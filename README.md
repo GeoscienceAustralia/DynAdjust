@@ -10,13 +10,13 @@
 [![github releases](https://img.shields.io/github/v/release/geoscienceaustralia/DynAdjust)](https://github.com/geoscienceaustralia/DynAdjust/releases)
 [![github issues](https://img.shields.io/github/issues/geoscienceaustralia/DynAdjust.svg)](https://github.com/geoscienceaustralia/DynAdjust/issues)
 [![github downloads](https://img.shields.io/github/downloads/geoscienceaustralia/DynAdjust/total)](https://tooomm.github.io/github-release-stats/?username=geoscienceaustralia&repository=DynAdjust&target=_blank)
-[![Docker Pulls](https://img.shields.io/docker/pulls/icsm/dynadjust)](https://hub.docker.com/r/icsm/dynadjust)
+[![Docker Pulls](https://img.shields.io/docker/pulls/agrsga/dynadjust)](https://hub.docker.com/r/agrsga/dynadjust)
 [![lines of code](https://tokei.rs/b1/github/geoscienceaustralia/dynadjust)](https://github.com/geoscienceaustralia/DynAdjust/tree/master/dynadjust)
 
 
 
 
-[![DynAdjust](https://github.com/icsm-au/DynAdjust/raw/master/resources/img/dynadjust-banner-sml.png)](https://github.com/icsm-au/dynadjust/releases)
+[![DynAdjust](https://github.com/GeoscienceAustralia/DynAdjust/raw/master/resources/img/dynadjust-banner-sml.png)](https://github.com/GeoscienceAustralia/DynAdjust/releases)
 
 ## Contents
 
