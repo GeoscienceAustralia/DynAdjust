@@ -232,8 +232,8 @@ void CDnaCovariance::WriteBinaryMsr(std::ofstream *binary_stream, PUINT32 msrInd
 	measRecord.station2 = m_lstn2Index;	
 	measRecord.clusterID = m_lclusterID;
 	
-	sprintf(measRecord.epsgCode, "%s", epsgCode.substr(0, STN_EPSG_WIDTH).c_str());
-	sprintf(measRecord.epoch, "%s", epoch.substr(0, STN_EPOCH_WIDTH).c_str());
+	snprintf(measRecord.epsgCode, sizeof(measRecord.epsgCode), "%s", epsgCode.substr(0, STN_EPSG_WIDTH).c_str());
+	snprintf(measRecord.epoch, sizeof(measRecord.epoch), "%s", epoch.substr(0, STN_EPOCH_WIDTH).c_str());
 
 	// X
 	measRecord.measStart = xCov;

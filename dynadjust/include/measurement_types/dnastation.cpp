@@ -935,7 +935,7 @@ void CDnaStation::SetStationRec(const station_t& stationRecord)
 	else
 		m_strHemisphereZone = "N";
 	char zone[3];
-	sprintf(zone, "%d", m_zone);
+	snprintf(zone, sizeof(zone), "%d", m_zone);
 	m_strHemisphereZone += zone;
 	SetDescription(stationRecord.description);
 	m_lfileOrder = stationRecord.fileOrder;

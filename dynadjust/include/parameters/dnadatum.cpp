@@ -135,7 +135,7 @@ std::string CDnaDatum::GetEpoch_s() const
 std::string CDnaDatum::GetEpsgCode_s() const 
 {
 	char epsgCode[8];
-	sprintf(epsgCode, "%d", epsgCode_);
+	snprintf(epsgCode, sizeof(epsgCode), "%d", epsgCode_);
 	return std::string(epsgCode); 
 }
 

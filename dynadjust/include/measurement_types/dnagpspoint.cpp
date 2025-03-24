@@ -543,8 +543,8 @@ void CDnaGpsPoint::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex
 	measRecord.scale3 = m_dHscale;
 	measRecord.scale4 = m_dVscale;
 
-	sprintf(measRecord.epsgCode, "%s", m_epsgCode.substr(0, STN_EPSG_WIDTH).c_str());
-	sprintf(measRecord.epoch, "%s", m_epoch.substr(0, STN_EPOCH_WIDTH).c_str());
+	snprintf(measRecord.epsgCode, sizeof(measRecord.epsgCode), "%s", m_epsgCode.substr(0, STN_EPSG_WIDTH).c_str());
+	snprintf(measRecord.epoch, sizeof(measRecord.epoch), "%s", m_epoch.substr(0, STN_EPOCH_WIDTH).c_str());
 
 	// X
 	measRecord.measAdj = m_measAdj;

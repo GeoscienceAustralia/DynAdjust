@@ -140,7 +140,7 @@ typedef struct msr_t {
 			memset(coordType, '\0', sizeof(coordType));
 			// GDA94, lat, long, height
 			memset(epsgCode, '\0', sizeof(epsgCode));
-			sprintf(epsgCode, DEFAULT_EPSG_S);
+			snprintf(epsgCode, sizeof(epsgCode), DEFAULT_EPSG_S);
 			memset(epoch, '\0', sizeof(epoch));
 	}
 
