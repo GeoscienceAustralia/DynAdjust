@@ -30,4 +30,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: icsm/dynadjust:latest
+          tags: agrsga/dynadjust:latest
