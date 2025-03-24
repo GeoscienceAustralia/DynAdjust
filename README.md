@@ -1,22 +1,22 @@
 [![cmake workflow](https://github.com/geoscienceaustralia/DynAdjust/actions/workflows/cmake_release.yml/badge.svg)](https://github.com/geoscienceaustralia/DynAdjust/actions/workflows/cmake_release.yml)
 [![cmake tests](https://github.com/geoscienceaustralia/DynAdjust/actions/workflows/test_coverage.yml/badge.svg)](https://github.com/geoscienceaustralia/DynAdjust/actions/workflows/test_coverage.yml)
-[![docker build](https://github.com/icsm-au/DynAdjust/actions/workflows/docker.yml/badge.svg)](https://github.com/icsm-au/DynAdjust/actions/workflows/docker.yml)
-[![codacy badge](https://img.shields.io/codacy/grade/a3944cda0c72445f8a13b1f82b64f714)](https://app.codacy.com/gh/icsm-au/DynAdjust/dashboard)
+[![docker build](https://github.com/GeoscienceAustralia/DynAdjust/actions/workflows/docker.yml/badge.svg)](https://github.com/GeoscienceAustralia/DynAdjust/actions/workflows/docker.yml)
+[![codacy badge](https://img.shields.io/codacy/grade/a3944cda0c72445f8a13b1f82b64f714)](https://app.codacy.com/gh/GeoscienceAustralia/DynAdjust/dashboard)
 [![cii best practices](https://img.shields.io/badge/cii%20best%20practices-passing-success)](https://bestpractices.coreinfrastructure.org/projects/4894)
 [![Coverage Status](https://coveralls.io/repos/github/GeoscienceAustralia/DynAdjust/badge.svg)](https://coveralls.io/github/GeoscienceAustralia/DynAdjust)
-[![codecov status](https://img.shields.io/codecov/c/github/icsm-au/dynadjust)](https://codecov.io/gh/icsm-au/DynAdjust)
+[![codecov status](https://img.shields.io/codecov/c/github/GeoscienceAustralia/dynadjust)](https://codecov.io/gh/GeoscienceAustralia/DynAdjust)
 [![documentation (user's guide)](https://img.shields.io/badge/docs-usersguide-blue.svg)](https://github.com/geoscienceaustralia/DynAdjust/raw/master/resources/DynAdjust%20Users%20Guide.pdf)
 [![gitHub license](https://img.shields.io/badge/license-Apache-blue.svg)](https://raw.githubusercontent.com/geoscienceaustralia/DynAdjust/master/LICENSE)
 [![github releases](https://img.shields.io/github/v/release/geoscienceaustralia/DynAdjust)](https://github.com/geoscienceaustralia/DynAdjust/releases)
 [![github issues](https://img.shields.io/github/issues/geoscienceaustralia/DynAdjust.svg)](https://github.com/geoscienceaustralia/DynAdjust/issues)
 [![github downloads](https://img.shields.io/github/downloads/geoscienceaustralia/DynAdjust/total)](https://tooomm.github.io/github-release-stats/?username=geoscienceaustralia&repository=DynAdjust&target=_blank)
-[![Docker Pulls](https://img.shields.io/docker/pulls/icsm/dynadjust)](https://hub.docker.com/r/icsm/dynadjust)
+[![Docker Pulls](https://img.shields.io/docker/pulls/agrsga/dynadjust)](https://hub.docker.com/r/agrsga/dynadjust)
 [![lines of code](https://tokei.rs/b1/github/geoscienceaustralia/dynadjust)](https://github.com/geoscienceaustralia/DynAdjust/tree/master/dynadjust)
 
 
 
 
-[![DynAdjust](https://github.com/icsm-au/DynAdjust/raw/master/resources/img/dynadjust-banner-sml.png)](https://github.com/icsm-au/dynadjust/releases)
+[![DynAdjust](https://github.com/GeoscienceAustralia/DynAdjust/raw/master/resources/img/dynadjust-banner-sml.png)](https://github.com/GeoscienceAustralia/dynadjust/releases)
 
 ## Contents
 
@@ -69,17 +69,17 @@ Pleae refer to the [Contributing guidelines](./.github/CONTRIBUTING.md) for info
 
 ## Feedback
 
-To suggest an enhancement to the functionality of DynAdjust, or to report a defect or unexpected behaviour, please submit your query via the [issue tracker](https://github.com/icsm-au/dynadjust/issues).
+To suggest an enhancement to the functionality of DynAdjust, or to report a defect or unexpected behaviour, please submit your query via the [issue tracker](https://github.com/GeoscienceAustralia/dynadjust/issues).
 
 ## User's guide
 
-A comprehensive User's Guide can be found in the [resources](https://github.com/icsm-au/DynAdjust/tree/master/resources) folder.  The User's Guide provides information about the history of DynAdjust, its architecture and algorithms, its usage, supported file format specifications and basic command-line examples.
+A comprehensive User's Guide can be found in the [resources](https://github.com/GeoscienceAustralia/DynAdjust/tree/master/resources) folder.  The User's Guide provides information about the history of DynAdjust, its architecture and algorithms, its usage, supported file format specifications and basic command-line examples.
 
 ## Creating images
 
 DynAdjust provides a capability to generate publication-quality images of raw station and measurement data and adjustment results, including shift vectors and estimated uncertainty, in a variety of projection types. This capability is made available by the program **plot**, the command line reference for which is documented in Appendix A.7 of the [User's guide](#users-guide).
 
-[![DynAdjust plot examples](https://raw.githubusercontent.com/icsm-au/DynAdjust/master/resources/img/dynadjust-plot-images.png)](https://github.com/icsm-au/dynadjust/releases)
+[![DynAdjust plot examples](https://raw.githubusercontent.com/GeoscienceAustralia/DynAdjust/master/resources/img/dynadjust-plot-images.png)](https://github.com/GeoscienceAustralia/dynadjust/releases)
   
 DynAdjust uses the **Generic Mapping Tools (GMT)**, available from the [GMT website](https://www.generic-mapping-tools.org/download/), and **gnuplot**, available from the [gnuplot homepage](http://www.gnuplot.info/). The current version of DynAdjust supports GMT version 6 and gnuplot version 5.4. To install GMT, please refer to the [install instructions](https://github.com/GenericMappingTools/gmt/blob/master/INSTALL.md), or the [build instructions](https://github.com/GenericMappingTools/gmt/blob/master/BUILDING.md) to build GMT from source. To install gnuplot, please refer to the [gnuplot download](http://www.gnuplot.info/download.html) page.
 
