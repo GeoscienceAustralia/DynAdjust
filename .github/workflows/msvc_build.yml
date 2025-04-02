@@ -144,6 +144,7 @@ jobs:
           set INCLUDE=%INCLUDE%;%MKL_INC%
           set DEPS_DIR=%VCPKG_INSTALL_FOLDER%\%ARCH%-windows\include
           set XSD_DIR=%GITHUB_WORKSPACE%\%CS_XSD_INSTALL_FOLDER%
-          set PATH=%DEPS_DIR%;%XSD_DIR%;%PATH%
-          echo %PATH%
+          set PATH=%DEPS_DIR%;%XSD_DIR%;%PATH%;%MKL_INC%
+          echo $MKL_INC%
+          echo %INCLUDE%
           msbuild /m /p:Configuration=%BUILD_CONFIGURATION% /p:Platform=%ARCH% /p:"VCBuildAdditionalOptions= /useenv" "${{ steps.find_sln.outputs.sln }}"
