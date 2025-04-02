@@ -53,7 +53,7 @@ jobs:
           path: |
             ${{ env.VCPKG_ROOT }}/downloads
             ${{ env.VCPKG_ROOT }}/installed
-          key: vcpkg-${{ env.CACHE_NUMBER }}-${{ env.VCPKG_PACKAGES }}
+          key: ${{ runner.os }}-vcpkg-${{ env.ARCH }}-${{ replace(env.VCPKG_PACKAGES, ' ', '_') }}
 
       - name: Install vcpkg prerequisites
         shell: cmd
