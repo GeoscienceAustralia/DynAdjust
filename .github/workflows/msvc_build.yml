@@ -9,7 +9,7 @@ env:
   VCPKG_COMMIT: 'HEAD'
   VCPKG_ROOT: ./vcpkg
   VCPKG_INSTALL_FOLDER: ./vcpkg/installed
-  CS_XSD_INSTALL_FOLDER: xsd/libxsd-4.2.0
+  CS_XSD_INSTALL_FOLDER: libxsd-4.2.0
   XSD_URL: https://www.codesynthesis.com/download/xsd/4.2/libxsd-4.2.0.tar.gz
   WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/487fd8c3-a3d8-4c22-a903-f8d54c2c57be/intel-oneapi-base-toolkit-2025.1.0.650_offline.exe
   WINDOWS_HPCKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/0ba263f5-de00-4e91-a780-fdb9e131c1e8/intel-oneapi-hpc-toolkit-2025.1.0.665_offline.exe
@@ -133,7 +133,7 @@ jobs:
           Write-Host "Downloading xsd from $env:XSD_URL..."
           curl.exe -L $env:XSD_URL -o "./libxsd-4.2.0.tar.gz"
           Write-Host "Extracting xsd..."
-          tar -xzf "./libxsd-4.2.0.tar.gz" -C "./xsd"
+          tar -xzf "./libxsd-4.2.0.tar.gz"
 
       - name: Build DynAdjust
         shell: cmd
