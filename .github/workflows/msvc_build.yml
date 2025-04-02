@@ -8,7 +8,8 @@ env:
   ARCH: x64
   VCPKG_ROOT: ./vcpkg
   VCPKG_INSTALL_FOLDER: ./vcpkg/installed
-  CS_XSD_INSTALL_FOLDER: xsd/xsd-4.0.0-i686-windows/libxsd
+  CS_XSD_INSTALL_FOLDER: xsd/libxsd-4.2.0
+  XSD_URL: https://www.codesynthesis.com/download/xsd/4.2/libxsd-4.2.0.tar.gz
   WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/487fd8c3-a3d8-4c22-a903-f8d54c2c57be/intel-oneapi-base-toolkit-2025.1.0.650_offline.exe
   WINDOWS_HPCKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/0ba263f5-de00-4e91-a780-fdb9e131c1e8/intel-oneapi-hpc-toolkit-2025.1.0.665_offline.exe
   WINDOWS_CPP_COMPONENTS: intel.oneapi.win.cpp-dpcpp-common
@@ -95,7 +96,7 @@ jobs:
           }
           
           Remove-Item -Recurse -Force "webimage_extracted"
-
+      
       - name: Find solution file
         id: find_sln
         shell: powershell
@@ -115,10 +116,11 @@ jobs:
       - name: Download and install xsd
         shell: powershell
         run: |
-          curl.exe -L "https://www.codesynthesis.com/download/xsd/latest/windows/i686/xsd-latest-i686-windows.zip" -o "./xsd-latest-i686-windows.zip"
+          Write-Host "Downloading xsd from $env:XSD_URL..."
+          curl.exe -L $env:XSD_URL -o "./libxsd-4.2.0.tar.gz"
           Write-Host "Extracting xsd..."
-          & "7z" x "xsd-latest-i686-windows.zip" -y -o"./xsd"
-
+          tar -xzf "./libxsd-4.2.0.tar.gz" -C "./xsd"
+      
       - name: Build DynAdjust
         shell: cmd
         working-directory: ${{ env.GITHUB_WORKSPACE }}
