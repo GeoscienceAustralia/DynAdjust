@@ -70,14 +70,14 @@ jobs:
           path: |
             C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat
             C:\Program Files (x86)\Intel\oneAPI\compiler
-          key: oneapi-${{ env.CACHE_NUMBER }}-${{ env.WINDOWS_BASEKIT_URL }}-${{ env.WINDOWS_HPCKIT_URL }}
+          key: oneapi-${{ env.CACHE_NUMBER }}-${{ env.WINDOWS_BASEKIT_URL }}
 
       - name: Install Intel OneAPI
         if: steps.cache-oneapi.outputs.cache-hit != 'true'
         shell: powershell
         run: |
           Write-Host "Installing Intel OneAPI..."
-          $url = $env:WINDOWS_HPCKIT_URL
+          $url = $env:WINDOWS_BASEKIT_URL
           $components = $env:WINDOWS_CPP_COMPONENTS
           $tempExe = Join-Path $env:TEMP "webimage.exe"
           
