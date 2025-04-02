@@ -53,7 +53,7 @@ jobs:
           path: |
             ${{ env.VCPKG_ROOT }}/downloads
             ${{ env.VCPKG_ROOT }}/installed
-          key: ${{ runner.os }}-vcpkg-${{ env.ARCH }}-${{ env.CACHE_NUMBER }}
+          key: ${{ runner.os }}-vcpkg-${{ env.ARCH }}-${{ replace(env.VCPKG_PACKAGES, ' ', '_') }}
 
       - name: Install vcpkg prerequisites
         shell: cmd
@@ -140,6 +140,8 @@ jobs:
         working-directory: ${{ env.GITHUB_WORKSPACE }}
         run: |
           call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
+          set MKL_INC=%MKLROOT%\include
+          set INCLUDE=%INCLUDE%;%MKL_INC%
           set DEPS_DIR=%VCPKG_INSTALL_FOLDER%\%ARCH%-windows\include
           set XSD_DIR=%GITHUB_WORKSPACE%\%CS_XSD_INSTALL_FOLDER%
           set PATH=%DEPS_DIR%;%XSD_DIR%;%PATH%
