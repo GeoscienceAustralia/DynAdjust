@@ -6,6 +6,7 @@ on:
 env:
   BUILD_CONFIGURATION: Release
   ARCH: x64
+  VCPKG_COMMIT: 'HEAD'
   VCPKG_ROOT: ./vcpkg
   VCPKG_INSTALL_FOLDER: ./vcpkg/installed
   CS_XSD_INSTALL_FOLDER: xsd/libxsd-4.2.0
@@ -13,40 +14,52 @@ env:
   WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/487fd8c3-a3d8-4c22-a903-f8d54c2c57be/intel-oneapi-base-toolkit-2025.1.0.650_offline.exe
   WINDOWS_HPCKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/0ba263f5-de00-4e91-a780-fdb9e131c1e8/intel-oneapi-hpc-toolkit-2025.1.0.665_offline.exe
   WINDOWS_CPP_COMPONENTS: intel.oneapi.win.cpp-dpcpp-common
-  CACHE_NUMBER: 4
+  CACHE_NUMBER: 3
+
+  VCPKG_PACKAGES: boost-process boost-iostreams boost-spirit boost-system boost-filesystem boost-timer boost-thread boost-program-options openblas 7zip xerces-c curl
 
 jobs:
   build:
     runs-on: windows-latest
+
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install vcpkg
+      - name: Prepare vcpkg
         shell: powershell
         run: |
-          if (-not (Test-Path "./vcpkg")) {
-              Write-Host "Cloning vcpkg repository..."
-              git clone https://github.com/microsoft/vcpkg.git
-              Write-Host "Bootstrapping vcpkg..."
-              & .\vcpkg\bootstrap-vcpkg.bat
+          if (-not (Test-Path $env:VCPKG_ROOT)) {
+            Write-Host "Cloning vcpkg repository..."
+            git clone https://github.com/microsoft/vcpkg $env:VCPKG_ROOT
           } else {
-              Write-Host "vcpkg is already installed."
+            Write-Host "vcpkg repository folder already exists."
+          }
+          if ($env:VCPKG_COMMIT -ne 'HEAD') {
+            Write-Host "Checking out vcpkg commit $env:VCPKG_COMMIT..."
+            git -C $env:VCPKG_ROOT checkout $env:VCPKG_COMMIT
+          }
+          # Bootstrap if needed
+          if (-not (Test-Path (Join-Path $env:VCPKG_ROOT 'vcpkg.exe'))) {
+            Write-Host "Bootstrapping vcpkg..."
+            & (Join-Path $env:VCPKG_ROOT 'bootstrap-vcpkg.bat') -disableMetrics
+          } else {
+            Write-Host "vcpkg.exe already exists; skipping bootstrap."
           }
 
-      - name: Cache vcpkg packages
-        uses: actions/cache@v3
+      - name: Cache vcpkg
         id: cache-vcpkg
+        uses: actions/cache@v3
         with:
           path: |
-            ./vcpkg
-            ./vcpkg/installed
-          key: ${{ runner.os }}-vcpkg-2025.1-${{ hashFiles('vcpkg.json') }}
+            ${{ env.VCPKG_ROOT }}/downloads
+            ${{ env.VCPKG_ROOT }}/installed
+          key: vcpkg-${{ env.CACHE_NUMBER }}-${{ env.VCPKG_PACKAGES }}
 
       - name: Install vcpkg prerequisites
         shell: cmd
-        if: steps.cache-vcpkg.outputs.cache-hit != 'true'
         run: |
-          .\vcpkg\vcpkg.exe install boost-process boost-iostreams boost-spirit boost-system boost-filesystem boost-timer boost-thread boost-program-options openblas 7zip xerces-c curl --triplet=%ARCH%-windows
+          echo Installing packages: %VCPKG_PACKAGES%
+          .\vcpkg\vcpkg.exe install %VCPKG_PACKAGES% --triplet=%ARCH%-windows
           .\vcpkg\vcpkg.exe integrate install
           .\vcpkg\vcpkg.exe list
 
@@ -57,7 +70,7 @@ jobs:
           path: |
             C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat
             C:\Program Files (x86)\Intel\oneAPI\compiler
-          key: install-${{ env.CACHE_NUMBER }}-${{ env.WINDOWS_HPCKIT_URL }}-${{ env.WINDOWS_CPP_COMPONENTS }}-compiler-${{ hashFiles('**/scripts/cache_exclude_windows.sh') }}
+          key: oneapi-${{ env.CACHE_NUMBER }}-${{ env.WINDOWS_BASEKIT_URL }}-${{ env.WINDOWS_HPCKIT_URL }}
 
       - name: Install Intel OneAPI
         if: steps.cache-oneapi.outputs.cache-hit != 'true'
@@ -97,7 +110,7 @@ jobs:
           }
           
           Remove-Item -Recurse -Force "webimage_extracted"
-      
+
       - name: Find solution file
         id: find_sln
         shell: powershell
@@ -106,14 +119,14 @@ jobs:
           if (-not $sln) { Write-Error "Solution file not found" }
           Write-Host "Solution file: $($sln.FullName)"
           echo "::set-output name=sln::$($sln.FullName)"
-      
+
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v1.0.2
-      
+
       - name: Restore NuGet packages
         working-directory: ${{ env.GITHUB_WORKSPACE }}
         run: nuget restore "${{ steps.find_sln.outputs.sln }}"
-      
+
       - name: Download and install xsd
         shell: powershell
         run: |
@@ -121,7 +134,7 @@ jobs:
           curl.exe -L $env:XSD_URL -o "./libxsd-4.2.0.tar.gz"
           Write-Host "Extracting xsd..."
           tar -xzf "./libxsd-4.2.0.tar.gz" -C "./xsd"
-      
+
       - name: Build DynAdjust
         shell: cmd
         working-directory: ${{ env.GITHUB_WORKSPACE }}
