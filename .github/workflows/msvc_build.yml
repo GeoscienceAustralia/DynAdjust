@@ -37,14 +37,15 @@ jobs:
         uses: actions/cache@v3
         id: cache-vcpkg
         with:
-          path: ${{ env.VCPKG_INSTALL_FOLDER }}
-          key: ${{ runner.os }}-vcpkg-${{ hashFiles('.github/workflows/msvc_build.yml') }}
+          path: |
+            ./vcpkg
+            ./vcpkg/installed
+          key: ${{ runner.os }}-vcpkg-2025.1-${{ hashFiles('vcpkg.json') }}
 
       - name: Install vcpkg prerequisites
         shell: cmd
         if: steps.cache-vcpkg.outputs.cache-hit != 'true'
         run: |
-          .\vcpkg\vcpkg.exe update
           .\vcpkg\vcpkg.exe install boost-process boost-iostreams boost-spirit boost-system boost-filesystem boost-timer boost-thread boost-program-options openblas 7zip xerces-c curl --triplet=%ARCH%-windows
           .\vcpkg\vcpkg.exe integrate install
           .\vcpkg\vcpkg.exe list
@@ -105,14 +106,14 @@ jobs:
           if (-not $sln) { Write-Error "Solution file not found" }
           Write-Host "Solution file: $($sln.FullName)"
           echo "::set-output name=sln::$($sln.FullName)"
-
+      
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v1.0.2
-
+      
       - name: Restore NuGet packages
         working-directory: ${{ env.GITHUB_WORKSPACE }}
         run: nuget restore "${{ steps.find_sln.outputs.sln }}"
-
+      
       - name: Download and install xsd
         shell: powershell
         run: |
