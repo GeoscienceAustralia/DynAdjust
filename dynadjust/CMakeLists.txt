@@ -220,15 +220,28 @@ elseif(UNIX)
     if ("${LAPACK_LIBRARIES}" MATCHES "libmkl")
         message(STATUS "Using Intel MKL for fast linear algebra")
         set(USE_MKL ON)
-    else()
-        message(STATUS "Using OpenBLAS and LAPACK for fast linear algebra (${BLAS_LINKER_FLAGS})")
-        #list(APPEND DNA_LIBRARIES "cblas" "lapacke" ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
-    	list(APPEND DNA_LIBRARIES "lapacke" ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+    endif()
+
+
+    if ("${BLAS_LIBRARIES}" MATCHES "openblas")
+        message(STATUS "Using OpenBLAS for BLAS (${BLAS_LIBRARIES})")
+        #list(APPEND DNA_LIBRARIES "cblas" ${BLAS_LIBRARIES})
+    	list(APPEND DNA_LIBRARIES ${BLAS_LIBRARIES})
+    endif()
+
+    if ("${LAPACK_LIBRARIES}" MATCHES "lapack")
+        message(STATUS "Using LAPACK for Linear Algebra (${LAPACK_LIBRARIES})")
+        #list(APPEND DNA_LIBRARIES "lapacke" ${LAPACK_LIBRARIES})
+    	list(APPEND DNA_LIBRARIES "lapacke" ${LAPACK_LIBRARIES})
     endif()
 
 endif()
 
 message(STATUS "DynAdjust library dependencies: ${DNA_LIBRARIES}")
+
+list(REMOVE_DUPLICATES DNA_LIBRARIES)
+
+message(STATUS "DynAdjust library dependencies (unique): ${DNA_LIBRARIES}")
 
 include_directories(
     ${CMAKE_SOURCE_DIR}
