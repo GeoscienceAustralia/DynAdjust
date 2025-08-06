@@ -1123,7 +1123,7 @@ void DynAdjustPrinter::PrintStationColumnHeaders(std::ostream& os, CoordinateOut
     UINT32 pad = PRINT_VAR_PAD;
     
     os << std::setw(STATION) << std::left << "Station";
-    os << std::setw(CONSTRAINT) << std::left << "Constraint";
+    os << std::setw(CONSTRAINT) << std::left << "Const";
     
     switch (mode) {
     case CoordinateOutputMode::Geographic:
