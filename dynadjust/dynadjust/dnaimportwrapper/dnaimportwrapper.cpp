@@ -1757,7 +1757,7 @@ int main(int argc, char* argv[])
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// start "total" time
-	cpu_timer time;
+	dynadjust::cpu_timer time;
 	
 	
 	// Import discontinuity file and apply discontinuities

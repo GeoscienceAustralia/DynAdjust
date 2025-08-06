@@ -211,7 +211,7 @@ _SEGMENT_STATUS_ dna_segment::SegmentNetwork(project_settings* p)
 	if (debug_level_ > 2)
 		trace_file << "Block " << currentBlock_ << "..." << std::endl;
 	
-	cpu_timer time;
+	dynadjust::cpu_timer time;
 
 	v_ContiguousNetList_.clear();
 	v_ContiguousNetList_.push_back(currentNetwork_ = 0);

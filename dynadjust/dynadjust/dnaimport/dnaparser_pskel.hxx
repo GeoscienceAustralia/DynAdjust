@@ -42,7 +42,6 @@
 #endif
 
 /// \cond
-#include <iostream>
 
 // Begin prologue.
 //
@@ -78,7 +77,6 @@
 #include <xsd/cxx/parser/non-validating/xml-schema-pimpl.hxx>
 #include <xsd/cxx/parser/xerces/elements.hxx>
 
-#include <boost/shared_ptr.hpp>
 /// \endcond
 
 // Forward declarations

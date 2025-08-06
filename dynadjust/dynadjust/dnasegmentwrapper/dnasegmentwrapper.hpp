@@ -60,6 +60,7 @@
 #include <include/functions/dnastringfuncs.hpp>
 #include <include/functions/dnafilepathfuncs.hpp>
 #include <include/functions/dnastrmanipfuncs.hpp>
+#include <include/functions/dnatimer.hpp>
 
 #include <dynadjust/dnasegment/dnasegment.hpp>
 
@@ -69,8 +70,8 @@ using namespace dynadjust::exception;
 extern bool running;
 extern std::mutex cout_mutex;
 
-// Use cpu_timer from dynadjust::networksegment namespace
-using dynadjust::networksegment::cpu_timer;
+// Use cpu_timer from dynadjust namespace
+using dynadjust::cpu_timer;
 
 class dna_segment_thread
 {

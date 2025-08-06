@@ -1064,7 +1064,7 @@ int main(int argc, char* argv[])
 		std::cout << "... ";
 	}
 	
-	cpu_timer time;
+	dynadjust::cpu_timer time;
 
 	char dnageoFile[601], *geoFileptr;
 	geoFileptr = NULL;

@@ -37,11 +37,9 @@
 #include <vector>
 #include <iostream>
 #include <iomanip>
-#include <sstream>
 #include <string>
 #include <fstream>
 
-#include <boost/shared_ptr.hpp>
 #include <memory>
 /// \endcond
 

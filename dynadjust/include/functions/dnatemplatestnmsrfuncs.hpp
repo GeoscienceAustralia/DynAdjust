@@ -32,18 +32,12 @@
 
 /// \cond
 #include <stdio.h>
-#include <string.h>
 
 #include <iostream>
-#include <sstream>
 #include <algorithm>
-#include <functional>
 #include <vector>
 #include <string>
 #include <cctype>
-#include <fstream>
-
-#include <boost/shared_ptr.hpp>
 
 #include <memory>
 

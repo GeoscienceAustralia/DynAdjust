@@ -81,13 +81,45 @@ void DynAdjustPrinter::PrintIteration(const UINT32& iteration) {
 void DynAdjustPrinter::PrintAdjustmentTime(cpu_timer& time, int timer_type) {
     // calculate and print total time
     auto elapsed = time.elapsed();
-    double seconds = elapsed.wall.count() / 1.0e9;
+    long long total_nanoseconds = elapsed.wall.count();
+    
+    // Convert to appropriate units for human-readable format
+    long long total_milliseconds = total_nanoseconds / 1000000LL;
+    long long hours = total_milliseconds / 3600000LL;
+    long long remaining_ms = total_milliseconds % 3600000LL;
+    long long minutes = remaining_ms / 60000LL;
+    remaining_ms = remaining_ms % 60000LL;
+    long long seconds = remaining_ms / 1000LL;
+    long long milliseconds = remaining_ms % 1000LL;
     
     std::stringstream ss;
-    if (seconds >= 1.0) {
-        ss << std::fixed << std::setprecision(3) << seconds << "s";
-    } else {
-        ss << std::fixed << std::setprecision(3) << (seconds * 1000.0) << "ms";
+    
+    // Format in human-readable way
+    // If >= 1 hour, show hours and minutes (e.g., "1h30m")
+    if (hours > 0) {
+        ss << hours << "h";
+        if (minutes > 0) {
+            ss << minutes << "m";
+        }
+    }
+    // If >= 1 minute but < 1 hour, show minutes and seconds (e.g., "2m15s")
+    else if (minutes > 0) {
+        ss << minutes << "m";
+        if (seconds > 0) {
+            ss << seconds << "s";
+        }
+    }
+    // If >= 1 second but < 1 minute, show seconds with decimal (e.g., "5.234s")
+    else if (seconds > 0) {
+        ss << seconds;
+        if (milliseconds > 0) {
+            ss << "." << std::setfill('0') << std::setw(3) << milliseconds;
+        }
+        ss << "s";
+    }
+    // If < 1 second, show milliseconds (e.g., "234ms")
+    else {
+        ss << total_milliseconds << "ms";
     }
 
     if (timer_type == 0) // iteration_time equivalent

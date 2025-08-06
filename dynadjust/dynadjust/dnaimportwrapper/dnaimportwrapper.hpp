@@ -62,6 +62,7 @@
 #include <include/functions/dnaiostreamfuncs.hpp>
 #include <include/functions/dnafilepathfuncs.hpp>
 #include <include/functions/dnastrmanipfuncs.hpp>
+#include <include/functions/dnatimer.hpp>
 
 #include <dynadjust/dnaimport/dnainterop.hpp>
 
@@ -71,31 +72,6 @@ using namespace dynadjust::datum_parameters;
 
 extern bool running;
 extern std::mutex cout_mutex;
-
-// High-precision timer class to replace boost::timer::cpu_timer
-class cpu_timer {
-public:
-    struct cpu_times {
-        std::chrono::nanoseconds wall;
-        std::chrono::nanoseconds user;
-        std::chrono::nanoseconds system;
-    };
-
-    cpu_timer() { start(); }
-    
-    void start() {
-        start_time_ = std::chrono::high_resolution_clock::now();
-    }
-    
-    cpu_times elapsed() const {
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto wall_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time_);
-        return {wall_duration, wall_duration, wall_duration}; // For simplicity, user and system = wall
-    }
-
-private:
-    std::chrono::high_resolution_clock::time_point start_time_;
-};
 
 class dna_import_thread
 {
@@ -110,7 +86,7 @@ public:
 		, _status_msg(status_msg), _ms(ms) {};
 	void operator()()
 	{
-		cpu_timer time;	// constructor of cpu_timer calls start()
+		dynadjust::cpu_timer time;	// constructor of cpu_timer calls start()
 		try {
 			_dnaParse->ParseInputFile(_filename, 
 				_vStations, _stnCount, 

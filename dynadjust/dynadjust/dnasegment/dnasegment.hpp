@@ -51,6 +51,7 @@
 #include <include/functions/dnatemplatedatetimefuncs.hpp>
 #include <include/functions/dnaiostreamfuncs.hpp>
 #include <include/functions/dnastringfuncs.hpp>
+#include <include/functions/dnatimer.hpp>
 #include <include/config/dnatypes.hpp>
 #include <include/config/dnaconsts.hpp>
 
@@ -67,31 +68,6 @@ using namespace dynadjust::iostreams;
 
 namespace dynadjust {
 namespace networksegment {
-
-// High-precision timer class to replace boost::timer::cpu_timer
-class cpu_timer {
-public:
-    struct cpu_times {
-        std::chrono::nanoseconds wall;
-        std::chrono::nanoseconds user;
-        std::chrono::nanoseconds system;
-    };
-
-    cpu_timer() { start(); }
-    
-    void start() {
-        start_time_ = std::chrono::high_resolution_clock::now();
-    }
-    
-    cpu_times elapsed() const {
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto wall_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time_);
-        return {wall_duration, wall_duration, wall_duration}; // For simplicity, user and system = wall
-    }
-
-private:
-    std::chrono::high_resolution_clock::time_point start_time_;
-};
 
 // This class is exported from the dnaSegment.dll
 #ifdef _MSC_VER

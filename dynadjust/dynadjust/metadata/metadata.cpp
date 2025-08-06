@@ -10,7 +10,6 @@
 #include <time.h>
 #include <mutex>
 
-#include <memory>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/variables_map.hpp>
@@ -34,6 +33,7 @@ std::mutex import_file_mutex;
 #include <include/functions/dnafilepathfuncs.hpp>
 #include <include/functions/dnastrmanipfuncs.hpp>
 #include <include/functions/dnastrutils.hpp>
+#include <include/functions/dnatimer.hpp>
 
 #include <include/parameters/dnadatum.hpp>
 
@@ -451,7 +451,7 @@ int main(int argc, char* argv[])
 		std::cout << "+ Parsing: " << std::endl;
 	}
 	
-	boost::timer::cpu_timer time;	// constructor of boost::timer::cpu_timer calls start()
+	dynadjust::cpu_timer time;	// constructor of cpu_timer calls start()
 
 	std::ifstream*	ifsDynaML_;
 	size_t		sifsFileSize_, measurementUpdateCount(0), unsureFrameCount(0), unsureEpochCount(0);

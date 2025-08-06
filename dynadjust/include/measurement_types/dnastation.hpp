@@ -36,7 +36,6 @@
 #include <cctype>
 #include <fstream>
 
-#include <boost/shared_ptr.hpp>
 /// \endcond
 
 #include <include/config/dnaexports.hpp>
