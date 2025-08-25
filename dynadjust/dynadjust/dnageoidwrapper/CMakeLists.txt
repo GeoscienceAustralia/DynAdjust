@@ -13,6 +13,8 @@ add_executable (${PROJECT_NAME}
                 dnageoidwrapper.cpp
                 ${CMAKE_SOURCE_DIR}/dynadjust.rc)
 
+target_precompile_headers (${PROJECT_NAME} PUBLIC precompile.h)
+
 target_link_libraries (${PROJECT_NAME} dnageoid ${DNA_LIBRARIES})
 
 set_target_properties (${PROJECT_NAME} PROPERTIES OUTPUT_NAME "${DNA_PROGRAM_PREFIX}geoid")
