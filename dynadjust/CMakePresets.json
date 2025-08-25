@@ -4,7 +4,7 @@
 
   "configurePresets": [
     {
-      "name": "vs-x64",
+      "name": "vs-x64-openblas",
       "displayName": "VS2022 x64 (vcpkg)",
       "generator": "Visual Studio 17 2022",
       "architecture": { "value": "x64" },
@@ -13,15 +13,34 @@
         "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "VCPKG_TARGET_TRIPLET": "x64-windows"
       }
+    },
+    {
+      "name": "vs-x64-mkl",
+      "displayName": "VS2022 x64 (vcpkg)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": { "value": "x64" },
+      "binaryDir": "${sourceParentDir}/build/",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "VCPKG_TARGET_TRIPLET": "x64-windows",
+        "CMAKE_PREFIX_PATH": "C:\\Program Files (x86)\\Intel\\oneAPI\\mkl\\2025.2\\lib\\cmake\\mkl;$env{CMAKE_PREFIX_PATH}",
+        "USE_MKL": "ON",
+        "MKL_ARCH": "intel64",
+        "MKL_MPI": "intelmpi",
+        "MKL_LINK": "dynamic",
+        "MKL_INTERFACE": "lp64",
+        "ENABLE_SCALAPACK": "True",
+        "BLA_VENDOR": "Intel10_64lp"
+      }
     }
   ],
 
   "buildPresets": [
-    { "name": "build-debug",   "configurePreset": "vs-x64", "configuration": "Debug" },
-    { "name": "build-release", "configurePreset": "vs-x64", "configuration": "Release" }
+    { "name": "build-debug",   "configurePreset": "vs-x64-mkl", "configuration": "Debug" },
+    { "name": "build-release", "configurePreset": "vs-x64-mkl", "configuration": "Release" }
   ],
 
   "testPresets": [
-    { "name": "ctest", "configurePreset": "vs-x64", "configuration": "Debug" }
+    { "name": "ctest", "configurePreset": "vs-x64-mkl", "configuration": "Debug" }
   ]
 }

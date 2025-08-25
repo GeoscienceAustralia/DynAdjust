@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.15)
 project(dynadjust VERSION 1.2.9)
 
-option(BUILD_TESTING "Enable testing" OFF)
+option(BUILD_TESTING "Enable testing" ON)
 option(BUILD_STATIC "Build static binaries in the 'static' directory" OFF)
-option(USE_MKL "Use Intel MKL (Linux and Windows)" OFF)
+option(USE_MKL "Use Intel MKL (Linux and Windows)" ON)
 option(USE_OPENMP_MAC "Use OpenMP on macOS (requires `brew install libomp`)" OFF)
 option(ILP64 "Use ILP64 Interface for BLAS and LAPACK" OFF)
 
-set(CMAKE_DISABLE_PRECOMPILE_HEADERS ON)
+set(CMAKE_DISABLE_PRECOMPILE_HEADERS OFF)
 
 # Fix Boost 1.70+ issue with CMake 3.14+
 if(POLICY CMP0167)
@@ -279,7 +279,8 @@ if(APPLE)
     endif()
     list(APPEND DNA_LIBRARIES ${ACCELERATE_LIB})
 
-elseif(WIN32)
+elseif (WIN32)
+    message(STATUS "Looking for BLAS and LAPACK on Windows (BLA_VENDOR=${BLA_VENDOR})")
     if (USE_MKL)
         add_compile_options("-DUSE_MKL")
         if (ILP64)
@@ -287,17 +288,35 @@ elseif(WIN32)
         else()
             set(BLA_VENDOR "Intel10_64lp" CACHE STRING "Force MKL" FORCE)
         endif()
+
+        message(STATUS "BLA_VENDOR=${BLA_VENDOR}")
+        
+        find_package(MKL CONFIG REQUIRED PATHS $ENV{MKL_ROOT})
+        set (BLAS_LIBRARIES, ${MKL_REQUESTED_LIBRARIES})
+        set(BLAS_INCLUDE_DIRS, ${MKL_INCLUDE})
+        message(STATUS "MKL_INCLUDE=${MKL_INCLUDE}")
+        message(STATUS "MKL_LIB_DIR=${MKL_ROOT}/lib")
+        message(STATUS "DLL_EXT=${DLL_EXT}")
+        include_directories(${MKL_INCLUDE})
+        link_directories("${MKL_ROOT}/lib")
+
+        foreach(lib ${MKL_REQUESTED_LIBRARIES})
+            get_filename_component(libname ${lib} NAME_WLE)
+            list(APPEND MKL_REQUESTED_DLL_LIBRARIES "${libname}_dll")            
+        endforeach()
+
+        message(STATUS "MKL_REQUESTED_DLL_LIBRARIES=${MKL_REQUESTED_DLL_LIBRARIES}")
+
+        list(APPEND DNA_LIBRARIES ${MKL_REQUESTED_DLL_LIBRARIES})
     else()
         set(BLA_VENDOR "OpenBLAS" CACHE STRING "Force OpenBLAS" FORCE)
-    endif()
-
-    message(STATUS "Looking for BLAS and LAPACK on Windows (BLA_VENDOR=${BLA_VENDOR})")
-
-    find_package(BLAS REQUIRED)
-    add_link_options(${BLAS_LINKER_FLAGS})
-    message(STATUS "BLAS_LINKER_FLAGS=${BLAS_LINKER_FLAGS}")
-    message(STATUS "BLAS_LIBRARIES=${BLAS_LIBRARIES}")
-    list(APPEND DNA_LIBRARIES ${BLAS_LIBRARIES})
+        find_package(BLAS REQUIRED)
+        add_link_options(${BLAS_LINKER_FLAGS})
+        message(STATUS "BLAS_LINKER_FLAGS=${BLAS_LINKER_FLAGS}")
+        message(STATUS "BLAS_LIBRARIES=${BLAS_LIBRARIES}")
+        list(APPEND DNA_LIBRARIES ${BLAS_LIBRARIES})
+    endif()   
+    
 
     if (NOT USE_MKL)
         set(BLA_VENDOR "Generic" CACHE STRING "Force Generic" FORCE)
@@ -311,7 +330,7 @@ elseif(WIN32)
         list(APPEND DNA_LIBRARIES ${LAPACK_LIBRARIES})
     endif()
 
-    if(NOT USE_MKL)
+    if (NOT USE_MKL)
         # Find OpenBLAS package which should set include directories
         find_package(OpenBLAS CONFIG QUIET)
         if(OpenBLAS_FOUND)
@@ -379,7 +398,8 @@ elseif(UNIX)
             list(APPEND DNA_LIBRARIES ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
         endif()
     endif()
-
+else()
+    message(STATUS "Here is something dandy")
 endif()
 
 message(STATUS "DynAdjust library dependencies: ${DNA_LIBRARIES}")
