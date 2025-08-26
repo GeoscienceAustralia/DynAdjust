@@ -3,9 +3,9 @@ project(dynadjust VERSION 1.2.9)
 
 option(BUILD_TESTING "Enable testing" ON)
 option(BUILD_STATIC "Build static binaries in the 'static' directory" OFF)
-option(USE_MKL "Use Intel MKL (Linux and Windows)" ON)
-option(USE_OPENMP_MAC "Use OpenMP on macOS (requires `brew install libomp`)" OFF)
+option(USE_MKL "Use Intel MKL (Linux and Windows)" OFF)
 option(ILP64 "Use ILP64 Interface for BLAS and LAPACK" OFF)
+option(USE_OPENMP_MAC "Use OpenMP on macOS (requires `brew install libomp`)" OFF)
 
 set(CMAKE_DISABLE_PRECOMPILE_HEADERS OFF)
 
@@ -17,8 +17,6 @@ endif()
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
-
-set (DYNADJUST_VERSION "1.2.9")
 
 message("")
 message("=====================================================================")
@@ -37,6 +35,19 @@ if(BUILD_TESTING)
     enable_testing()
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 endif()
+
+# Set output directories for all platforms to use bin/
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+# For multi-config generators (Visual Studio, Xcode)
+foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
+    string(TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG_UPPER)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG_UPPER} ${CMAKE_BINARY_DIR}/bin)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG_UPPER} ${CMAKE_BINARY_DIR}/bin)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG_UPPER} ${CMAKE_BINARY_DIR}/bin)
+endforeach()
 
 if (BUILD_STATIC)
     message(STATUS "Static building enabled (BUILD_STATIC=ON)")
@@ -68,43 +79,27 @@ message(STATUS "C++ standard: ${CMAKE_CXX_STANDARD}")
 # Compiler flags
 # ----------------------------------------------------------------------------
 
-# ignore BOOST warning for the moment
-add_compile_options("-DBOOST_ALLOW_DEPRECATED_HEADERS")
-add_compile_options("-DBOOST_BIND_GLOBAL_PLACEHOLDERS")
-add_compile_options("-DBOOST_DISABLE_PRAGMA_MESSAGE")
-
-# These don't work with MSVC
-#add_compile_options(-Wno-ignored-qualifiers)
-#add_compile_options(-Wno-deprecated-declarations)
+# Suppress Boost warnings
+add_compile_definitions(
+    BOOST_ALLOW_DEPRECATED_HEADERS
+    BOOST_BIND_GLOBAL_PLACEHOLDERS
+    BOOST_DISABLE_PRAGMA_MESSAGE
+)
 
 if(BUILD_TESTING)
-    add_compile_options(-w)
+    # Suppress all warnings during testing
+    if(MSVC)
+        add_compile_options(/W0)
+    else()
+        add_compile_options(-w)
+    endif()
 endif()
 
 if(APPLE)
-    #    add_compile_options(-Werror -ferror-limit=1)
     add_compile_options(-Wno-unguarded-availability-new)
     add_compile_options(-Wno-deprecated-declarations)
     add_compile_options(-Wno-nullability-completeness)
 endif()
-
-## Debug flags
-#if (NOT BUILD_STATIC AND NOT APPLE)
-#    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ggdb -Og")
-#endif()
-
-## Coverage if testing
-#if(NOT BUILD_STATIC AND NOT APPLE)
-#    add_compile_options(--coverage -fprofile-arcs -ftest-coverage)
-#    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage")
-#endif()
-
-## Linker flags
-#if(APPLE)
-#    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl")
-#else()
-#    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--no-as-needed")
-#endif()
 
 if (WIN32)
     add_compile_options(-DNOMINMAX)
@@ -199,11 +194,6 @@ include_directories(${XSD_INCLUDE_DIR} ${XSD_INCLUDE_DIR}/xsd)
 # Boost
 # ----------------------------------------------------------------------------
 
-#if (BUILD_STATIC and WIN32)
-#    set(Boost_USE_STATIC_LIBS ON)
-#    set(Boost_USE_STATIC_RUNTIME ON)
-#endif()
-
 find_package(Boost 1.58.0 CONFIG REQUIRED
     COMPONENTS system filesystem timer thread program_options)
 message(STATUS "Found Boost version: ${Boost_VERSION}")
@@ -224,29 +214,26 @@ set(DNA_LIBRARIES
 find_package(OpenMP)
 
 if(OpenMP_CXX_FOUND)
-    if (APPLE AND NOT "${OpenMP_CXX_LIBRARIES}" MATCHES ".*libomp.*")
-        message(STATUS "libomp not found (install with `brew install libomp`)")
-        set(USE_OPENMP_MAC OFF)
-    else()
-        set(USE_OPENMP_MAC ON)
-    endif()
-
-    if (APPLE AND USE_OPENMP_MAC)
-        message(STATUS "Enabled OpenMP on MacOS using libomp")
-        add_compile_options(-Xpreprocessor -fopenmp)
-        add_link_options(-L/opt/homebrew/lib)
-        list(APPEND DNA_LIBRARIES ${OpenMP_CXX_LIBRARIES})
+    # Check for libomp on macOS
+    if(APPLE)
+        if(NOT "${OpenMP_CXX_LIBRARIES}" MATCHES ".*libomp.*")
+            message(STATUS "libomp not found (install with `brew install libomp`)")
+        else()
+            message(STATUS "Enabled OpenMP on macOS using libomp")
+            add_compile_options(-Xpreprocessor -fopenmp)
+            add_link_options(-L/opt/homebrew/lib)
+            list(APPEND DNA_LIBRARIES ${OpenMP_CXX_LIBRARIES})
+        endif()
     elseif(MSVC)
         message(STATUS "Enabled OpenMP for MSVC")
         add_compile_options(${OpenMP_CXX_FLAGS})
-        # Don't add OpenMP flags as link options for MSVC
         list(APPEND DNA_LIBRARIES ${OpenMP_CXX_LIBRARIES})
     else()
+        # Linux and other Unix systems
         message(STATUS "Enabled OpenMP")
         add_compile_options(${OpenMP_CXX_FLAGS})
         add_link_options(${OpenMP_CXX_FLAGS})
         list(APPEND DNA_LIBRARIES ${OpenMP_CXX_LIBRARIES})
-        #list(APPEND DNA_LIBRARIES OpenMP::OpenMP_CXX)
     endif()
 endif()
 
@@ -262,11 +249,6 @@ else()
     message(STATUS "Using LP64 interface for BLAS and LAPACK")
 endif()
 
-if(USE_MKL AND (NOT APPLE))
-    add_compile_options("-DUSE_MKL")
-    set(BLA_VENDOR Intel10_64lp)
-endif()
-
 if(APPLE)
     message(STATUS "Looking for BLAS and LAPACK on MacOS")
 
@@ -279,127 +261,134 @@ if(APPLE)
     endif()
     list(APPEND DNA_LIBRARIES ${ACCELERATE_LIB})
 
-elseif (WIN32)
-    message(STATUS "Looking for BLAS and LAPACK on Windows (BLA_VENDOR=${BLA_VENDOR})")
-    if (USE_MKL)
-        add_compile_options("-DUSE_MKL")
-        if (ILP64)
-            set(BLA_VENDOR "Intel10_64ilp" CACHE STRING "Force MKL" FORCE)
-        else()
-            set(BLA_VENDOR "Intel10_64lp" CACHE STRING "Force MKL" FORCE)
-        endif()
-
-        message(STATUS "BLA_VENDOR=${BLA_VENDOR}")
-        
-        find_package(MKL CONFIG REQUIRED PATHS $ENV{MKL_ROOT})
-        set (BLAS_LIBRARIES, ${MKL_REQUESTED_LIBRARIES})
-        set(BLAS_INCLUDE_DIRS, ${MKL_INCLUDE})
-        message(STATUS "MKL_INCLUDE=${MKL_INCLUDE}")
-        message(STATUS "MKL_LIB_DIR=${MKL_ROOT}/lib")
-        message(STATUS "DLL_EXT=${DLL_EXT}")
-        include_directories(${MKL_INCLUDE})
-        link_directories("${MKL_ROOT}/lib")
-
-        foreach(lib ${MKL_REQUESTED_LIBRARIES})
-            get_filename_component(libname ${lib} NAME_WLE)
-            list(APPEND MKL_REQUESTED_DLL_LIBRARIES "${libname}_dll")            
-        endforeach()
-
-        message(STATUS "MKL_REQUESTED_DLL_LIBRARIES=${MKL_REQUESTED_DLL_LIBRARIES}")
-
-        list(APPEND DNA_LIBRARIES ${MKL_REQUESTED_DLL_LIBRARIES})
+else()
+    # Windows and Linux/Unix handling
+    if(WIN32)
+        message(STATUS "Looking for BLAS and LAPACK on Windows")
     else()
-        set(BLA_VENDOR "OpenBLAS" CACHE STRING "Force OpenBLAS" FORCE)
-        find_package(BLAS REQUIRED)
-        add_link_options(${BLAS_LINKER_FLAGS})
-        message(STATUS "BLAS_LINKER_FLAGS=${BLAS_LINKER_FLAGS}")
-        message(STATUS "BLAS_LIBRARIES=${BLAS_LIBRARIES}")
-        list(APPEND DNA_LIBRARIES ${BLAS_LIBRARIES})
-    endif()   
-    
-
-    if (NOT USE_MKL)
-        set(BLA_VENDOR "Generic" CACHE STRING "Force Generic" FORCE)
+        message(STATUS "Looking for BLAS and LAPACK on Linux/Unix")
+        if(BUILD_STATIC)
+            set(BLA_STATIC ON)
+        endif()
     endif()
 
-    find_package(LAPACK)
-    if (LAPACK_FOUND)
-        add_link_options(${LAPACK_LINKER_FLAGS})
-        message(STATUS "LAPACK_LINKER_FLAGS=${LAPACK_LINKER_FLAGS}")
-        message(STATUS "LAPACK_LIBRARIES=${LAPACK_LIBRARIES}")
-        list(APPEND DNA_LIBRARIES ${LAPACK_LIBRARIES})
-    endif()
-
-    if (NOT USE_MKL)
-        # Find OpenBLAS package which should set include directories
-        find_package(OpenBLAS CONFIG QUIET)
-        if(OpenBLAS_FOUND)
-            message(STATUS "Found OpenBLAS via CONFIG")
-            # OpenBLAS::OpenBLAS target should have include directories set
-            if(TARGET OpenBLAS::OpenBLAS)
-                list(APPEND DNA_LIBRARIES OpenBLAS::OpenBLAS)
-            endif()
+    if(USE_MKL)
+        # Use Intel MKL's native CMake config
+        add_compile_options("-DUSE_MKL")
+        
+        # Set MKL interface based on ILP64 option
+        if(ILP64)
+            set(MKL_INTERFACE "ilp64")
         else()
-            # Fallback to manual search
-            find_path(BLAS_INCLUDE_DIRS 
-                NAMES cblas.h
-                PATHS 
-                    ${CMAKE_PREFIX_PATH}/include
-                    ${CMAKE_PREFIX_PATH}/include/openblas
+            set(MKL_INTERFACE "lp64")
+        endif()
+        
+        # Find MKL using its CMake config
+        find_package(MKL CONFIG)
+        
+        if(MKL_FOUND)
+            message(STATUS "Found Intel MKL using MKLConfig.cmake")
+            message(STATUS "  MKL Version: ${MKL_VERSION}")
+            message(STATUS "  MKL Interface: ${MKL_INTERFACE}")
+            message(STATUS "  MKL Threading: ${MKL_THREADING}")
+            
+            # Use the modern MKL target
+            list(APPEND DNA_LIBRARIES MKL::MKL)
+        else()
+            # MKL CONFIG not found, try with FindBLAS
+            message(STATUS "MKLConfig.cmake not found, trying FindBLAS with BLA_VENDOR set to Intel MKL")
+            
+            if(ILP64)
+                set(BLA_VENDOR "Intel10_64ilp")
+            else()
+                set(BLA_VENDOR "Intel10_64lp")
+            endif()
+            
+            find_package(BLAS MODULE REQUIRED)
+            find_package(LAPACK MODULE)
+            
+            # Verify we actually got MKL
+            if(NOT "${BLAS_LIBRARIES}" MATCHES "mkl")
+                message(FATAL_ERROR "USE_MKL=ON but Intel MKL was not found. Found: ${BLAS_LIBRARIES}")
+            endif()
+            
+            message(STATUS "Found Intel MKL via FindBLAS: ${BLAS_LIBRARIES}")
+            list(APPEND DNA_LIBRARIES ${BLAS_LIBRARIES})
+            if(LAPACK_FOUND)
+                list(APPEND DNA_LIBRARIES ${LAPACK_LIBRARIES})
+            endif()
+            
+            # MKL provides mkl_cblas.h, not cblas.h - no need to search for cblas.h
+        endif()
+        
+    else()
+        # Use standard BLAS and LAPACK search
+        find_package(BLAS MODULE REQUIRED)
+        find_package(LAPACK MODULE)
+        
+        message(STATUS "Found BLAS: ${BLAS_LIBRARIES}")
+        if(LAPACK_FOUND)
+            message(STATUS "Found LAPACK: ${LAPACK_LIBRARIES}")
+        endif()
+        
+        # Add libraries and linker flags
+        if(WIN32)
+            add_link_options(${BLAS_LINKER_FLAGS})
+            if(LAPACK_FOUND)
+                add_link_options(${LAPACK_LINKER_FLAGS})
+            endif()
+        endif()
+        
+        list(APPEND DNA_LIBRARIES ${BLAS_LIBRARIES})
+        if(LAPACK_FOUND)
+            list(APPEND DNA_LIBRARIES ${LAPACK_LIBRARIES})
+        endif()
+        
+        # Check if MKL was found by FindBLAS
+        string(TOLOWER "${BLAS_LIBRARIES}" BLAS_LIBRARIES_LOWER)
+        if(BLAS_LIBRARIES_LOWER MATCHES "mkl")
+            message(STATUS "Intel MKL detected via FindBLAS - skipping cblas.h search")
+            add_compile_options("-DUSE_MKL")
+        else()
+            # Try to find cblas.h header for non-MKL BLAS implementations (OpenBLAS, etc.)
+            set(BLAS_INCLUDE_SEARCH_PATHS
+                ${CMAKE_PREFIX_PATH}/include
+                ${CMAKE_PREFIX_PATH}/include/openblas
+            )
+            
+            if(WIN32)
+                list(APPEND BLAS_INCLUDE_SEARCH_PATHS
                     ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include
                     ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include/openblas
                     C:/vcpkg/installed/x64-windows/include
                     C:/vcpkg/installed/x64-windows/include/openblas
-                REQUIRED
-            )
-            message(STATUS "BLAS_INCLUDE_DIRS=${BLAS_INCLUDE_DIRS}")
-            include_directories(${BLAS_INCLUDE_DIRS})
-        endif()
-    endif()
-
-elseif(UNIX)
-    message(STATUS "Looking for BLAS and LAPACK on Linux")
-
-    if (BUILD_STATIC)
-        set(BLA_STATIC ON)
-    endif()
-
-    find_package(BLAS REQUIRED)
-
-    find_package(LAPACK)
-
-    if ("${BLAS_LIBRARIES}" MATCHES "libmkl")
-        message(STATUS "Using Intel MKL for fast linear algebra")
-        add_compile_options("-DUSE_MKL")
-        set(USE_MKL ON)
-    	list(APPEND DNA_LIBRARIES ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
-    else()
-        message(STATUS "Using OpenBLAS and LAPACK for fast linear algebra (${BLAS_LINKER_FLAGS})")
-        # Try to find OpenBLAS package first
-        find_package(OpenBLAS CONFIG QUIET)
-        if(OpenBLAS_FOUND AND TARGET OpenBLAS::OpenBLAS)
-            message(STATUS "Found OpenBLAS via CONFIG")
-            list(APPEND DNA_LIBRARIES OpenBLAS::OpenBLAS ${LAPACK_LIBRARIES})
-        else()
-            # Fallback to manual search
-            find_path(BLAS_INCLUDE_DIRS 
-                NAMES cblas.h 
-                PATHS 
-                    ${CMAKE_PREFIX_PATH}/include
-                    ${CMAKE_PREFIX_PATH}/include/openblas
+                )
+            else()
+                list(APPEND BLAS_INCLUDE_SEARCH_PATHS
                     /usr/include
                     /usr/local/include
                     /usr/include/openblas
                     /usr/local/include/openblas
+                    # Architecture-specific paths for Debian/Ubuntu
+                    /usr/include/x86_64-linux-gnu
+                    /usr/include/aarch64-linux-gnu
+                    /usr/include/i386-linux-gnu
+                )
+            endif()
+            
+            find_path(BLAS_INCLUDE_DIRS 
+                NAMES cblas.h
+                PATHS ${BLAS_INCLUDE_SEARCH_PATHS}
                 REQUIRED
             )
-            message(STATUS "BLAS_INCLUDE_DIRS=${BLAS_INCLUDE_DIRS}")
-            include_directories(${BLAS_INCLUDE_DIRS})
-            list(APPEND DNA_LIBRARIES ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+            
+            if(BLAS_INCLUDE_DIRS)
+                message(STATUS "Found cblas.h at: ${BLAS_INCLUDE_DIRS}")
+                include_directories(${BLAS_INCLUDE_DIRS})
+            endif()
         endif()
     endif()
-else()
-    message(STATUS "Here is something dandy")
+
 endif()
 
 message(STATUS "DynAdjust library dependencies: ${DNA_LIBRARIES}")
@@ -422,8 +411,10 @@ if(BUILD_STATIC)
     message("=====================================================================")
     message("")
 
-    add_definitions(-DBUILD_STATIC)
-    add_definitions(-DXERCES_STATIC_LIBRARY)
+    add_compile_definitions(
+        BUILD_STATIC
+        XERCES_STATIC_LIBRARY
+    )
 
     # Set optimization flags based on compiler
     if(MSVC)
@@ -435,18 +426,12 @@ if(BUILD_STATIC)
         add_compile_options(-O3)
     endif()
 
-    message(STATUS "BLAS_LIBRARIES=${BLAS_LIBRARIES}")
-    message(STATUS "LAPACK_LIBRARIES=${LAPACK_LIBRARIES}")
-
-    if (UNIX AND NOT APPLE)
-    	list(APPEND DNA_LIBRARIES "gfortran" ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
-    	list(APPEND DNA_LIBRARIES "quadmath" ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
-    	list(APPEND DNA_LIBRARIES "openblas" ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
-    	list(APPEND DNA_LIBRARIES "lapacke" ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+    if(BLAS_LIBRARIES)
+        message(STATUS "BLAS_LIBRARIES=${BLAS_LIBRARIES}")
     endif()
-
-    message(STATUS "BLAS_LIBRARIES=${BLAS_LIBRARIES}")
-    message(STATUS "LAPACK_LIBRARIES=${LAPACK_LIBRARIES}")
+    if(LAPACK_LIBRARIES)
+        message(STATUS "LAPACK_LIBRARIES=${LAPACK_LIBRARIES}")
+    endif()
 
     if (UNIX)
         # Find the static library equivalents
@@ -464,7 +449,6 @@ if(BUILD_STATIC)
                 if(NOT (libname STREQUAL "m" OR 
                         libname STREQUAL "dl" OR 
                         libname MATCHES "^-W*" OR 
-                        #libname STREQUAL "xerces-c" OR
                         libname STREQUAL "Accelerate"))
                     message(CHECK_START "Finding static '${lib}'")
                     find_library(STATIC_LIB_${libname}
@@ -476,8 +460,6 @@ if(BUILD_STATIC)
                         message(CHECK_PASS "Found")
                         list(APPEND STATIC_LIBS_LIST ${STATIC_LIB_${libname}})
                     endif()
-                else()
-                    #message(STATUS "Finding static '${lib}' - Skipped")
                 endif()
             endif()
         endforeach()
@@ -545,6 +527,59 @@ endif()
 
 
 # ----------------------------------------------------------------------------
+# Unified Installation
+# ----------------------------------------------------------------------------
+
+# Set default install prefix if not specified
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    # Install to repo root bin directory (DynAdjust/bin)
+    set(CMAKE_INSTALL_PREFIX "${CMAKE_SOURCE_DIR}/.." CACHE PATH "Installation Directory" FORCE)
+endif()
+
+message(STATUS "Install prefix: ${CMAKE_INSTALL_PREFIX}")
+
+# Install all executables to bin directory
+install(TARGETS 
+    dnaimportwrapper dnareftranwrapper dnasegmentwrapper 
+    dnageoidwrapper dnaplotwrapper dynadjust dnaadjustwrapper
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION bin
+    ARCHIVE DESTINATION bin)
+
+# Install all libraries to bin directory  
+install(TARGETS
+    dnaimport dnareftran dnasegment dnageoid dnaplot dnaadjust
+    RUNTIME DESTINATION bin
+    LIBRARY DESTINATION bin
+    ARCHIVE DESTINATION bin)
+
+# Install static executables if they exist
+if(BUILD_STATIC)
+    # Check if targets exist before trying to install them
+    if(TARGET dnaimportwrapper_static)
+        install(TARGETS dnaimportwrapper_static RUNTIME DESTINATION bin)
+    endif()
+    if(TARGET dnareftranwrapper_static)
+        install(TARGETS dnareftranwrapper_static RUNTIME DESTINATION bin)
+    endif()
+    if(TARGET dnasegmentwrapper_static)
+        install(TARGETS dnasegmentwrapper_static RUNTIME DESTINATION bin)
+    endif()
+    if(TARGET dnageoidwrapper_static)
+        install(TARGETS dnageoidwrapper_static RUNTIME DESTINATION bin)
+    endif()
+    if(TARGET dnaplotwrapper_static)
+        install(TARGETS dnaplotwrapper_static RUNTIME DESTINATION bin)
+    endif()
+    if(TARGET dynadjust_static)
+        install(TARGETS dynadjust_static RUNTIME DESTINATION bin)
+    endif()
+    if(TARGET dnaadjustwrapper_static)
+        install(TARGETS dnaadjustwrapper_static RUNTIME DESTINATION bin)
+    endif()
+endif()
+
+# ----------------------------------------------------------------------------
 # Testing
 # ----------------------------------------------------------------------------
 
@@ -570,9 +605,7 @@ if (BUILD_TESTING)
     add_test (NAME adjust-gnss-network COMMAND $<TARGET_FILE:dnaadjustwrapper> gnss --output-adj-msr --export-dna-msr --export-xml-msr)
 
     # bash command to check results
-    if (NOT WIN32)
-        add_test (NAME test-gnss-network COMMAND bash -c "diff <(tail -n +53 gnss.simult.adj) <(tail -n +53 ${CMAKE_SOURCE_DIR}/../sampleData/gnss.simult.adj.expected)")
-    endif ()
+    add_test (NAME test-gnss-network COMMAND bash -c "diff <(tail -n +53 gnss.simult.adj) <(tail -n +53 ${CMAKE_SOURCE_DIR}/../sampleData/gnss.simult.adj.expected)")
 
     file (COPY ${CMAKE_SOURCE_DIR}/../sampleData/gnss_b1.net DESTINATION ./)
     add_test (NAME import-gnss-network-similar COMMAND $<TARGET_FILE:dnaimportwrapper> -n gnss_similar ${CMAKE_SOURCE_DIR}/../sampleData/gnss-network.stn ${CMAKE_SOURCE_DIR}/../sampleData/gnss-network.msr -r itrf2008 --override-input-ref-frame --search-similar-gnss-msr --quiet) 
@@ -1538,11 +1571,7 @@ if (BUILD_TESTING)
     set_tests_properties(
         import-urban-network-thread reftran-urban-network-thread geoid-urban-network-thread segment-urban-network-thread adjust-urban-network-thread-01
         PROPERTIES RUN_SERIAL TRUE)
-
-    if (NOT WIN32)
-        set_tests_properties(test-gnss-network PROPERTIES DEPENDS adjust-gnss-network)
-    endif ()
-
+    set_tests_properties(test-gnss-network PROPERTIES DEPENDS adjust-gnss-network)
     set_tests_properties(ref-itrf-pmm-06 PROPERTIES DEPENDS ref-itrf-pmm-05)
     #set_tests_properties(ref-itrf-pmm-07 PROPERTIES DEPENDS ref-itrf-pmm-06)
 
@@ -1561,4 +1590,3 @@ endif ()
 
 message ("")
 message ("")
-
