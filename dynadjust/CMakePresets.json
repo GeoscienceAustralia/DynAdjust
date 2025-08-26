@@ -5,7 +5,7 @@
   "configurePresets": [
     {
       "name": "vs-x64-openblas",
-      "displayName": "VS2022 x64 (vcpkg)",
+      "displayName": "VS2022 x64 (OpenBLAS)",
       "generator": "Visual Studio 17 2022",
       "architecture": { "value": "x64" },
       "binaryDir": "${sourceParentDir}/build/",
@@ -15,8 +15,8 @@
       }
     },
     {
-      "name": "vs-x64-mkl",
-      "displayName": "VS2022 x64 (vcpkg)",
+      "name": "vs-x64",
+      "displayName": "VS2022 x64 (Intel MKL)",
       "generator": "Visual Studio 17 2022",
       "architecture": { "value": "x64" },
       "binaryDir": "${sourceParentDir}/build/",
@@ -36,8 +36,8 @@
   ],
 
   "buildPresets": [
-    { "name": "build-debug",   "configurePreset": "vs-x64-mkl", "configuration": "Debug" },
-    { "name": "build-release", "configurePreset": "vs-x64-mkl", "configuration": "Release" }
+    { "name": "build-debug",   "configurePreset": "vs-x64", "configuration": "Debug" },
+    { "name": "build-release", "configurePreset": "vs-x64", "configuration": "Release" }
   ],
 
   "testPresets": [
