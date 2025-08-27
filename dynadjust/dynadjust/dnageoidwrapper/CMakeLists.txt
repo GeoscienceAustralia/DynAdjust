@@ -19,13 +19,7 @@ target_link_libraries (${PROJECT_NAME} dnageoid ${DNA_LIBRARIES})
 
 set_target_properties (${PROJECT_NAME} PROPERTIES OUTPUT_NAME "${DNA_PROGRAM_PREFIX}geoid")
 
-install (TARGETS ${PROJECT_NAME} DESTINATION bin)
 
-# Install to the x64 directory
-set_target_properties (${PROJECT_NAME} PROPERTIES 
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/x64")    
-    
-install (TARGETS ${PROJECT_NAME} DESTINATION x64)
 
 if(BUILD_STATIC)
 
@@ -100,6 +94,4 @@ if(BUILD_STATIC)
   set_target_properties(${STATIC_TARGET_NAME} PROPERTIES 
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/static")
     
-  # Install to the static directory
-  install(TARGETS ${STATIC_TARGET_NAME} DESTINATION static)
 endif()

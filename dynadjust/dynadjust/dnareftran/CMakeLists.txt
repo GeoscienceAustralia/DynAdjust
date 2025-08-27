@@ -1,7 +1,6 @@
 # <dnareftran/...> build rules
 project (dnareftran)
 
-#add_definitions(-DBUILD_DNAREFTRAN_DLL -DBUILD_EXPORTDNATYPES -DMKL_ILP64 -fopenmp)
 add_definitions(-DBUILD_DNAREFTRAN_DLL -DBUILD_EXPORTDNATYPES)
 
 include_directories (${PROJECT_SOURCE_DIR})
@@ -36,10 +35,3 @@ target_precompile_headers (${PROJECT_NAME} PUBLIC precompile.h)
 
 target_link_libraries (${PROJECT_NAME} ${DNA_LIBRARIES})
 
-install (TARGETS ${PROJECT_NAME} DESTINATION lib)
-
-# Install to the x64 directory
-set_target_properties (${PROJECT_NAME} PROPERTIES 
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/x64")    
-    
-install (TARGETS ${PROJECT_NAME} DESTINATION x64)

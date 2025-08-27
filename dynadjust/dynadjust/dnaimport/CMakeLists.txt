@@ -1,19 +1,7 @@
 # <dnaimport/...> build rules
 project (dnaimport)
 
-#add_definitions(-DBUILD_DNAIMPORT_DLL -DBUILD_EXPORTDNATYPES -DMKL_ILP64 -fopenmp)
 add_definitions(-DBUILD_DNAIMPORT_DLL -DBUILD_EXPORTDNATYPES)
-
-
-## BLAS/LAPACK or MKL
-#if(APPLE)
-#    # Force disable MKL ILP64 and -fopenmp on mac
-#    remove_definitions(-DMKL_ILP64)
-#    # Remove any -fopenmp flags that may have been added
-#    string(REPLACE "-fopenmp" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-#    remove_definitions(-fopenmp)
-#    message(STATUS "Removed -fopenmp flag (macOS) for project ${PROJECT_NAME}")
-#endif()
 
 include_directories (${PROJECT_SOURCE_DIR})
 
@@ -55,11 +43,3 @@ add_library (${PROJECT_NAME} SHARED
 target_precompile_headers (${PROJECT_NAME} PUBLIC precompile.h)
 
 target_link_libraries (${PROJECT_NAME} ${DNA_LIBRARIES})
-
-install (TARGETS ${PROJECT_NAME} DESTINATION lib)
-
-# Install to the x64 directory
-set_target_properties (${PROJECT_NAME} PROPERTIES 
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/x64")    
-    
-install (TARGETS ${PROJECT_NAME} DESTINATION x64)

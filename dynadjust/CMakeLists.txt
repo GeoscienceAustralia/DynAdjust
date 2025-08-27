@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(dynadjust VERSION 1.2.9)
 
-option(BUILD_TESTING "Enable testing" ON)
+option(BUILD_TESTING "Enable testing" OFF)
 option(BUILD_STATIC "Build static binaries in the 'static' directory" OFF)
 option(USE_MKL "Use Intel MKL (Linux and Windows)" OFF)
 option(ILP64 "Use ILP64 Interface for BLAS and LAPACK" OFF)
@@ -1590,3 +1590,4 @@ endif ()
 
 message ("")
 message ("")
+
