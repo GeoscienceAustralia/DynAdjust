@@ -127,7 +127,7 @@ const char* const __dynadjust_app_name__ = "dynadjust";
     #define __LINEAR_ALGEBRA_LIB__ "OpenBLAS"
 #elif (defined(_WIN32) && !defined(USE_MKL)) // Windows - No LAPACKE and no MKL
     #define __LINEAR_ALGEBRA_LIB__ "OpenBLAS"
-#elif (defined(_WIN32) && defined(USE_MKL))  // Linux or Windows - Intel MKL with ILP64
+#elif (defined(_WIN32) || defined(USE_MKL))  // Linux or Windows - Intel MKL with ILP64
     #define __LINEAR_ALGEBRA_LIB__ "Intel MKL"
 #else // LAPACKE fall back
     #define __LINEAR_ALGEBRA_LIB__ "OpenBLAS"
