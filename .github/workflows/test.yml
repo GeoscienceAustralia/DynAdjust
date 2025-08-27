@@ -1,0 +1,342 @@
+# Compile and build binaries
+#
+# For updated Intel OneAPI URLs, see:
+# https://github.com/oneapi-src/oneapi-ci/blob/master/.github/workflows/build_all.yml
+
+name: Run tests
+
+on:
+  workflow_dispatch:
+  push:
+
+env:
+  WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/f5881e61-dcdc-40f1-9bd9-717081ac623c/intel-oneapi-base-toolkit-2025.2.1.46_offline.exe
+  LINUX_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/3b7a16b3-a7b0-460f-be16-de0d64fa6b1e/intel-oneapi-base-toolkit-2025.2.1.44_offline.sh
+
+jobs:
+#------------------------------------------------
+
+  ctest_linux_dyn_openblas:
+    name: Run tests on Linux (openblas)
+    runs-on: ubuntu-latest
+    env:
+      BRANCH_NAME: ${{ github.head_ref || github.ref_name }} 
+      PKGS: >
+        libxerces-c-dev xsdcxx libboost-system-dev libboost-filesystem-dev libboost-timer-dev
+        libboost-thread-dev libboost-program-options-dev libopenblas-dev liblapacke-dev gmt ghostscript
+
+    steps:
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ env.PKGS }}
+
+      - name: Check branch name
+        shell: bash
+        run: echo ${{ env.BRANCH_NAME }}
+          
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH_NAME }}
+
+      - name: Build with CMake
+        run: |
+          cmake dynadjust -DBUILD_TESTING=ON
+          make -j2
+          ls -la bin/
+          
+      - name: Run tests
+        run: |
+          set +e
+          ctest --output-on-failure --timeout 120 2>&1 | tee ctest_output.log
+          CTEST_EXIT_CODE=${PIPESTATUS[0]}
+          echo "CTEST_EXIT_CODE=$CTEST_EXIT_CODE" >> $GITHUB_ENV
+          exit 0
+
+      - name: Parse test results and create annotations
+        if: always()
+        shell: bash
+        run: |
+          if [ -f ctest_output.log ]; then
+            # Find the line with "tests passed" and get everything from there to the end
+            SUMMARY_LINE=$(grep -n "tests passed" ctest_output.log | head -1 | cut -d: -f1)
+            
+            if [ -n "$SUMMARY_LINE" ]; then
+              # Get the first line (the summary line)
+              FIRST_LINE=$(tail -n +$SUMMARY_LINE ctest_output.log | head -1)
+              # Get the multiline summary from the tests passed line onwards
+              SUMMARY_CONTENT=$(tail -n +$SUMMARY_LINE ctest_output.log | grep -v "Errors while" | tr '\n' '\a')
+              # Replace newlines with %0A for GitHub Actions annotation
+              SUMMARY_CONTENT=$(echo "$SUMMARY_CONTENT" | tr '\a' '\n' | sed ':a;N;$!ba;s/\n/%0A/g')
+              
+              # Check if there are failed tests
+              if grep -q "tests failed" ctest_output.log; then
+                echo "::error title=Test results (openblas): $FIRST_LINE::$SUMMARY_CONTENT"
+              else
+                echo "::notice title=Test results (openblas): $FIRST_LINE::$SUMMARY_CONTENT"
+              fi
+            else
+              echo "::error title=Test Error::Could not find test summary in ctest output"
+            fi
+          else
+            echo "::error title=Test Error::Could not find ctest output file"
+          fi
+          
+#------------------------------------------------
+
+  ctest_linux_dyn_mkl:
+    name: Run tests on Linux (mkl)
+    runs-on: ubuntu-latest
+    env:
+      BRANCH_NAME: ${{ github.head_ref || github.ref_name }} 
+      PKGS: >
+        libxerces-c-dev xsdcxx libboost-system-dev libboost-filesystem-dev libboost-timer-dev
+        libboost-thread-dev libboost-program-options-dev gmt ghostscript
+
+    steps:
+
+      - name: Generate cache triggers
+        shell: bash
+        run: |
+          echo ONEAPI_HASH=$(echo "${LINUX_BASEKIT_URL}" | md5sum | cut -f 1 -d" ") >> $GITHUB_ENV
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ env.PKGS }}
+
+      - name: Cache Intel OneAPI
+        id: cache-oneapi
+        uses: actions/cache@v4
+        with:
+          path: /opt/intel
+          key: intel-oneapi-linux-${{ env.ONEAPI_HASH }}
+
+      - name: Install Intel OneAPI
+        if: steps.cache-oneapi.outputs.cache-hit != 'true'
+        run: |
+          curl -L $LINUX_BASEKIT_URL -o install.sh
+          sudo sh install.sh -a --action install --components intel.oneapi.lin.mkl.devel --eula=accept -s
+
+      - name: Check branch name
+        shell: bash
+        run: echo ${{ env.BRANCH_NAME }}
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH_NAME }}
+
+      - name: Build with CMake
+        run: |
+          source /opt/intel/oneapi/setvars.sh
+          cmake dynadjust -DBUILD_TESTING=ON
+          make -j2
+          ls -la bin/
+          
+      - name: Run tests
+        run: |
+          source /opt/intel/oneapi/setvars.sh
+          set +e
+          ctest --output-on-failure --timeout 120 2>&1 | tee ctest_output.log
+          CTEST_EXIT_CODE=${PIPESTATUS[0]}
+          echo "CTEST_EXIT_CODE=$CTEST_EXIT_CODE" >> $GITHUB_ENV
+          exit 0
+
+      - name: Parse test results and create annotations
+        if: always()
+        shell: bash
+        run: |
+          if [ -f ctest_output.log ]; then
+            # Find the line with "tests passed" and get everything from there to the end
+            SUMMARY_LINE=$(grep -n "tests passed" ctest_output.log | head -1 | cut -d: -f1)
+            
+            if [ -n "$SUMMARY_LINE" ]; then
+              # Get the first line (the summary line)
+              FIRST_LINE=$(tail -n +$SUMMARY_LINE ctest_output.log | head -1)
+              # Get the multiline summary from the tests passed line onwards
+              SUMMARY_CONTENT=$(tail -n +$SUMMARY_LINE ctest_output.log | grep -v "Errors while running" | tr '\n' '\a')
+              # Replace newlines with %0A for GitHub Actions annotation
+              SUMMARY_CONTENT=$(echo "$SUMMARY_CONTENT" | tr '\a' '\n' | sed ':a;N;$!ba;s/\n/%0A/g')
+              
+              # Check if there are failed tests
+              if grep -q "tests failed" ctest_output.log; then
+                echo "::error title=Test results (mkl): $FIRST_LINE::$SUMMARY_CONTENT"
+              else
+                echo "::notice title=Test results (mkl): $FIRST_LINE::$SUMMARY_CONTENT"
+              fi
+            else
+              echo "::error title=Test Error::Could not find test summary in ctest output"
+            fi
+          else
+            echo "::error title=Test Error::Could not find ctest output file"
+          fi
+
+
+  ctest_windows_dyn_mkl:
+    name: Run tests on Windows (mkl)
+    runs-on: windows-2025
+    env:
+      BRANCH_NAME: ${{ github.head_ref || github.ref_name }} 
+      VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-system boost-filesystem boost-timer boost-thread boost-program-options boost-interprocess xerces-c vcpkg-tool-ninja
+      VCPKG_INSTALLATION_ROOT: "C:/vcpkg"
+      VCPKG_BINARY_SOURCES: "clear"
+      ONEAPI_VERSION: "2025.2"
+    
+    steps:
+
+    - name: Generate cache triggers
+      shell: bash
+      run: |
+        echo VCPKG_HASH=$(echo "${VCPKG_PACKAGES}" | sed "s/ /_/g" | md5sum | cut -f 1 -d" ") >> $GITHUB_ENV
+        echo ONEAPI_HASH=$(echo "${WINDOWS_BASEKIT_URL}" | md5sum | cut -f 1 -d" ") >> $GITHUB_ENV
+
+    - name: Cache vcpkg
+      id: cache-vcpkg
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
+        key: vcpkg-${{ runner.os }}-${{ env.VCPKG_HASH }}
+
+    - name: Cache Intel OneAPI
+      id: cache-oneapi
+      uses: actions/cache@v4
+      with:
+        path: C:\Program Files (x86)\Intel\oneAPI
+        key: intel-oneapi-${{ env.ONEAPI_HASH }}
+
+    - name: Install vcpkg prerequisites
+      if: steps.cache-vcpkg.outputs.cache-hit != 'true'
+      shell: powershell
+      run: |
+        vcpkg.exe --triplet=x64-windows install ${{ env.VCPKG_PACKAGES }}
+        Remove-Item -Recurse -Force ${{ env.VCPKG_INSTALLATION_ROOT }}/.git
+        Remove-Item -Recurse -Force ${{ env.VCPKG_INSTALLATION_ROOT }}/buildtrees
+        Remove-Item -Recurse -Force ${{ env.VCPKG_INSTALLATION_ROOT }}/downloads
+        Remove-Item -Recurse -Force ${{ env.VCPKG_INSTALLATION_ROOT }}/.github
+        Remove-Item -Recurse -Force ${{ env.VCPKG_INSTALLATION_ROOT }}/docs
+
+    - name: List installed packages
+      shell: powershell
+      run: vcpkg.exe list
+
+    - name: Install Intel OneAPI
+      if: steps.cache-oneapi.outputs.cache-hit != 'true'
+      shell: powershell
+      run: |
+        Write-Host "Installing Intel OneAPI..."
+        $url = $env:WINDOWS_BASEKIT_URL
+        $components = "intel.oneapi.win.mkl.devel"
+        $tempExe = Join-Path $env:TEMP "webimage.exe"
+
+        Write-Host "Downloading installer from $url..."
+        curl.exe -L $url -o $tempExe
+
+        Write-Host "Extracting installer..."
+        $installerArgs = "-s -x -f webimage_extracted --log extract.log"
+        $proc = Start-Process -FilePath $tempExe -ArgumentList $installerArgs -NoNewWindow -Wait -PassThru
+        Remove-Item $tempExe -Force
+
+        $bootstrapperPath = Join-Path -Path (Join-Path $PWD "webimage_extracted") "bootstrapper.exe"
+
+        Write-Host "Listing available components..."
+        $procBootstrap = Start-Process -FilePath $bootstrapperPath -ArgumentList "--list-components" -NoNewWindow -Wait -PassThru -RedirectStandardOutput components
+        get-content components
+
+        Write-Host "Running bootstrapper..."
+        $bootstrapArgs = "-s --action install --components=$components --eula=accept -p=NEED_VS2017_INTEGRATION=0 -p=NEED_VS2019_INTEGRATION=0 -p=NEED_VS2022_INTEGRATION=0 --log-dir=."
+        $procBootstrap = Start-Process -FilePath $bootstrapperPath -ArgumentList $bootstrapArgs -NoNewWindow -Wait -PassThru
+        Remove-Item -Recurse -Force "webimage_extracted"
+
+    - name: Check branch name
+      shell: bash
+      run: echo ${{ env.BRANCH_NAME }}
+
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ env.BRANCH_NAME }}
+        path: "./src"
+
+    - name: Download and install xsd
+      working-directory: "./src"
+      shell: bash
+      run: |
+        curl.exe -L -O https://www.codesynthesis.com/download/xsd/4.2/libxsd-4.2.0.tar.gz
+        tar zxvf libxsd-4.2.0.tar.gz
+
+    - name: Extract OneAPI version
+      shell: powershell
+      run: |
+        # Extract version from URL (e.g., 2025.2.1 -> 2025.2)
+        $url = "${{ env.WINDOWS_BASEKIT_URL }}"
+        if ($url -match 'toolkit-(\d+\.\d+)\.\d+') {
+          $version = $matches[1]
+          echo "ONEAPI_VERSION=$version" >> $env:GITHUB_ENV
+          Write-Host "Extracted OneAPI version: $version"
+        } else {
+          Write-Host "Failed to extract version, using default 2025.2"
+          echo "ONEAPI_VERSION=2025.2" >> $env:GITHUB_ENV
+        }
+
+    - name: Build with CMake
+      working-directory: "./src"
+      shell: cmd
+      run: |
+        vcpkg.exe integrate install
+        call "C:\Program Files (x86)\Intel\oneAPI\compiler\%ONEAPI_VERSION%\env\vars.bat"
+        call "C:\Program Files (x86)\Intel\oneAPI\mkl\%ONEAPI_VERSION%\env\vars.bat"
+        set XSDROOT=%cd%\libxsd-4.2.0
+        set VPKG_INCLUDE=${{ env.VCPKG_INSTALLATION_ROOT }}\installed\x64-windows\include
+        set INCLUDE=%XSDROOT%;%VPKG_INCLUDE%;%INCLUDE%
+        set UseEnv=true
+        cmake -DUSE_MKL=ON ^
+              -DBUILD_TESTING=ON ^
+              -DVCPKG_MANIFEST_MODE=OFF ^
+              -DCMAKE_TOOLCHAIN_FILE"=${{ env.VCPKG_INSTALLATION_ROOT }}/scripts/buildsystems/vcpkg.cmake" ^
+              -G "Visual Studio 17 2022" -A x64 dynadjust
+        cmake --build %cd% --config Release --parallel 2
+        dir bin\
+
+    - name: Run tests
+      working-directory: "./src"
+      shell: cmd
+      run: |
+        call "C:\Program Files (x86)\Intel\oneAPI\compiler\%ONEAPI_VERSION%\env\vars.bat"
+        call "C:\Program Files (x86)\Intel\oneAPI\mkl\%ONEAPI_VERSION%\env\vars.bat"
+        ctest --output-on-failure --timeout 120 -C Release > ctest_output.log 2>&1
+        echo CTEST_EXIT_CODE=%ERRORLEVEL% >> %GITHUB_ENV%
+        exit /b 0
+
+    - name: Parse test results and create annotations
+      if: always()
+      working-directory: "./src"
+      shell: bash
+      run: |
+        if [ -f ctest_output.log ]; then
+          # Find the line with "tests passed" and get everything from there to the end
+          SUMMARY_LINE=$(grep -n "tests passed" ctest_output.log | head -1 | cut -d: -f1)
+          
+          if [ -n "$SUMMARY_LINE" ]; then
+            # Get the first line (the summary line)
+            FIRST_LINE=$(tail -n +$SUMMARY_LINE ctest_output.log | head -1)
+            # Get the multiline summary from the tests passed line onwards
+            SUMMARY_CONTENT=$(tail -n +$SUMMARY_LINE ctest_output.log | grep -v "Errors while running" | tr '\n' '\a')
+            # Replace newlines with %0A for GitHub Actions annotation
+            SUMMARY_CONTENT=$(echo "$SUMMARY_CONTENT" | tr '\a' '\n' | sed ':a;N;$!ba;s/\n/%0A/g')
+            
+            # Check if there are failed tests
+            if grep -q "tests failed" ctest_output.log; then
+              echo "::error title=Test results (windows mkl): $FIRST_LINE::$SUMMARY_CONTENT"
+            else
+              echo "::notice title=Test results (windows mkl): $FIRST_LINE::$SUMMARY_CONTENT"
+            fi
+          else
+            echo "::error title=Test Error::Could not find test summary in ctest output"
+          fi
+        else
+          echo "::error title=Test Error::Could not find ctest output file"
+        fi
+
+

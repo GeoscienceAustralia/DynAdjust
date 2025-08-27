@@ -1,0 +1,79 @@
+# Test static binaries on sample data
+name: Test static binaries
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Build binaries (Linux, Mac, Windows)"]
+    types:
+      - completed
+
+env:
+  ARTIFACT_NAME: dynadjust-linux-openblas-static.zip
+
+jobs:
+  test_static_binaries:
+    name: Test static binaries on sample data
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Download artifact from build workflow
+        uses: actions/download-artifact@v4
+        with:
+          name: dynadjust-linux-openblas-static
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+          
+      - name: Extract binaries
+        run: |
+          ls -la
+          unzip -o ${{ env.ARTIFACT_NAME }}
+          ls -la
+          chmod +x dynadjust/dnaadjust/dnaadjust
+          chmod +x dynadjust/dnaimport/dnaimport
+          chmod +x dynadjust/dnareftran/dnareftran
+          chmod +x dynadjust/dnasegment/dnasegment
+          chmod +x dynadjust/dnaplot/dnaplot
+          chmod +x dynadjust/dnageoid/dnageoid
+          
+      - name: Clone repository for sample data
+        uses: actions/checkout@v4
+        with:
+          path: repo
+          
+      - name: Set up environment
+        run: |
+          echo "$(pwd)/dynadjust/dnaadjust" >> $GITHUB_PATH
+          echo "$(pwd)/dynadjust/dnaimport" >> $GITHUB_PATH
+          echo "$(pwd)/dynadjust/dnareftran" >> $GITHUB_PATH
+          echo "$(pwd)/dynadjust/dnasegment" >> $GITHUB_PATH
+          echo "$(pwd)/dynadjust/dnaplot" >> $GITHUB_PATH
+          echo "$(pwd)/dynadjust/dnageoid" >> $GITHUB_PATH
+          
+      - name: Test GNSS network
+        working-directory: repo/sampleData
+        run: |
+          if [ -f run-gnss-network.sh ]; then
+            chmod +x run-gnss-network.sh
+            ./run-gnss-network.sh
+          else
+            echo "::warning::run-gnss-network.sh not found"
+          fi
+          
+      - name: Test urban network
+        working-directory: repo/sampleData
+        run: |
+          if [ -f run-urban-network.sh ]; then
+            chmod +x run-urban-network.sh
+            ./run-urban-network.sh
+          else
+            echo "::warning::run-urban-network.sh not found"
+          fi
+          
+      - name: Check results
+        working-directory: repo/sampleData
+        run: |
+          echo "=== Test results ==="
+          find . -name "*.adj" -o -name "*.log" -o -name "*.out" | head -10
+          echo "=== End of results ==="
