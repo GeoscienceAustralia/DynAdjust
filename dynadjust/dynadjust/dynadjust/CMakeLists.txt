@@ -12,9 +12,11 @@ add_executable (${PROJECT_NAME}
                 dynadjust.cpp
                 ${CMAKE_SOURCE_DIR}/dynadjust.rc)
 
+target_precompile_headers (${PROJECT_NAME} PUBLIC precompile.h)
+
 target_link_libraries (${PROJECT_NAME} ${DNA_LIBRARIES})
 
-set_target_properties (${PROJECT_NAME} PROPERTIES OUTPUT_NAME "${DNA_PROGRAM_PREFIX}dynadjust")
+set_target_properties (${PROJECT_NAME} PROPERTIES OUTPUT_NAME "dynadjust")
 
 
 
@@ -89,7 +91,7 @@ if(BUILD_STATIC)
   
   # Set the output name to be the same as the dynamic version
   set_target_properties(${STATIC_TARGET_NAME}
-    PROPERTIES OUTPUT_NAME "${DNA_PROGRAM_PREFIX}dynadjust")
+    PROPERTIES OUTPUT_NAME "dynadjust")
   
   # Also set runtime output directory to the static subdirectory
   set_target_properties(${STATIC_TARGET_NAME} PROPERTIES 
