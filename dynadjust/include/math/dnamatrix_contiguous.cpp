@@ -22,6 +22,8 @@
 #include <include/math/dnamatrix_contiguous.hpp>
 #include <iomanip>
 #include <sstream>
+#include <cmath>
+#include <limits>
 #include <include/ide/trace.hpp>
 
 namespace dynadjust {
@@ -411,17 +413,17 @@ void matrix_2d::buy(const UINT32& rows, const UINT32& columns, double** mem_spac
 
     // an exception will be thrown by out_of_memory_handler
     // if memory cannot be allocated
-    (*mem_space) = new double[static_cast<std::size_t>(rows) * static_cast<std::size_t>(columns)];
+    std::size_t total_size = static_cast<std::size_t>(rows) * static_cast<std::size_t>(columns);
+    (*mem_space) = new double[total_size];
 
     if ((*mem_space) == nullptr) {
         std::stringstream ss;
         ss << "Insufficient memory for a " << rows << " x " << columns << " matrix.";
         throw NetMemoryException(ss.str());
     }
-
-    // an exception will be thrown by out_of_memory_handler
-    // if memory cannot be allocated
-    memset(*mem_space, 0, byteSize<double>(static_cast<std::size_t>(rows) * columns)); // initialise to zero
+    
+    // Initialize memory to zero to prevent uninitialized values
+    std::memset((*mem_space), 0, total_size * sizeof(double));
 }
 
 void matrix_2d::deallocate() {
@@ -661,7 +663,7 @@ matrix_2d matrix_2d::cholesky_inverse(bool LOWER_IS_CLEARED /*=false*/) {
         return *this;
 
     if (_rows != _cols)
-        throw std::runtime_error("choleskyinverse_mkl: Matrix is not square.");
+        throw std::runtime_error("cholesky_inverse(): Matrix is not square.");
 
     char uplo(LOWER_TRIANGLE);
 
