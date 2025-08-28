@@ -1,4 +1,3 @@
-#include <filesystem>
 //============================================================================
 // Name         : dnasegmentwrapper.cpp
 // Author       : Roger Fraser

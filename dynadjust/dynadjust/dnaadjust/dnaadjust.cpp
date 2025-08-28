@@ -1,4 +1,3 @@
-#include <filesystem>
 // Author       : Roger Fraser
 // Contributors : Dale Roberts <dale.o.roberts@gmail.com>
 // Copyright    : Copyright 2017-2025 Geoscience Australia
@@ -9691,6 +9690,11 @@ void dna_adjust::LoadNetworkFiles()
            
         if (!success) {
             SignalExceptionAdjustment("LoadNetworkFiles(): Failed to load network files", 0);
+        }
+        
+        // Check if all measurements are ignored (no measurements to process)
+        if (measurementCount_ == 0 || (v_CML_.size() > 0 && v_CML_.at(0).empty())) {
+            SignalExceptionAdjustment("LoadNetworkFiles(): No valid measurements to process. All measurements may be ignored.", 0);
         }
         
         // Ensure v_blockStationsMap_ matches expected state

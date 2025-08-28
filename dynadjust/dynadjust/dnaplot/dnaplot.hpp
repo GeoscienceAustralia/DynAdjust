@@ -41,6 +41,7 @@
 
 #include <memory>
 #include <filesystem>
+#include <thread>
 
 #include <include/config/dnaexports.hpp>
 #include <include/config/dnaversion.hpp>

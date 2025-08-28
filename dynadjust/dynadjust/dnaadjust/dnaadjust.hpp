@@ -47,11 +47,9 @@
 #include <chrono>
 #include <functional>
 
-#include <exception>
 #include <filesystem>
 #include <boost/math/distributions/chi_squared.hpp>
 #include <boost/math/distributions/normal.hpp>
-#include <chrono>
 
 #include <atomic>
 
