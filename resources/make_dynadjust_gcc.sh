@@ -401,55 +401,55 @@ else
 
 	echo "Copying libraries and binaries to $DYNADJUST_INSTALL_PATH ..."
 
-	if [[ -e "./dynadjust/dynadjust/dynadjust" ]]; then
-		sudo cp ./dynadjust/dynadjust/dynadjust "$DYNADJUST_INSTALL_PATH/"
+	if [[ -e "./bin/dynadjust" ]]; then
+		sudo cp ./bin/dynadjust "$DYNADJUST_INSTALL_PATH/"
 		ln -sf "$DYNADJUST_INSTALL_PATH/dynadjust" "$BIN_FOLDER_FULLPATH/dynadjust"
 		echo " - dynadjust"
 	fi
 
-	if [[ -e "./dynadjust/dnaadjustwrapper/dnaadjust" ]]; then
-		sudo cp ./dynadjust/dnaadjust/libdnaadjust.$_lib_ext "$DYNADJUST_INSTALL_PATH/"
-		sudo cp ./dynadjust/dnaadjustwrapper/dnaadjust "$DYNADJUST_INSTALL_PATH/"
+	if [[ -e "./bin/dnaadjust" ]]; then
+		sudo cp ./bin/libdnaadjust.$_lib_ext "$DYNADJUST_INSTALL_PATH/"
+		sudo cp ./bin/dnaadjust "$DYNADJUST_INSTALL_PATH/"
 		ln -sf "$DYNADJUST_INSTALL_PATH/dnaadjust" "$BIN_FOLDER_FULLPATH/dnaadjust"
 		ln -sf "$DYNADJUST_INSTALL_PATH/libdnaadjust.$_lib_ext"  "$BIN_FOLDER_FULLPATH/libdnaadjust.$_lib_ext"
 		echo " - dnaadjust, libdnaadjust.$_lib_ext"
 	fi
 
-	if [[ -e "./dynadjust/dnaimportwrapper/dnaimport" ]]; then
-		sudo cp ./dynadjust/dnaimport/libdnaimport.$_lib_ext "$DYNADJUST_INSTALL_PATH/"
-		sudo cp ./dynadjust/dnaimportwrapper/dnaimport "$DYNADJUST_INSTALL_PATH/"
+	if [[ -e "./bin/dnaimport" ]]; then
+		sudo cp ./bin/libdnaimport.$_lib_ext "$DYNADJUST_INSTALL_PATH/"
+		sudo cp ./bin/dnaimport "$DYNADJUST_INSTALL_PATH/"
 		ln -sf "$DYNADJUST_INSTALL_PATH/dnaimport" "$BIN_FOLDER_FULLPATH/dnaimport"
 		ln -sf "$DYNADJUST_INSTALL_PATH/libdnaimport.$_lib_ext"  "$BIN_FOLDER_FULLPATH/libdnaimport.$_lib_ext"
 		echo " - dnaimport, libdnaimport.$_lib_ext"
 	fi
 
-	if [[ -e "./dynadjust/dnareftranwrapper/dnareftran" ]]; then
-		sudo cp ./dynadjust/dnareftran/libdnareftran.$_lib_ext "$DYNADJUST_INSTALL_PATH/"
-		sudo cp ./dynadjust/dnareftranwrapper/dnareftran "$DYNADJUST_INSTALL_PATH/"
+	if [[ -e "./bin/dnareftran" ]]; then
+		sudo cp ./bin/libdnareftran.$_lib_ext "$DYNADJUST_INSTALL_PATH/"
+		sudo cp ./bin/dnareftran "$DYNADJUST_INSTALL_PATH/"
 		ln -sf "$DYNADJUST_INSTALL_PATH/dnareftran" "$BIN_FOLDER_FULLPATH/dnareftran"
 		ln -sf "$DYNADJUST_INSTALL_PATH/libdnareftran.$_lib_ext" "$BIN_FOLDER_FULLPATH/libdnareftran.$_lib_ext"
 		echo " - dnareftran, libdnareftran.$_lib_ext"
 	fi
 
-	if [[ -e "./dynadjust/dnageoidwrapper/dnageoid" ]]; then
-		sudo cp ./dynadjust/dnageoid/libdnageoid.$_lib_ext "$DYNADJUST_INSTALL_PATH/"
-		sudo cp ./dynadjust/dnageoidwrapper/dnageoid "$DYNADJUST_INSTALL_PATH/"
+	if [[ -e "./bin/dnageoid" ]]; then
+		sudo cp ./bin/libdnageoid.$_lib_ext "$DYNADJUST_INSTALL_PATH/"
+		sudo cp ./bin/dnageoid "$DYNADJUST_INSTALL_PATH/"
 		ln -sf "$DYNADJUST_INSTALL_PATH/dnageoid" "$BIN_FOLDER_FULLPATH/dnageoid"
 		ln -sf "$DYNADJUST_INSTALL_PATH/libdnageoid.$_lib_ext"  "$BIN_FOLDER_FULLPATH/libdnageoid.$_lib_ext"
 		echo " - dnageoid, libdnageoid.$_lib_ext"
 	fi
 
-	if [[ -e "./dynadjust/dnasegmentwrapper/dnasegment" ]]; then
-		sudo cp ./dynadjust/dnasegment/libdnasegment.$_lib_ext "$DYNADJUST_INSTALL_PATH/"
-		sudo cp ./dynadjust/dnasegmentwrapper/dnasegment "$DYNADJUST_INSTALL_PATH/"
+	if [[ -e "./bin/dnasegment" ]]; then
+		sudo cp ./bin/libdnasegment.$_lib_ext "$DYNADJUST_INSTALL_PATH/"
+		sudo cp ./bin/dnasegment "$DYNADJUST_INSTALL_PATH/"
 		ln -sf "$DYNADJUST_INSTALL_PATH/dnasegment" "$BIN_FOLDER_FULLPATH/dnasegment"
 		ln -sf "$DYNADJUST_INSTALL_PATH/libdnasegment.$_lib_ext"  "$BIN_FOLDER_FULLPATH/libdnasegment.$_lib_ext"
 		echo " - dnasegment, libdnasegment.$_lib_ext"
 	fi
 
-	if [[ -e "./dynadjust/dnaplotwrapper/dnaplot" ]]; then
-		sudo cp ./dynadjust/dnaplot/libdnaplot.$_lib_ext "$DYNADJUST_INSTALL_PATH/"
-		sudo cp ./dynadjust/dnaplotwrapper/dnaplot "$DYNADJUST_INSTALL_PATH/"
+	if [[ -e "./bin/dnaplot" ]]; then
+		sudo cp ./bin/libdnaplot.$_lib_ext "$DYNADJUST_INSTALL_PATH/"
+		sudo cp ./bin/dnaplot "$DYNADJUST_INSTALL_PATH/"
 		ln -sf "$DYNADJUST_INSTALL_PATH/dnaplot" "$BIN_FOLDER_FULLPATH/dnaplot"
 		ln -sf "$DYNADJUST_INSTALL_PATH/libdnaplot.$_lib_ext" "$BIN_FOLDER_FULLPATH/libdnaplot.$_lib_ext"
 		echo " - dnaplot, libdnaplot.$_lib_ext"
