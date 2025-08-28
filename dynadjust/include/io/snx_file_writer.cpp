@@ -25,6 +25,7 @@
 #include <include/functions/dnaiostreamfuncs.hpp>
 #include <include/functions/dnatemplatefuncs.hpp>
 #include <include/functions/dnachronutils.hpp>
+#include <include/functions/dnafilepathfuncs.hpp>
 
 namespace dynadjust { 
 namespace iostreams {
@@ -192,7 +193,7 @@ void DnaIoSnx::PrintWarnings(std::ofstream* warning_file, const std::string& fil
 {
 	// Print formatted header
 	print_file_header(*warning_file, "DYNADJUST SINEX OUTPUT WARNINGS FILE");
-	*warning_file << std::setw(PRINT_VAR_PAD) << std::left << "File name:" << std::filesystem::absolute(fileName).string() << std::endl;
+	*warning_file << std::setw(PRINT_VAR_PAD) << std::left << "File name:" << safe_absolute_path(fileName) << std::endl;
 
 	*warning_file << OUTPUTLINE << std::endl << std::endl;
 

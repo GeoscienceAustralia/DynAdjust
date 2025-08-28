@@ -20,6 +20,7 @@
 //============================================================================
 
 #include <include/io/seg_file.hpp>
+#include <include/functions/dnafilepathfuncs.hpp>
 
 namespace dynadjust { 
 namespace iostreams {
@@ -612,13 +613,13 @@ void SegFile::WriteSegFile(const std::string& seg_filename, const std::string& b
 	// Print formatted header
 	print_file_header(seg_file, "DYNADJUST SEGMENTATION OUTPUT FILE");
 	
-	seg_file << std::setw(PRINT_VAR_PAD) << std::left << "File name:" << std::filesystem::absolute(seg_filename).string() << std::endl << std::endl;
+	seg_file << std::setw(PRINT_VAR_PAD) << std::left << "File name:" << safe_absolute_path(seg_filename) << std::endl << std::endl;
 
 	seg_file << std::setw(PRINT_VAR_PAD) << std::left << "Command line arguments: ";
 	seg_file << command_line_arguments << std::endl << std::endl;
 
-	seg_file << std::setw(PRINT_VAR_PAD) << std::left << "Stations file:" << std::filesystem::absolute(bst_filename).string() << std::endl;
-	seg_file << std::setw(PRINT_VAR_PAD) << std::left << "Measurements file:" << std::filesystem::absolute(bms_filename).string() << std::endl;	
+	seg_file << std::setw(PRINT_VAR_PAD) << std::left << "Stations file:" << safe_absolute_path(bst_filename) << std::endl;
+	seg_file << std::setw(PRINT_VAR_PAD) << std::left << "Measurements file:" << safe_absolute_path(bms_filename) << std::endl;	
 
 	UINT32 b = 1;
 	

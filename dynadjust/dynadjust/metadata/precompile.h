@@ -15,19 +15,19 @@
 /// \cond
 #include <windows.h>
 
-#include <include/functions/dnatimer.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
 #include <memory>
+#include <filesystem>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/variables_map.hpp>
-#include <filesystem>
 #include <boost/algorithm/string/predicate.hpp>
 
 /// \endcond
 
+#include <include/functions/dnatimer.hpp>
 #include <include/config/dnaversion.hpp>
 #include <include/config/dnaconsts.hpp>
 #include <include/config/dnaconsts-interface.hpp>

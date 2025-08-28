@@ -20,10 +20,9 @@
 //============================================================================
 
 #include <dynadjust/dnaplot/dnaplot.hpp>
-#include <filesystem>
-#include <thread>
 
 #include <include/functions/dnastrutils.hpp>
+#include <include/functions/dnafilepathfuncs.hpp>
 namespace dynadjust { 
 namespace networkplot {
 
@@ -217,7 +216,7 @@ void dna_plot::CreategnuplotGraphEnvironment(project_settings* pprj, const plotG
 void dna_plot::InvokeGnuplot()
 {
 	// Invoke gnuplot using absolute path				
-	std::string system_file_cmd = "gnuplot " + std::filesystem::absolute(pprj_->p._gnuplot_cmd_file).string();
+	std::string system_file_cmd = "gnuplot " + safe_absolute_path(pprj_->p._gnuplot_cmd_file);
 
 	// set up a thread group to execute the gnuplot in parallel
 	std::thread gnuplot_thread{dna_create_threaded_process(system_file_cmd)};
@@ -1076,7 +1075,7 @@ void dna_plot::InitialiseGMTFilenames()
 		gmt_filename = pprj_->g.output_folder + FOLDER_SLASH + gmt_filename;
 
 		// Create absolute path				
-		gmt_filename = std::filesystem::absolute(gmt_filename).string();
+		gmt_filename = safe_absolute_path(gmt_filename);
 
 		// Add to the list
 		v_gmt_cmd_filenames_.push_back(gmt_filename);

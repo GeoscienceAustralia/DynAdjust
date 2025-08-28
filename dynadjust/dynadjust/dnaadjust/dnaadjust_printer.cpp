@@ -27,6 +27,7 @@
 #include <sstream>
 #include <filesystem>
 #include <include/functions/dnaiostreamfuncs.hpp>
+#include <include/functions/dnafilepathfuncs.hpp>
 #include <include/io/adj_file.hpp>
 
 namespace dynadjust {
@@ -1116,7 +1117,7 @@ void DynAdjustPrinter::PrintStationFileHeader(std::ostream& os, std::string_view
     print_file_header(os, std::string("DYNADJUST ") + std::string(file_type) + " OUTPUT FILE");
     
     os << std::setw(PRINT_VAR_PAD) << std::left << "File name:" << 
-        std::filesystem::absolute(filename).string() << std::endl << std::endl;
+        safe_absolute_path(filename) << std::endl << std::endl;
 }
 
 void DynAdjustPrinter::PrintStationColumnHeaders(std::ostream& os, const std::string& stn_coord_types,
@@ -2632,7 +2633,7 @@ void DynAdjustPrinter::PrintPositionalUncertainty()
 
         if (adjust_.projectSettings_.o._apply_type_b_file)
             apu_file << std::setw(PRINT_VAR_PAD) << std::left << "Type B uncertainty file:" <<
-                std::filesystem::absolute(adjust_.projectSettings_.a.type_b_file).string() << std::endl;
+                safe_absolute_path(adjust_.projectSettings_.a.type_b_file) << std::endl;
     }
 
     apu_file << OUTPUTLINE << std::endl << std::endl;
@@ -3352,16 +3353,16 @@ void DynAdjustPrinter::PrintOutputFileHeaderInfo()
     // Print formatted header
     print_file_header(adjust_.xyz_file, "DYNADJUST COORDINATE OUTPUT FILE");
 
-    adjust_.adj_file << std::setw(PRINT_VAR_PAD) << std::left << "File name:" << std::filesystem::absolute(adjust_.projectSettings_.o._adj_file).string() << std::endl << std::endl;
-    adjust_.xyz_file << std::setw(PRINT_VAR_PAD) << std::left << "File name:" << std::filesystem::absolute(adjust_.projectSettings_.o._xyz_file).string() << std::endl << std::endl;
+    adjust_.adj_file << std::setw(PRINT_VAR_PAD) << std::left << "File name:" << safe_absolute_path(adjust_.projectSettings_.o._adj_file) << std::endl << std::endl;
+    adjust_.xyz_file << std::setw(PRINT_VAR_PAD) << std::left << "File name:" << safe_absolute_path(adjust_.projectSettings_.o._xyz_file) << std::endl << std::endl;
 
     adjust_.adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Command line arguments: ";
     adjust_.adj_file << adjust_.projectSettings_.a.command_line_arguments << std::endl << std::endl;
 
     if (adjust_.projectSettings_.i.input_files.empty())
     {
-        adjust_.adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Stations file:" << std::filesystem::absolute(adjust_.projectSettings_.a.bst_file).string() << std::endl;
-        adjust_.adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Measurements file:" << std::filesystem::absolute(adjust_.projectSettings_.a.bms_file).string() << std::endl;
+        adjust_.adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Stations file:" << safe_absolute_path(adjust_.projectSettings_.a.bst_file) << std::endl;
+        adjust_.adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Measurements file:" << safe_absolute_path(adjust_.projectSettings_.a.bms_file) << std::endl;
     }
     else
     {
@@ -3382,8 +3383,8 @@ void DynAdjustPrinter::PrintOutputFileHeaderInfo()
     
 
     // Geoid model
-    adjust_.adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Geoid model: " << std::filesystem::absolute(adjust_.projectSettings_.n.ntv2_geoid_file).string() << std::endl;
-    adjust_.xyz_file << std::setw(PRINT_VAR_PAD) << std::left << "Geoid model: " << std::filesystem::absolute(adjust_.projectSettings_.n.ntv2_geoid_file).string() << std::endl;
+    adjust_.adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Geoid model: " << safe_absolute_path(adjust_.projectSettings_.n.ntv2_geoid_file) << std::endl;
+    adjust_.xyz_file << std::setw(PRINT_VAR_PAD) << std::left << "Geoid model: " << safe_absolute_path(adjust_.projectSettings_.n.ntv2_geoid_file) << std::endl;
     
     switch (adjust_.projectSettings_.a.adjust_mode)
     {
@@ -3445,9 +3446,9 @@ void DynAdjustPrinter::PrintOutputFileHeaderInfo()
         if (adjust_.projectSettings_.o._apply_type_b_file)
         {
             adjust_.adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Type B uncertainty file:" <<
-                std::filesystem::absolute(adjust_.projectSettings_.a.type_b_file).string() << std::endl;
+                safe_absolute_path(adjust_.projectSettings_.a.type_b_file) << std::endl;
             adjust_.xyz_file << std::setw(PRINT_VAR_PAD) << std::left << "Type B uncertainty file:" <<
-                std::filesystem::absolute(adjust_.projectSettings_.a.type_b_file).string() << std::endl;
+                safe_absolute_path(adjust_.projectSettings_.a.type_b_file) << std::endl;
         }
     }
 

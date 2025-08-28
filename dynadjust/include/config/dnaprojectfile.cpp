@@ -1725,15 +1725,15 @@ void CDnaProjectFile::PrintProjectFile()
 	dnaproj_file << OUTPUTLINE << std::endl;
 	
 	PrintRecord(dnaproj_file, NETWORK_NAME, settings_.g.network_name);								// network name
-	PrintRecord(dnaproj_file, INPUT_FOLDER, std::filesystem::absolute(settings_.g.input_folder).string());	// Path containing all input files
-	PrintRecord(dnaproj_file, OUTPUT_FOLDER, std::filesystem::absolute(settings_.g.output_folder).string());	// Path for all output files
+	PrintRecord(dnaproj_file, INPUT_FOLDER, safe_absolute_path(settings_.g.input_folder));	// Path containing all input files
+	PrintRecord(dnaproj_file, OUTPUT_FOLDER, safe_absolute_path(settings_.g.output_folder));	// Path for all output files
 	PrintRecord(dnaproj_file, VERBOSE, settings_.g.verbose);										// Give detailed information about what dnainterop is doing.
 																									// 0: No information (default)
 																									// 1: Helpful information
 																									// 2: Extended information\n3: Debug level information
 	PrintRecord(dnaproj_file, QUIET, yesno_string(settings_.g.quiet));								// Run quietly?
-	PrintRecord(dnaproj_file, PROJECT_FILE, std::filesystem::absolute(settings_.g.project_file).string());	// project file
-	PrintRecord(dnaproj_file, DYNADJUST_LOG_FILE, std::filesystem::absolute(settings_.g.log_file).string());	// dynadjust log file
+	PrintRecord(dnaproj_file, PROJECT_FILE, safe_absolute_path(settings_.g.project_file));	// project file
+	PrintRecord(dnaproj_file, DYNADJUST_LOG_FILE, safe_absolute_path(settings_.g.log_file));	// dynadjust log file
 	
 	dnaproj_file << std::endl;
 
@@ -1851,7 +1851,7 @@ void CDnaProjectFile::PrintProjectFile()
 	dnaproj_file << OUTPUTLINE << std::endl;
 
 	// Output configured to populate binary station files
-	PrintRecord(dnaproj_file, NTV2_FILEPATH, std::filesystem::absolute(settings_.n.ntv2_geoid_file).string());					// Full file path to geoid file
+	PrintRecord(dnaproj_file, NTV2_FILEPATH, safe_absolute_path(settings_.n.ntv2_geoid_file));					// Full file path to geoid file
 	
 	PrintRecord(dnaproj_file, METHOD, settings_.n.interpolation_method);
 	PrintRecord(dnaproj_file, DDEG_FORMAT, settings_.n.coordinate_format);

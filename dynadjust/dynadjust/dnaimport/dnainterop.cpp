@@ -1,4 +1,3 @@
-#include <filesystem>
 //============================================================================
 // Name         : dnainterop.cpp
 // Author       : Roger Fraser
@@ -4944,11 +4943,11 @@ void dna_import::PrintMeasurementsToStations(std::string& m2s_file, MsrTally* pa
 		// Print formatted header
 		print_file_header(m2s_stream, "DYNADJUST MEASUREMENT TO STATION OUTPUT FILE");
 
-		m2s_stream << std::setw(PRINT_VAR_PAD) << std::left << "File name:" << std::filesystem::absolute(m2s_file).string() << std::endl << std::endl;
+		m2s_stream << std::setw(PRINT_VAR_PAD) << std::left << "File name:" << safe_absolute_path(m2s_file) << std::endl << std::endl;
 
-		m2s_stream << std::setw(PRINT_VAR_PAD) << std::left << "Associated measurement file: " << std::filesystem::absolute(aml_file).string() << std::endl;
-		m2s_stream << std::setw(PRINT_VAR_PAD) << std::left << "Stations file:" << std::filesystem::absolute(bst_file).string() << std::endl;
-		m2s_stream << std::setw(PRINT_VAR_PAD) << std::left << "Measurements file:" << std::filesystem::absolute(bms_file).string() << std::endl;
+		m2s_stream << std::setw(PRINT_VAR_PAD) << std::left << "Associated measurement file: " << safe_absolute_path(aml_file) << std::endl;
+		m2s_stream << std::setw(PRINT_VAR_PAD) << std::left << "Stations file:" << safe_absolute_path(bst_file) << std::endl;
+		m2s_stream << std::setw(PRINT_VAR_PAD) << std::left << "Measurements file:" << safe_absolute_path(bms_file) << std::endl;
 
 		// Print station count
 		m2s_stream << std::endl;

@@ -1,4 +1,3 @@
-#include <filesystem>
 //============================================================================
 // Name         : dnageoidwrapper.cpp
 // Author       : Roger Fraser
@@ -24,6 +23,7 @@
 #include <dynadjust/dnageoidwrapper/dnageoidwrapper.hpp>
 
 #include <include/functions/dnastrutils.hpp>
+#include <include/functions/dnafilepathfuncs.hpp>
 
 using namespace dynadjust;
 
@@ -139,8 +139,8 @@ void ReturnBadStationRecords(dna_geoid_interpolation* g, project_settings& p)
 	badpoints_log << p.n.command_line_arguments << std::endl << std::endl;
 
 	badpoints_log << std::setw(PRINT_VAR_PAD) << std::left << "Network name:" <<  p.g.network_name << std::endl;
-	badpoints_log << std::setw(PRINT_VAR_PAD) << std::left << "Stations file:" << std::filesystem::absolute(p.n.bst_file).string() << std::endl;
-	badpoints_log << std::setw(PRINT_VAR_PAD) << std::left << "Geoid model: " << std::filesystem::absolute(p.n.ntv2_geoid_file).string() << std::endl << std::endl;
+	badpoints_log << std::setw(PRINT_VAR_PAD) << std::left << "Stations file:" << safe_absolute_path(p.n.bst_file) << std::endl;
+	badpoints_log << std::setw(PRINT_VAR_PAD) << std::left << "Geoid model: " << safe_absolute_path(p.n.ntv2_geoid_file) << std::endl << std::endl;
 	badpoints_log << std::setw(PRINT_VAR_PAD) << std::left << "Stations not interpolated:" << g->PointsNotInterpolated() << std::endl;
 	badpoints_log << OUTPUTLINE << std::endl << std::endl;
 	

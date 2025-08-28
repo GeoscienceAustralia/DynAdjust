@@ -30,11 +30,21 @@
 #endif
 
 #include <cstdint>
+#include <fstream>
+#include <iomanip>
+#include <ios>
+#include <iostream>
+#include <sstream>
 #include <filesystem>
-#include <include/functions/dnaintegermanipfuncs.hpp>
-#include <include/io/dynadjust_file.hpp>
-#include <include/measurement_types/dnastation.hpp>
 #include <optional>
+
+#include <include/io/dynadjust_file.hpp>
+#include <include/functions/dnaintegermanipfuncs.hpp>
+#include <include/functions/dnaiostreamfuncs.hpp>
+#include <include/functions/dnatemplatefuncs.hpp>
+#include <include/functions/dnatemplatestnmsrfuncs.hpp>
+#include <include/measurement_types/dnastation.hpp>
+
 
 namespace dynadjust {
 namespace iostreams {

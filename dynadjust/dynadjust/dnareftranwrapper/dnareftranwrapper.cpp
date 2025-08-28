@@ -1,4 +1,3 @@
-#include <filesystem>
 //============================================================================
 // Name         : dnareftranwrapper.cpp
 // Author       : Roger Fraser
@@ -24,6 +23,7 @@
 #include <dynadjust/dnareftranwrapper/dnareftranwrapper.hpp>
 
 #include <include/functions/dnastrutils.hpp>
+#include <include/functions/dnafilepathfuncs.hpp>
 
 using namespace dynadjust;
 
@@ -32,16 +32,16 @@ void PrintOutputFileHeaderInfo(std::ofstream* f_out, const std::string& out_file
 	// Print formatted header
 	print_file_header(*f_out, header);
 
-	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "File name:" << std::filesystem::absolute(out_file).string() << std::endl << std::endl;
+	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "File name:" << safe_absolute_path(out_file) << std::endl << std::endl;
 	
 	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Command line arguments: ";
 	*f_out << p->r.command_line_arguments << std::endl << std::endl;
 
 	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Network name:" <<  p->g.network_name << std::endl;
-	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Input folder: " << std::filesystem::absolute(p->g.input_folder).string() << std::endl;
-	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Output folder: " << std::filesystem::absolute(p->g.output_folder).string() << std::endl;
-	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Stations file:" << std::filesystem::absolute(p->r.bst_file).string() << std::endl;
-	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Measurements file:" << std::filesystem::absolute(p->r.bms_file).string() << std::endl;
+	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Input folder: " << safe_absolute_path(p->g.input_folder) << std::endl;
+	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Output folder: " << safe_absolute_path(p->g.output_folder) << std::endl;
+	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Stations file:" << safe_absolute_path(p->r.bst_file) << std::endl;
+	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Measurements file:" << safe_absolute_path(p->r.bms_file) << std::endl;
 	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Target reference frame:" << p->r.reference_frame;
 
 	if (userSuppliedFrame)

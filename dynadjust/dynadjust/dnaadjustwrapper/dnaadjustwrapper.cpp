@@ -1,4 +1,3 @@
-#include <filesystem>
 //============================================================================
 // Name         : dnaadjustwrapper.cpp
 // Author       : Roger Fraser
@@ -25,6 +24,7 @@
 #include <dynadjust/dnaadjust/dnaadjust_printer.hpp>
 
 #include <include/functions/dnastrutils.hpp>
+#include <include/functions/dnafilepathfuncs.hpp>
 #include <thread>
 
 #include "threading_init.hpp"
@@ -1131,7 +1131,7 @@ int main(int argc, char* argv[])
 		std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Reference frame: " << datum.GetName() << std::endl;
 		std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Epoch: " << datum.GetEpoch_s() << std::endl;
 		
-		std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Geoid model: " << std::filesystem::absolute(p.n.ntv2_geoid_file).string() << std::endl;
+		std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Geoid model: " << safe_absolute_path(p.n.ntv2_geoid_file) << std::endl;
 
 		if (p.a.scale_normals_to_unity)
 			std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Scale normals to unity: " << "yes" << std::endl;

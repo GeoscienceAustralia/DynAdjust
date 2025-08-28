@@ -19,10 +19,10 @@
 // Description  : DynAdjust Interoperability library Executable
 //============================================================================
 
-#include <filesystem>
 #include <dynadjust/dnaimportwrapper/dnaimportwrapper.hpp>
 #include <include/parameters/dnaepsg.hpp>
 #include <include/functions/dnastrutils.hpp>
+#include <include/functions/dnafilepathfuncs.hpp>
 #include <mutex>
 #include <thread>
 
@@ -44,20 +44,20 @@ void PrintOutputFileHeaderInfo(std::ofstream* f_out, const std::string& out_file
 	// Print formatted header
 	print_file_header(*f_out, header);
 
-	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "File name:" << std::filesystem::absolute(out_file).string() << std::endl << std::endl;
+	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "File name:" << safe_absolute_path(out_file) << std::endl << std::endl;
 	
 	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Command line arguments: ";
 	*f_out << p->i.command_line_arguments << std::endl << std::endl;
 
 	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Network name:" <<  p->g.network_name << std::endl;
-	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Input folder: " << std::filesystem::absolute(p->g.input_folder).string() << std::endl;
-	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Output folder: " << std::filesystem::absolute(p->g.output_folder).string() << std::endl;
-	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Stations file:" << std::filesystem::absolute(p->i.bst_file).string() << std::endl;
-	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Measurements file:" << std::filesystem::absolute(p->i.bms_file).string() << std::endl;
-	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Associated station file:" << std::filesystem::absolute(p->i.asl_file).string() << std::endl;
-	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Associated measurement file:" << std::filesystem::absolute(p->i.aml_file).string() << std::endl;
-	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Duplicate stations output file:" <<  std::filesystem::absolute(p->i.dst_file).string() << std::endl;
-	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Similar measurement output file:" <<  std::filesystem::absolute(p->i.dms_file).string() << std::endl;
+	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Input folder: " << safe_absolute_path(p->g.input_folder) << std::endl;
+	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Output folder: " << safe_absolute_path(p->g.output_folder) << std::endl;
+	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Stations file:" << safe_absolute_path(p->i.bst_file) << std::endl;
+	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Measurements file:" << safe_absolute_path(p->i.bms_file) << std::endl;
+	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Associated station file:" << safe_absolute_path(p->i.asl_file) << std::endl;
+	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Associated measurement file:" << safe_absolute_path(p->i.aml_file) << std::endl;
+	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Duplicate stations output file:" <<  safe_absolute_path(p->i.dst_file) << std::endl;
+	*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Similar measurement output file:" <<  safe_absolute_path(p->i.dms_file) << std::endl;
 
 	if (!p->i.input_files.empty())
 	{
@@ -126,7 +126,7 @@ void PrintOutputFileHeaderInfo(std::ofstream* f_out, const std::string& out_file
 	}
 
 	if (!p->i.seg_file.empty())
-		*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Segmentation file:" << std::filesystem::absolute(p->i.seg_file).string() << std::endl;
+		*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Segmentation file:" << safe_absolute_path(p->i.seg_file) << std::endl;
 
 	if (p->i.import_block)
 		*f_out << std::setw(PRINT_VAR_PAD) << std::left << "Import stns & msrs from block: " << p->i.import_block_number << std::endl;
