@@ -37,8 +37,8 @@ cd "$_build_dir"
 
 # 2. copy files:
 echo "Copying Find...cmake files to build directory..."
-cp ../FindXercesC.cmake ./
-cp ../FindMKL.cmake ./
+#cp ../FindXercesC.cmake ./
+#cp ../FindMKL.cmake ./
 cp ../FindXSD.cmake ./
 
 echo "Done."
