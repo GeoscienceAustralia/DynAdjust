@@ -20,9 +20,6 @@
 //============================================================================
 
 #include <dynadjust/dnareftran/dnareftran.hpp>
-#include <include/ide/trace.hpp>
-
-#include <include/functions/dnastrutils.hpp>
 
 namespace dynadjust { 
 namespace referenceframe {

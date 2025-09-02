@@ -32,7 +32,6 @@
 /// \cond
 #include <exception>
 #include <stdexcept>
-
 /// \endcond
 
 #include <include/config/dnatypes.hpp>

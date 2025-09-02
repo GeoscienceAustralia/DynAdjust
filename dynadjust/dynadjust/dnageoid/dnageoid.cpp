@@ -22,9 +22,6 @@
 
 #include <dynadjust/dnageoid/dnageoid.hpp>
 
-#include <include/functions/dnastrutils.hpp>
-#include <include/functions/dnastrmanipfuncs.hpp>
-
 namespace dynadjust { namespace geoidinterpolation {
 
 dna_geoid_interpolation::dna_geoid_interpolation()

@@ -37,17 +37,19 @@
 #include <sstream>
 #include <string>
 #include <time.h>
-
 #include <memory>
+#include <filesystem>
+
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/variables_map.hpp>
-#include <filesystem>
 /// \endcond
 
-#include <include/config/dnaversion.hpp>
 #include <include/config/dnaconsts.hpp>
+#include <include/config/dnaversion.hpp>
 #include <include/config/dnaoptions-interface.hpp>
+
+#include <include/functions/dnastrutils.hpp>
 #include <include/functions/dnastringfuncs.hpp>
 #include <include/functions/dnaprocessfuncs.hpp>
 #include <include/functions/dnafilepathfuncs.hpp>

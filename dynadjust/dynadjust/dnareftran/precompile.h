@@ -5,10 +5,10 @@
 
 #pragma once
 
-#include <include/config/dnaversion.hpp>
-#include <include/config/dnaexports.hpp>
-#include <include/config/dnaversion-stream.hpp>
 #include <include/config/dnaconsts.hpp>
+#include <include/config/dnaversion.hpp>
+#include <include/config/dnaversion-stream.hpp>
+#include <include/config/dnaexports.hpp>
 #include <include/config/dnaoptions.hpp>
 
 #include <include/io/bst_file.hpp>

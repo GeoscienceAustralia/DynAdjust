@@ -21,8 +21,6 @@
 //============================================================================
 
 #include <dynadjust/dnasegmentwrapper/dnasegmentwrapper.hpp>
-#include <mutex>
-#include <thread>
 
 using namespace dynadjust;
 

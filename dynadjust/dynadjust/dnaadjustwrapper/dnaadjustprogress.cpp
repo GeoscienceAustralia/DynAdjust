@@ -20,8 +20,6 @@
 //============================================================================
 
 #include <dynadjust/dnaadjustwrapper/dnaadjustprogress.hpp>
-#include <thread>
-#include <chrono>
 
 bool running;
 std::mutex cout_mutex;

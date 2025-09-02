@@ -40,13 +40,13 @@
 
 /// \endcond
 
+#include <include/config/dnaversion.hpp>
 #include <include/io/bst_file_loader.hpp>
 #include <include/io/bst_file.hpp>
 #include <include/config/dnaconsts.hpp>
 #include <include/config/dnaexports.hpp>
 #include <include/config/dnaoptions.hpp>
 #include <include/config/dnatypes.hpp>
-#include <include/config/dnaversion.hpp>
 #include <include/config/dnaversion-stream.hpp>
 
 #include <include/parameters/dnaepsg.hpp>
@@ -54,6 +54,8 @@
 #include <include/measurement_types/dnastation.hpp>
 
 #include <include/exception/dnaexception.hpp>
+
+#include <include/functions/dnastrutils.hpp>
 #include <include/functions/dnastrmanipfuncs.hpp>
 #include <include/functions/dnatemplatecalcfuncs.hpp>
 #include <include/functions/dnaiostreamfuncs.hpp>

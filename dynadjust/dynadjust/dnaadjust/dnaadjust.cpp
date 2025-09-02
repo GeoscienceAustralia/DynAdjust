@@ -18,8 +18,6 @@
 //============================================================================
 
 #include <dynadjust/dnaadjust/dnaadjust.hpp>
-#include <dynadjust/dnaadjust/network_data_loader.hpp>
-#include <dynadjust/dnaadjust/dnaadjust_printer.hpp>
 #include <dynadjust/dnaadjust/dnaadjust-multi.cpp>
 
 namespace dynadjust {

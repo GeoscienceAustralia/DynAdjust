@@ -47,18 +47,23 @@
 #include <mutex>
 #include <thread>
 #include <chrono>
-
 #include <memory>
 #include <filesystem>
+
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/variables_map.hpp>
-#include <include/config/dnaversion.hpp>
+/// \endcond
+
 #include <include/config/dnaconsts.hpp>
+#include <include/config/dnaversion.hpp>
 #include <include/config/dnaconsts-interface.hpp>
 #include <include/config/dnaoptions-interface.hpp>
 #include <include/config/dnaprojectfile.hpp>
 
+#include <include/parameters/dnaepsg.hpp>
+
+#include <include/functions/dnastrutils.hpp>
 #include <include/functions/dnaiostreamfuncs.hpp>
 #include <include/functions/dnafilepathfuncs.hpp>
 #include <include/functions/dnastrmanipfuncs.hpp>

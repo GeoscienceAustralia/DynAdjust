@@ -37,7 +37,6 @@
 #include <vector>
 #include <math.h>
 #include <iostream>
-
 #include <memory>
 /// \endcond
 

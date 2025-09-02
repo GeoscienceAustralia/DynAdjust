@@ -34,7 +34,6 @@
 #include <string>
 #include <iomanip>
 #include <sstream>
-
 /// \endcond
 
 #include <include/parameters/dnaepsg.hpp>

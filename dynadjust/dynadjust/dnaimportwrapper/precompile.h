@@ -5,9 +5,9 @@
 
 #pragma once
 
+#include <include/config/dnaconsts.hpp>
 #include <include/config/dnaversion.hpp>
 #include <include/config/dnaversion-stream.hpp>
-#include <include/config/dnaconsts.hpp>
 #include <include/config/dnatypes.hpp>
 #include <include/config/dnatypes-gui.hpp>
 #include <include/config/dnaexports.hpp>

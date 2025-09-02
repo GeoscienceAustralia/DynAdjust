@@ -33,16 +33,15 @@
 /// \cond
 #include <stdio.h>
 #include <string.h>
-
 #include <vector>
 #include <iostream>
 #include <iomanip>
 #include <sstream>
 #include <string>
 #include <fstream>
+#include <memory>
 
 #include <boost/shared_ptr.hpp>
-#include <memory>
 /// \endcond
 
 #include <include/functions/dnastrmanipfuncs.hpp>

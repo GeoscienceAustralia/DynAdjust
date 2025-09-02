@@ -35,18 +35,16 @@
 #include <chrono>
 #include <iomanip>
 #include <ctime>
-
-using std::ostringstream;
-using std::locale;
-
 #include <filesystem>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
+using std::ostringstream;
+using std::locale;
 /// \endcond
 
+#include <include/config/dnaversion.hpp>
 #include <include/config/dnaversion-stream.hpp>
 #include <include/config/dnaconsts-iostream.hpp>
-#include <include/config/dnaversion.hpp>
 
 template <typename T>
 T real_line_length_ascii(const T& line_length_ascii)

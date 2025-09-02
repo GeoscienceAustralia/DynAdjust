@@ -8,8 +8,8 @@
 // See https://github.com/boostorg/process/issues/161
 #define _WIN32_WINNT 0x0501
 
-#include <include/config/dnaversion.hpp>
 #include <include/config/dnaconsts.hpp>
+#include <include/config/dnaversion.hpp>
 #include <include/config/dnatypes.hpp>
 #include <include/config/dnatypes-gui.hpp>
 #include <include/config/dnaexports.hpp>

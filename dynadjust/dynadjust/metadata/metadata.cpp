@@ -9,13 +9,12 @@
 #include <string>
 #include <time.h>
 #include <mutex>
-
 #include <memory>
+#include <filesystem>
+
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/variables_map.hpp>
-
-#include <filesystem>
 /// \endcond
 
 std::mutex cout_mutex;
@@ -23,8 +22,8 @@ std::mutex import_file_mutex;
 
 #include <include/exception/dnaexception.hpp>
 
-#include <include/config/dnaversion.hpp>
 #include <include/config/dnaconsts.hpp>
+#include <include/config/dnaversion.hpp>
 #include <include/config/dnaconsts-interface.hpp>
 #include <include/config/dnaoptions.hpp>
 #include <include/config/dnaoptions-interface.hpp>

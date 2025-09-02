@@ -43,16 +43,17 @@
 #include <filesystem>
 /// \endcond
 
-#include <include/config/dnaexports.hpp>
+#include <include/config/dnaconsts.hpp>
 #include <include/config/dnaversion.hpp>
+#include <include/config/dnaexports.hpp>
+#include <include/config/dnatypes.hpp>
+
 #include <include/exception/dnaexception.hpp>
 #include <include/functions/dnatemplatefuncs.hpp>
 #include <include/functions/dnatemplatestnmsrfuncs.hpp>
 #include <include/functions/dnatemplatedatetimefuncs.hpp>
 #include <include/functions/dnaiostreamfuncs.hpp>
 #include <include/functions/dnastringfuncs.hpp>
-#include <include/config/dnatypes.hpp>
-#include <include/config/dnaconsts.hpp>
 
 #include <include/io/asl_file.hpp>
 #include <include/io/aml_file.hpp>

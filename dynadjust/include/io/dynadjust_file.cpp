@@ -23,8 +23,8 @@
 #include <boost/date_time/gregorian/gregorian.hpp>
 /// \endcond
 
-#include <include/io/dynadjust_file.hpp>
 #include <include/config/dnaversion.hpp>
+#include <include/io/dynadjust_file.hpp>
 #include <include/functions/dnastrmanipfuncs.hpp>
 
 namespace dynadjust {

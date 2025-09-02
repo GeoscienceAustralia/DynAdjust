@@ -30,6 +30,8 @@
 #endif
 
 /// \cond
+#include <memory>
+
 #include <boost/shared_ptr.hpp>
 /// \endcond
 
@@ -37,7 +39,6 @@
 #include <include/measurement_types/dnadirection.hpp>
 #include <include/measurement_types/dnameasurement.hpp>
 
-#include <memory>
 
 namespace dynadjust {
 namespace measurements {

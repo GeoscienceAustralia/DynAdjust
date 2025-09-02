@@ -30,8 +30,6 @@
 #endif
 
 /// \cond
-#include <iomanip>
-
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -41,13 +39,13 @@
 #include <time.h>
 #include <string.h>
 #include <set>
-
+#include <filesystem>
 
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/variables_map.hpp>
-#include <filesystem>
 /// \endcond
+
 #include <include/config/dnaexports.hpp>
 #include <include/config/dnaversion.hpp>
 #include <include/config/dnaconsts.hpp>
@@ -56,6 +54,7 @@
 #include <include/config/dnatypes-gui.hpp>
 #include <include/config/dnaversion-stream.hpp>
 
+#include <include/functions/dnastrutils.hpp>
 #include <include/functions/dnafilepathfuncs.hpp>
 #include <include/functions/dnatemplatefuncs.hpp>
 #include <include/functions/dnastringfuncs.hpp>

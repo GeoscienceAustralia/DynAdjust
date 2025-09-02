@@ -33,7 +33,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string>
-
 #include <algorithm>
 #include <functional>
 #include <sstream>
@@ -43,17 +42,16 @@
 #include <iomanip>
 #include <math.h>
 #include <iostream>
-#include <boost/tokenizer.hpp>
-
-#include <include/functions/dnatemplatecalcfuncs.hpp>
-#include <include/functions/dnastrutils.hpp>
 #include <charconv>
 #include <stdexcept>
+
+#include <boost/tokenizer.hpp>
 #include <boost/spirit/include/qi.hpp>
 #include <boost/phoenix/core.hpp>
 #include <boost/phoenix/operator.hpp>
 /// \endcond
 
+#include <include/functions/dnastrutils.hpp>
 #include <include/functions/dnatemplatecalcfuncs.hpp>
 
 using boost::spirit::qi::double_;

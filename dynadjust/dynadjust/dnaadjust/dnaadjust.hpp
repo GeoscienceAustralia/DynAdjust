@@ -40,27 +40,25 @@
 #include <utility>
 #include <memory>
 #include <vector>
-
 #include <thread>
 #include <mutex>
 #include <condition_variable>
 #include <chrono>
 #include <functional>
-
+#include <atomic>
 #include <filesystem>
+
 #include <boost/math/distributions/chi_squared.hpp>
 #include <boost/math/distributions/normal.hpp>
 
-#include <atomic>
-
 /// \endcond
 
+#include <include/config/dnaversion.hpp>
 #include <include/config/dnaconsts.hpp>
 #include <include/config/dnaexports.hpp>
 #include <include/config/dnaoptions-interface.hpp>
 #include <include/config/dnatypes-gui.hpp>
 #include <include/config/dnatypes.hpp>
-#include <include/config/dnaversion.hpp>
 #include <include/exception/dnaexception.hpp>
 
 #include <include/io/adj_file.hpp>
@@ -89,8 +87,7 @@
 #include <include/thread/dnathreading.hpp>
 
 #include <dynadjust/dnaadjust/network_data_loader.hpp>
-
-#include "network_data_loader.hpp"
+#include <dynadjust/dnaadjust/dnaadjust_printer.hpp>
 
 using namespace dynadjust::datum_parameters;
 using namespace dynadjust::measurements;

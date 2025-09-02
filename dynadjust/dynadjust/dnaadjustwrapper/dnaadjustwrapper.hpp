@@ -36,21 +36,26 @@
 #include <sstream>
 #include <string>
 #include <time.h>
-
 #include <memory>
+#include <thread>
+#include <filesystem>
+
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/variables_map.hpp>
-
-#include <filesystem>
 /// \endcond
 
+#include <include/functions/dnastrutils.hpp>
 #include <include/functions/dnafilepathfuncs.hpp>
 #include <include/functions/dnastrmanipfuncs.hpp>
 
 #include <include/config/dnaprojectfile.hpp>
 #include <include/config/dnaoptions-interface.hpp>
+
 #include <dynadjust/dnaadjust/dnaadjust.hpp>
+#include <dynadjust/dnaadjust/dnaadjust_printer.hpp>
+#include <dynadjust/dnaadjustwrapper/dnaadjustprogress.hpp>
+#include <dynadjust/dnaadjustwrapper/threading_init.hpp>
 
 using namespace dynadjust::networkadjust;
 using namespace dynadjust::exception;

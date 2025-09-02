@@ -36,6 +36,8 @@
 #include <sstream>
 #include <string>
 #include <time.h>
+#include <thread>
+#include <chrono>
 /// \endcond
 
 #include <include/config/dnaconsts-interface.hpp>

@@ -30,11 +30,11 @@
 
 /// \cond
 #include <stdio.h>
-
 #include <vector>
 #include <string>
 #include <cctype>
 #include <fstream>
+#include <memory>
 
 #include <boost/shared_ptr.hpp>
 /// \endcond
@@ -50,8 +50,6 @@
 #include <include/parameters/dnaellipsoid.hpp>
 #include <include/parameters/dnaprojection.hpp>
 #include <include/io/dnaiodnatypes.hpp>
-
-#include <memory>
 
 using namespace dynadjust::datum_parameters;
 

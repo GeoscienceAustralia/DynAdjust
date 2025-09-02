@@ -33,7 +33,6 @@
 /// \cond
 #include <stdio.h>
 #include <string.h>
-
 #include <iostream>
 #include <sstream>
 #include <algorithm>
@@ -42,11 +41,9 @@
 #include <string>
 #include <cctype>
 #include <fstream>
-
-#include <boost/shared_ptr.hpp>
-
 #include <memory>
 
+#include <boost/shared_ptr.hpp>
 /// \endcond
 
 #include <include/config/dnaexports.hpp>

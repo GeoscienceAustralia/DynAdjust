@@ -21,8 +21,6 @@
 
 #include <dynadjust/dnaplot/dnaplot.hpp>
 
-#include <include/functions/dnastrutils.hpp>
-#include <include/functions/dnafilepathfuncs.hpp>
 namespace dynadjust { 
 namespace networkplot {
 

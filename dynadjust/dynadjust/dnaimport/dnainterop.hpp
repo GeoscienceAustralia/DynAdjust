@@ -37,19 +37,18 @@
 #include <vector>
 #include <cstdarg>
 #include <math.h>
+#include <mutex>
 
 #include <memory>
 #include <filesystem>
 /// \endcond
 
-#include <include/exception/dnaexception.hpp>
 #include <include/config/dnaexports.hpp>
 #include <include/config/dnaversion.hpp>
 #include <include/config/dnaconsts.hpp>
 #include <include/config/dnatypes.hpp>
 #include <include/config/dnatypes-gui.hpp>
-
-//#include <include/math/dnamatrix_contiguous.hpp>
+#include <include/exception/dnaexception.hpp>
 
 #include <include/parameters/dnaepsg.hpp>
 #include <include/parameters/dnadatum.hpp>
@@ -66,6 +65,8 @@
 #include <include/io/dnaiosnx.hpp>
 #include <include/io/dnaioscalar.hpp>
 
+#include <include/functions/dnafilepathfuncs.hpp>
+#include <include/functions/dnastrutils.hpp>
 #include <include/functions/dnatemplatefuncs.hpp>
 #include <include/functions/dnatemplatestnmsrfuncs.hpp>
 #include <include/functions/dnaiostreamfuncs.hpp>

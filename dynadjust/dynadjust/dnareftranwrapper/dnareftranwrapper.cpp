@@ -22,9 +22,6 @@
 
 #include <dynadjust/dnareftranwrapper/dnareftranwrapper.hpp>
 
-#include <include/functions/dnastrutils.hpp>
-#include <include/functions/dnafilepathfuncs.hpp>
-
 using namespace dynadjust;
 
 void PrintOutputFileHeaderInfo(std::ofstream* f_out, const std::string& out_file, project_settings* p, const std::string& header, UINT32& epsgCode, bool userSuppliedFrame, bool userSuppliedEpoch)

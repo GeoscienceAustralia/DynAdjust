@@ -33,7 +33,6 @@
 /// \cond
 #include <numeric>
 #include <math.h>
-
 #include <memory>
 /// \endcond
 

@@ -34,10 +34,8 @@
 #include <stdarg.h>
 #include <string>
 #include <string_view>
-
 #include <algorithm>
 #include <functional>
-
 #include <filesystem>
 /// \endcond
 

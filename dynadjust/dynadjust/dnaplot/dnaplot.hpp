@@ -38,17 +38,20 @@
 #include <map>
 #include <cstdarg>
 #include <math.h>
-
 #include <memory>
 #include <filesystem>
 #include <thread>
+/// \endcond
 
-#include <include/config/dnaexports.hpp>
+#include <include/config/dnaconsts.hpp>
 #include <include/config/dnaversion.hpp>
+#include <include/config/dnatypes.hpp>
+#include <include/config/dnaexports.hpp>
 #include <include/config/dnatypes-gui.hpp>
 
 #include <include/exception/dnaexception.hpp>
 
+#include <include/functions/dnastrutils.hpp>
 #include <include/functions/dnatemplatefuncs.hpp>
 #include <include/functions/dnatemplatestnmsrfuncs.hpp>
 #include <include/functions/dnaiostreamfuncs.hpp>
@@ -59,9 +62,6 @@
 #include <include/functions/dnatemplatematrixfuncs.hpp>
 #include <include/functions/dnastrmanipfuncs.hpp>
 #include <include/functions/dnaprocessfuncs.hpp>
-
-#include <include/config/dnaconsts.hpp>
-#include <include/config/dnatypes.hpp>
 
 #include <include/parameters/dnaepsg.hpp>
 #include <include/parameters/dnadatum.hpp>

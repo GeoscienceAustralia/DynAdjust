@@ -22,9 +22,6 @@
 
 #include <dynadjust/dnageoidwrapper/dnageoidwrapper.hpp>
 
-#include <include/functions/dnastrutils.hpp>
-#include <include/functions/dnafilepathfuncs.hpp>
-
 using namespace dynadjust;
 
 bool CreateNTv2Grid(dna_geoid_interpolation* g, const char* dat_gridfilePath, const n_file_par* grid)

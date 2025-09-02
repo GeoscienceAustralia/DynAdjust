@@ -35,24 +35,22 @@
 #include <filesystem>
 /// \endcond
 
-#include <include/measurement_types/dnageometries.hpp>
+#include <include/ide/trace.hpp>
 
-#include <include/io/dnaiotpb.hpp>
 #include <include/io/bst_file.hpp>
 #include <include/io/bms_file.hpp>
-#include <include/measurement_types/dnageometries.hpp>
-
 #include <include/io/dnaiotpb.hpp>
 #include <include/io/dnaiodna.hpp>
 
-#include <include/config/dnaexports.hpp>
-#include <include/config/dnaversion.hpp>
-#include <include/config/dnaversion-stream.hpp>
 #include <include/config/dnaconsts.hpp>
+#include <include/config/dnaversion.hpp>
+#include <include/config/dnaexports.hpp>
+#include <include/config/dnaversion-stream.hpp>
 #include <include/config/dnaoptions.hpp>
 #include <include/config/dnaoptions-interface.hpp>
 #include <include/exception/dnaexception.hpp>
 
+#include <include/functions/dnastrutils.hpp>
 #include <include/functions/dnatemplatedatetimefuncs.hpp>
 #include <include/functions/dnaiostreamfuncs.hpp>
 #include <include/functions/dnastringfuncs.hpp>
@@ -71,6 +69,7 @@
 
 #include <include/math/dnamatrix_contiguous.hpp>
 #include <include/measurement_types/dnameasurement.hpp>
+#include <include/measurement_types/dnageometries.hpp>
 
 using namespace dynadjust::measurements;
 using namespace dynadjust::exception;

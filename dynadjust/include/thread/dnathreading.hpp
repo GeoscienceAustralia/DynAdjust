@@ -36,8 +36,9 @@
 #include <algorithm>
 #include <sstream>
 #include <fstream>
-#include <include/config/dnatypes.hpp>
 /// \endcond
+
+#include <include/config/dnatypes.hpp>
 
 template<typename T>
 class concurrent_block_adjustment
