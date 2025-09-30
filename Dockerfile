@@ -20,7 +20,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 RUN cd ./DynAdjust && \
-    cmake -S dynadjust -B build && \
-    cmake --build build --parallel
+    cmake -S dynadjust -B build -DBUILD_TESTING=ON && \
+    cmake --build build --parallel && \
+    ctest --test-dir build
 
-RUN wget "https://s3-ap-southeast-2.amazonaws.com/geoid/AUSGeoid/AUSGeoid2020_20180201.gsb" -P "/opt/dynadjust/geoid_file"
+RUN wget --no-check-certificate "https://s3-ap-southeast-2.amazonaws.com/geoid/AUSGeoid/AUSGeoid2020_20180201.gsb" -P "/opt/dynadjust/geoid_file"
