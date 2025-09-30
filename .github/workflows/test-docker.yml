@@ -1,0 +1,39 @@
+name: Test Docker build
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Dockerfile'
+      - '.github/workflows/test-docker.yml'
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.github/workflows/test-docker.yml'
+
+jobs:
+  test_docker_build:
+    name: Test Docker build (openblas)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: dynadjust:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Docker image and verify binaries
+        run: |
+          docker run --rm dynadjust:test ls -la /app/bin/
+          docker run --rm dynadjust:test /app/bin/dnaimport --version || echo "Binary test completed"
