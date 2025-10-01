@@ -1,19 +1,19 @@
-name: Test Docker build
+name: Test Docker builds
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'Dockerfile'
+      - 'docker/**'
       - '.github/workflows/test-docker.yml'
   pull_request:
     paths:
-      - 'Dockerfile'
+      - 'docker/**'
       - '.github/workflows/test-docker.yml'
 
 jobs:
-  test_docker_build:
-    name: Test Docker build (openblas)
+  test_docker_ubuntu:
+    name: Test Docker build (Ubuntu)
     runs-on: ubuntu-latest
 
     steps:
@@ -27,13 +27,39 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile
+          file: ./docker/Dockerfile.ubuntu
           push: false
-          tags: dynadjust:test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: dynadjust:ubuntu
+          cache-from: type=gha,scope=ubuntu
+          cache-to: type=gha,mode=max,scope=ubuntu
 
       - name: Run Docker image and verify binaries
         run: |
-          docker run --rm dynadjust:test ls -la /app/bin/
-          docker run --rm dynadjust:test /app/bin/dnaimport --version || echo "Binary test completed"
+          docker run --rm dynadjust:ubuntu ls -la /app/DynAdjust/build/bin/
+          docker run --rm dynadjust:ubuntu /app/DynAdjust/build/bin/dnaimport --version || echo "Binary test completed"
+
+  test_docker_centos:
+    name: Test Docker build (CentOS Stream 10)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.centos
+          push: false
+          tags: dynadjust:centos
+          cache-from: type=gha,scope=centos
+          cache-to: type=gha,mode=max,scope=centos
+
+      - name: Run Docker image and verify binaries
+        run: |
+          docker run --rm dynadjust:centos ls -la /app/DynAdjust/build/bin/
+          docker run --rm dynadjust:centos /app/DynAdjust/build/bin/dnaimport --version || echo "Binary test completed"

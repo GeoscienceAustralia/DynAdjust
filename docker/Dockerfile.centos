@@ -1,23 +1,22 @@
-# if building on M1 uncomment the line 2, and comment out line 3
-#FROM --platform=linux/amd64 ubuntu as dynadjust-build
-FROM ubuntu as dynadjust-build
+FROM centos:stream10 as dynadjust-build
 
 RUN mkdir -p /app/DynAdjust/ && mkdir -p /opt/dynadjust/geoid_file
 COPY . /app/DynAdjust/
 WORKDIR /app
 
-RUN apt-get update && \
-    DEBIAN_FRONTEND="noninteractive" apt-get install -y --no-install-recommends \
-    libxerces-c-dev \
-    xsdcxx \
-    libboost-program-options-dev \
-    libopenblas-dev \
-    liblapacke-dev \
+RUN dnf install -y \
+    epel-release && \
+    dnf install -y \
+    xerces-c-devel \
+    xsd \
+    boost-program-options \
+    openblas-devel \
+    lapack-devel \
     cmake \
     make \
-    g++ \
+    gcc-c++ \
     wget && \
-    rm -rf /var/lib/apt/lists/*
+    dnf clean all
 
 RUN cd ./DynAdjust && \
     cmake -S dynadjust -B build -DBUILD_TESTING=ON && \
