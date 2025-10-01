@@ -39,7 +39,7 @@ jobs:
           docker run --rm dynadjust:ubuntu /app/DynAdjust/build/bin/dnaimport --version || echo "Binary test completed"
 
   test_docker_centos:
-    name: Test Docker build (CentOS Stream 10)
+    name: Test Docker build (CentOS Stream 9)
     runs-on: ubuntu-latest
 
     steps:

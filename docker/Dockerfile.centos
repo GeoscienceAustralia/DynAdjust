@@ -1,4 +1,4 @@
-FROM centos:stream10 as dynadjust-build
+FROM centos:stream9 as dynadjust-build
 
 RUN mkdir -p /app/DynAdjust/ && mkdir -p /opt/dynadjust/geoid_file
 COPY . /app/DynAdjust/
