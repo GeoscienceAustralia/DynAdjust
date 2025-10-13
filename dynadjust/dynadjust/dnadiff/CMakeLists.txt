@@ -13,8 +13,13 @@ if(NOT BUILD_STATIC)
   target_link_libraries (${PROJECT_NAME})
 
   # Link C++ filesystem library if needed
-  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0")
+      target_link_libraries (${PROJECT_NAME} stdc++fs)
+    endif()
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # Only needed on Linux with Clang (not on macOS/Apple Clang)
+    if(UNIX AND NOT APPLE)
       target_link_libraries (${PROJECT_NAME} stdc++fs)
     endif()
   endif()
@@ -27,6 +32,18 @@ else()
 
   # Always output as 'dnadiff' (not 'dnadiff_static')
   SET_TARGET_PROPERTIES(${STATIC_TARGET_NAME} PROPERTIES OUTPUT_NAME dnadiff)
+
+  # Link C++ filesystem library if needed
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0")
+      target_link_libraries (${STATIC_TARGET_NAME} stdc++fs)
+    endif()
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # Only needed on Linux with Clang (not on macOS/Apple Clang)
+    if(UNIX AND NOT APPLE)
+      target_link_libraries (${STATIC_TARGET_NAME} stdc++fs)
+    endif()
+  endif()
 
   # Link statically
   if(UNIX)

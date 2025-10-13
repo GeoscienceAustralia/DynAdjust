@@ -273,6 +273,22 @@ set(DNA_LIBRARIES
 )
 
 # ----------------------------------------------------------------------------
+# C++ filesystem library
+# ----------------------------------------------------------------------------
+
+# Link C++ filesystem library if needed
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0")
+        list(APPEND DNA_LIBRARIES stdc++fs)
+    endif()
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # Only needed on Linux with Clang (not on macOS/Apple Clang)
+    if(UNIX AND NOT APPLE)
+        list(APPEND DNA_LIBRARIES stdc++fs)
+    endif()
+endif()
+
+# ----------------------------------------------------------------------------
 # OpenMP
 # ----------------------------------------------------------------------------
 

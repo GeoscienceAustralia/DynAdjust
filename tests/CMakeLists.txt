@@ -27,6 +27,18 @@ else()
     set(PLATFORM_LIBS "")
 endif()
 
+# C++ filesystem library for C++17
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0")
+        list(APPEND PLATFORM_LIBS stdc++fs)
+    endif()
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # Only needed on Linux with Clang (not on macOS/Apple Clang)
+    if(UNIX AND NOT APPLE)
+        list(APPEND PLATFORM_LIBS stdc++fs)
+    endif()
+endif()
+
 # Common source files for I/O tests
 set(IO_COMMON_SOURCES
     ../dynadjust/include/io/dynadjust_file.cpp
