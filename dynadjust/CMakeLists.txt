@@ -260,7 +260,7 @@ include_directories(${XSD_INCLUDE_DIR} ${XSD_INCLUDE_DIR}/xsd)
 set(Boost_NO_BOOST_CMAKE ON)
 set(Boost_NO_CMAKE ON)
 find_package(Boost REQUIRED
-    COMPONENTS program_options)
+    COMPONENTS program_options filesystem)
 message(STATUS "Found Boost version: ${Boost_VERSION}")
 
 # ----------------------------------------------------------------------------

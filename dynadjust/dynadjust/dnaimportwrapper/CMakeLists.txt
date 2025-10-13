@@ -19,6 +19,13 @@ if(NOT BUILD_STATIC)
 
   target_link_libraries (${PROJECT_NAME} dnaimport ${DNA_LIBRARIES})
 
+  # Link C++ filesystem library if needed
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0")
+      target_link_libraries (${PROJECT_NAME} stdc++fs)
+    endif()
+  endif()
+
   set_target_properties (${PROJECT_NAME} PROPERTIES
                          OUTPUT_NAME "${DNA_PROGRAM_PREFIX}import")
 endif()

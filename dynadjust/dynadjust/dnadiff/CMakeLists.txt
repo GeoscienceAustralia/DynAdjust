@@ -12,6 +12,13 @@ if(NOT BUILD_STATIC)
 
   target_link_libraries (${PROJECT_NAME})
 
+  # Link C++ filesystem library if needed
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "9.0")
+      target_link_libraries (${PROJECT_NAME} stdc++fs)
+    endif()
+  endif()
+
 else()
   SET (STATIC_TARGET_NAME "${PROJECT_NAME}_static")
 
