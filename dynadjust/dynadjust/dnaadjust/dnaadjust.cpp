@@ -6502,13 +6502,45 @@ void dna_adjust::Solve(bool COMPUTE_INVERSE, const UINT32& block)
 	
 		// Clear upper triangle to match expected structure for cholesky_inverse
 		v_normals_.at(block).clearupper();
-		
+
 		// Calculate Inverse of AT * V-1 * A
 		// Explicitly set LOWER_IS_CLEARED to false (data is in lower triangle)
-		FormInverseVarianceMatrix(&(v_normals_.at(block)), false);
+		try {
+			FormInverseVarianceMatrix(&(v_normals_.at(block)), false);
+		}
+		catch (const std::runtime_error& e) {
+			std::string error_msg(e.what());
+			std::stringstream enhanced_msg;
+			enhanced_msg << "Solve(): Matrix inversion failed:\n" << error_msg;
+
+			size_t critical_row_pos = error_msg.find("Critical row: ");
+			if (critical_row_pos != std::string::npos) {
+				size_t row_start = critical_row_pos + 14;
+				size_t row_end = error_msg.find_first_not_of("0123456789", row_start);
+				std::string row_str = error_msg.substr(row_start, row_end - row_start);
+				UINT32 critical_row = std::stoul(row_str);
+
+				UINT32 station_pos = critical_row / 3;
+				if (station_pos < v_parameterStationList_.at(block).size()) {
+					UINT32 global_stn_idx = v_parameterStationList_.at(block).at(station_pos);
+					const station_t& stn = bstBinaryRecords_.at(global_stn_idx);
+
+					enhanced_msg << "\n\nProblematic Station Identified:\n";
+					enhanced_msg << "  Station name: " << stn.stationName << "\n";
+					enhanced_msg << "  Constraint:   " << stn.stationConst << "\n";
+					enhanced_msg << "  Coordinates:  " << std::fixed << std::setprecision(9);
+					enhanced_msg << "Lat=" << stn.currentLatitude << ", ";
+					enhanced_msg << "Lon=" << stn.currentLongitude << ", ";
+					enhanced_msg << "Hgt=" << std::setprecision(4) << stn.currentHeight << "\n";
+					enhanced_msg << "  Critical row: " << critical_row << " (station parameter index " << station_pos << ")\n";
+				}
+			}
+
+			SignalExceptionAdjustment(enhanced_msg.str(), 0);
+		}
 
 		// Check for a failed inverse solution
-		if (boost::math::isnan(v_normals_.at(block).get(0, 0)) || 
+		if (boost::math::isnan(v_normals_.at(block).get(0, 0)) ||
 			boost::math::isinf(v_normals_.at(block).get(0, 0)))
 		{
 			std::stringstream ss;
