@@ -189,10 +189,12 @@ public:
 	void ParseDiscontinuities(const std::string& fileName);
 
 private:
-	
+
 	// DynaML files
-	void ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PUINT32 stnCount, 
-							   vdnaMsrPtr* vMeasurements, PUINT32 msrCount, PUINT32 clusterID, 
+	bool CheckAndWarnInvalidSchemaLocation(const std::string& fileName);
+
+	void ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PUINT32 stnCount,
+							   vdnaMsrPtr* vMeasurements, PUINT32 msrCount, PUINT32 clusterID,
 							   std::string& fileEpsg, std::string& fileEpoch, bool firstFile, std::string* success_msg);
 	
 	// SINEX files

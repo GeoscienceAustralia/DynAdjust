@@ -388,7 +388,55 @@ _PARSE_STATUS_ dna_import::ParseInputFile(const std::string& fileName, vdnaStnPt
 
 	return parseStatus_;
 }
-	
+
+bool dna_import::CheckAndWarnInvalidSchemaLocation(const std::string& fileName)
+{
+	std::string xml_schema_location;
+
+	try {
+		std::ifstream xml_check(fileName);
+		if (xml_check.is_open())
+		{
+			std::string line;
+			size_t lines_checked = 0;
+
+			while (std::getline(xml_check, line) && lines_checked < 10)
+			{
+				size_t pos = line.find("xsi:noNamespaceSchemaLocation");
+				if (pos != std::string::npos)
+				{
+					size_t quote1 = line.find("\"", pos);
+					size_t quote2 = line.find("\"", quote1 + 1);
+					if (quote1 != std::string::npos && quote2 != std::string::npos)
+					{
+						xml_schema_location = line.substr(quote1 + 1, quote2 - quote1 - 1);
+						break;
+					}
+				}
+				lines_checked++;
+			}
+			xml_check.close();
+
+			if (!xml_schema_location.empty() && xml_schema_location != "DynaML.xsd")
+			{
+				if (!std::filesystem::exists(xml_schema_location))
+				{
+					std::cerr << std::endl;
+					std::cerr << "WARNING: Schema location '" << xml_schema_location
+							  << "' specified in XML file not found." << std::endl;
+					std::cerr << "         Using DynaML.xsd from current directory instead." << std::endl;
+					return true;
+				}
+			}
+		}
+	}
+	catch (...)
+	{
+	}
+
+	return false;
+}
+
 void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PUINT32 stnCount,
 							   vdnaMsrPtr* vMeasurements, PUINT32 msrCount, PUINT32 clusterID,
 							   std::string& fileEpsg, std::string& fileEpoch, bool firstFile, std::string* success_msg)
@@ -399,6 +447,9 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 	parseStatus_ = PARSE_SUCCESS;
 	_filespecifiedreferenceframe = false;
 	_filespecifiedepoch = false;
+
+	// Check the schema location in the XML file and validate it
+	bool need_schema_override = CheckAndWarnInvalidSchemaLocation(fileName);
 
 	// Check if DynaML.xsd exists in the current directory
 	// This prevents the XML parser from hanging when the schema file is missing
@@ -473,7 +524,21 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		::xml_schema::document doc_p (DnaXmlFormat_p, "DnaXmlFormat");
 
 		DnaXmlFormat_p.pre();
-		doc_p.parse (*ifsInputFILE_);
+
+		if (need_schema_override)
+		{
+			// Override schema location if the original was invalid
+			using namespace xsd::cxx::parser::xerces;
+			properties<char> props;
+			props.no_namespace_schema_location("DynaML.xsd");
+			doc_p.parse (*ifsInputFILE_, 0, props);
+		}
+		else
+		{
+			// Use the schema location from the XML file
+			doc_p.parse (*ifsInputFILE_);
+		}
+
 		DnaXmlFormat_p.post_DnaXmlFormat (vStations, vMeasurements);
 
         // unlock after parsing
@@ -600,7 +665,7 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		ss << "ParseXML(): An std::ios_base failure was encountered while parsing " << fileName << "." << std::endl << "  " << e.what();
 		SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
 	}
-	catch (const XMLInteropException& e) 
+	catch (const XMLInteropException& e)
 	{
 		std::stringstream ss;
 		ss << "ParseXML(): An exception was encountered while parsing " << fileName << "." << std::endl << "  " << e.what();
@@ -611,7 +676,7 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		std::stringstream ss("");
 		ss << e.what();
 
-		::xsd::cxx::parser::diagnostics<char>::const_iterator _it;		
+		::xsd::cxx::parser::diagnostics<char>::const_iterator _it;
 		for (_it=e.diagnostics().begin(); _it!=e.diagnostics().end(); _it++)
 		{
 			ss << std::endl;
@@ -632,7 +697,7 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 	{
 		std::stringstream ss;
 		ss << "ParseXML(): An unknown error was encountered while parsing " << fileName << "." << std::endl;
-		SignalExceptionParse(ss.str(), 0);	
+		SignalExceptionParse(ss.str(), 0);
 	}
 
 	if (parseStatus_ != PARSE_SUCCESS)
