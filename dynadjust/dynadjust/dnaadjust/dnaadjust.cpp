@@ -6508,36 +6508,134 @@ void dna_adjust::Solve(bool COMPUTE_INVERSE, const UINT32& block)
 		try {
 			FormInverseVarianceMatrix(&(v_normals_.at(block)), false);
 		}
-		catch (const std::runtime_error& e) {
-			std::string error_msg(e.what());
-			std::stringstream enhanced_msg;
-			enhanced_msg << "Solve(): Matrix inversion failed:\n" << error_msg;
+	catch (const exception::MatrixInversionException& e) {
+		std::stringstream enhanced_msg;
+		enhanced_msg << "Solve(): Matrix inversion failed:\n" << e.what();
 
-			size_t critical_row_pos = error_msg.find("Critical row: ");
-			if (critical_row_pos != std::string::npos) {
-				size_t row_start = critical_row_pos + 14;
-				size_t row_end = error_msg.find_first_not_of("0123456789", row_start);
-				std::string row_str = error_msg.substr(row_start, row_end - row_start);
-				UINT32 critical_row = std::stoul(row_str);
+		UINT32 dpotrf_row = UINT_MAX;
+		if (e.dpotrf_info() > 0) {
+			dpotrf_row = e.dpotrf_info() - 1;
+		}
 
-				UINT32 station_pos = critical_row / 3;
-				if (station_pos < v_parameterStationList_.at(block).size()) {
-					UINT32 global_stn_idx = v_parameterStationList_.at(block).at(station_pos);
-					const station_t& stn = bstBinaryRecords_.at(global_stn_idx);
+		UINT32 gershgorin_row = UINT_MAX;
+		if (e.gershgorin_critical_row() >= 0) {
+			gershgorin_row = static_cast<UINT32>(e.gershgorin_critical_row());
+		}
 
-					enhanced_msg << "\n\nProblematic Station Identified:\n";
-					enhanced_msg << "  Station name: " << stn.stationName << "\n";
-					enhanced_msg << "  Constraint:   " << stn.stationConst << "\n";
-					enhanced_msg << "  Coordinates:  " << std::fixed << std::setprecision(9);
-					enhanced_msg << "Lat=" << stn.currentLatitude << ", ";
-					enhanced_msg << "Lon=" << stn.currentLongitude << ", ";
-					enhanced_msg << "Hgt=" << std::setprecision(4) << stn.currentHeight << "\n";
-					enhanced_msg << "  Critical row: " << critical_row << " (station parameter index " << station_pos << ")\n";
+		auto report_station = [&](UINT32 row, const char* source) {
+			UINT32 station_pos = row / 3;
+			UINT32 param_idx = row % 3;
+			const char* param_names[] = {"Latitude", "Longitude", "Height"};
+
+			if (station_pos < v_parameterStationList_.at(block).size()) {
+				UINT32 global_stn_idx = v_parameterStationList_.at(block).at(station_pos);
+				const station_t& stn = bstBinaryRecords_.at(global_stn_idx);
+
+				enhanced_msg << "\n\nProblematic Station (" << source << "):\n";
+				enhanced_msg << "  Station name: " << stn.stationName << "\n";
+				enhanced_msg << "  Constraint:   " << stn.stationConst << "\n";
+				enhanced_msg << "  Coordinates:  " << std::fixed << std::setprecision(9);
+				enhanced_msg << "Lat=" << stn.currentLatitude << ", ";
+				enhanced_msg << "Lon=" << stn.currentLongitude << ", ";
+				enhanced_msg << "Hgt=" << std::setprecision(4) << stn.currentHeight << "\n";
+				enhanced_msg << "  Critical row: " << row << " (station " << station_pos
+							 << ", parameter: " << param_names[param_idx] << ")\n";
+			}
+		};
+
+		if (dpotrf_row != UINT_MAX) {
+			report_station(dpotrf_row, "dpotrf failure point");
+		}
+
+		if (gershgorin_row != UINT_MAX && gershgorin_row != dpotrf_row) {
+			report_station(gershgorin_row, "Gershgorin analysis");
+		}
+
+		std::set<UINT32> problematic_stations;
+		if (e.has_eigendata()) {
+			for (const auto& evd : e.eigenvectors()) {
+				for (const auto& comp : evd.components) {
+					UINT32 station_pos = comp.row / 3;
+					if (station_pos < v_parameterStationList_.at(block).size()) {
+						UINT32 global_stn_idx = v_parameterStationList_.at(block).at(station_pos);
+						problematic_stations.insert(global_stn_idx);
+					}
 				}
 			}
-
-			SignalExceptionAdjustment(enhanced_msg.str(), 0);
 		}
+
+		if (!problematic_stations.empty()) {
+			std::vector<const measurement_t*> related_measurements;
+			for (const auto& msr : bmsBinaryRecords_) {
+				if (msr.ignore)
+					continue;
+
+				bool involves_problematic = false;
+				if (problematic_stations.count(msr.station1) > 0)
+					involves_problematic = true;
+				if (msr.measurementStations >= 2 && problematic_stations.count(msr.station2) > 0)
+					involves_problematic = true;
+				if (msr.measurementStations >= 3 && problematic_stations.count(msr.station3) > 0)
+					involves_problematic = true;
+
+				if (involves_problematic)
+					related_measurements.push_back(&msr);
+			}
+
+			if (!related_measurements.empty()) {
+				enhanced_msg << "\n\nMeasurements involving problematic stations ("
+							 << related_measurements.size() << " total";
+				size_t display_count = std::min(related_measurements.size(), size_t(20));
+				if (display_count < related_measurements.size())
+					enhanced_msg << ", showing first " << display_count;
+				enhanced_msg << "):\n";
+				enhanced_msg << "  " << std::left
+							 << std::setw(6) << "Type"
+							 << std::setw(8) << "FileOrd"
+							 << std::setw(25) << "Station1"
+							 << std::setw(25) << "Station2"
+							 << std::setw(25) << "Station3"
+							 << std::right
+							 << std::setw(12) << "Value"
+							 << std::setw(12) << "StdDev"
+							 << std::setw(12) << "Residual"
+							 << std::setw(10) << "NStat"
+							 << std::setw(8) << "Cluster" << "\n";
+				enhanced_msg << "  " << std::string(145, '-') << "\n";
+
+				for (size_t i = 0; i < display_count; ++i) {
+					const measurement_t* msr = related_measurements[i];
+					const char* stn1_name = bstBinaryRecords_.at(msr->station1).stationName;
+					const char* stn2_name = (msr->measurementStations >= 2) ?
+						bstBinaryRecords_.at(msr->station2).stationName : "-";
+					const char* stn3_name = (msr->measurementStations >= 3) ?
+						bstBinaryRecords_.at(msr->station3).stationName : "-";
+
+					double stddev = sqrt(msr->term2);
+
+					enhanced_msg << "  " << std::left
+								 << std::setw(6) << msr->measType
+								 << std::setw(8) << msr->fileOrder
+								 << std::setw(25) << stn1_name
+								 << std::setw(25) << stn2_name
+								 << std::setw(25) << stn3_name
+								 << std::right << std::fixed << std::setprecision(4)
+								 << std::setw(12) << msr->term1
+								 << std::setw(12) << stddev
+								 << std::setw(12) << msr->measCorr
+								 << std::setw(10) << std::setprecision(2) << msr->NStat
+								 << std::setw(8) << msr->clusterID << "\n";
+				}
+			}
+		}
+
+		SignalExceptionAdjustment(enhanced_msg.str(), 0);
+	}
+	catch (const std::runtime_error& e) {
+		std::stringstream ss;
+		ss << "Solve(): Matrix inversion failed:\n" << e.what();
+		SignalExceptionAdjustment(ss.str(), 0);
+	}
 
 		// Check for a failed inverse solution
 		if (boost::math::isnan(v_normals_.at(block).get(0, 0)) ||

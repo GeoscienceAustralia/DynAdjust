@@ -19,12 +19,15 @@
 // Description  : DynAdjust Matrix library
 //============================================================================
 
+#include <algorithm>
 #include <cmath>
+#include <include/exception/dnaexception.hpp>
 #include <include/ide/trace.hpp>
 #include <include/math/dnamatrix_contiguous.hpp>
 #include <iomanip>
 #include <limits>
 #include <sstream>
+#include <vector>
 
 namespace dynadjust {
 namespace math {
@@ -856,6 +859,9 @@ matrix_2d matrix_2d::cholesky_inverse(bool LOWER_IS_CLEARED /*=false*/) {
     LAPACK_FUNC(dpotrf)(&uplo, &n, _buffer, &n, &info);
 
     if (info != 0) {
+        using dynadjust::exception::MatrixInversionException;
+        using dynadjust::exception::EigenvectorComponent;
+
         std::stringstream error_msg;
         error_msg << "cholesky_inverse(): Cholesky factorisation failed.\n";
         error_msg << "\nSystem Information:\n";
@@ -883,7 +889,7 @@ matrix_2d matrix_2d::cholesky_inverse(bool LOWER_IS_CLEARED /*=false*/) {
         error_msg << "  Matrix dimensions: " << _rows << " x " << _cols << "\n";
         error_msg << "  Triangle processed: uplo='" << uplo
                   << "' (LOWER_IS_CLEARED=" << (LOWER_IS_CLEARED ? "true" : "false") << ")\n";
-        
+
 #ifdef DEBUG_MATRIX_2D
         error_msg << "  Diagonal range: [" << min_diag << ", " << max_diag << "]\n";
         error_msg << "  Condition estimate: " << (max_diag/min_diag) << "\n";
@@ -893,7 +899,7 @@ matrix_2d matrix_2d::cholesky_inverse(bool LOWER_IS_CLEARED /*=false*/) {
             error_msg << "  Matrix was scaled to improve conditioning\n";
             error_msg << "   Scale factor applied: " << scale_factor << "\n";
         }
-#endif  
+#endif
 
         error_msg << "\nError Details:\n";
         error_msg << "  dpotrf info = " << info << "\n";
@@ -904,6 +910,9 @@ matrix_2d matrix_2d::cholesky_inverse(bool LOWER_IS_CLEARED /*=false*/) {
         }
 
 #ifdef DEBUG_MATRIX_2D
+        int gershgorin_critical_row = -1;
+        std::vector<dynadjust::exception::EigenvectorData> collected_eigenvectors;
+
         error_msg << "\nMatrix Diagnostics (Original Matrix):\n";
 
         // If the matrix is triangular (not symmetric), fill in the empty triangle
@@ -1005,6 +1014,7 @@ matrix_2d matrix_2d::cholesky_inverse(bool LOWER_IS_CLEARED /*=false*/) {
                     gmin_row = i;
                 }
             }
+            gershgorin_critical_row = gmin_row;
             error_msg << "\n  Gershgorin Analysis:\n";
             error_msg << "    Lower bound for eigenvalues: " << std::scientific << std::setprecision(6) << gmin << "\n";
             error_msg << "    Critical row: " << gmin_row << "\n";
@@ -1017,11 +1027,12 @@ matrix_2d matrix_2d::cholesky_inverse(bool LOWER_IS_CLEARED /*=false*/) {
 
             // Compute smallest eigenvalues using LAPACK dsyevr
             error_msg << "\n  Eigenvalue Analysis (smallest 10 eigenvalues):\n";
+
             try {
                 // Create a copy of the leading minor for eigenvalue computation
                 int eig_n = k;  // Size of the leading minor that failed
                 int num_eigs = std::min(10, eig_n);  // Request up to 10 eigenvalues
-                
+
                 // Allocate workspace for dsyevr
                 double* eig_matrix = new double[eig_n * eig_n];
                 double* eigenvalues = new double[num_eigs];
@@ -1036,7 +1047,7 @@ matrix_2d matrix_2d::cholesky_inverse(bool LOWER_IS_CLEARED /*=false*/) {
                 }
                 
                 // LAPACK dsyevr parameters
-                char jobz = 'N';  // Only eigenvalues, no eigenvectors
+                char jobz = 'V';  // Compute eigenvalues AND eigenvectors
                 char range = 'I'; // Compute eigenvalues by index range
                 char uplo_eig = 'L';  // Use lower triangle
                 double vl = 0.0, vu = 0.0;  // Not used with range='I'
@@ -1090,6 +1101,55 @@ matrix_2d matrix_2d::cholesky_inverse(bool LOWER_IS_CLEARED /*=false*/) {
                             error_msg << "    Note: Only computed first " << m << " of " << eig_n << " eigenvalues\n";
                         }
                     }
+
+                    error_msg << "\n  Eigenvector Analysis (parameters with large components):\n";
+                    const double component_threshold = 0.1;
+                    const int max_components_to_show = 10;
+
+                    for (int eig_idx = 0; eig_idx < m; ++eig_idx) {
+                        if (eigenvalues[eig_idx] < 1.0e-6) {
+                            error_msg << "    Eigenvector for λ[" << (eig_idx + 1) << "] = "
+                                     << std::scientific << std::setprecision(3) << eigenvalues[eig_idx] << ":\n";
+
+                            std::vector<std::pair<int, double>> components;
+                            for (int row = 0; row < eig_n; ++row) {
+                                double component = eigenvectors[row + eig_idx * eig_n];
+                                if (std::abs(component) > component_threshold) {
+                                    components.push_back({row, component});
+                                }
+                            }
+
+                            std::sort(components.begin(), components.end(),
+                                     [](const auto& a, const auto& b) {
+                                         return std::abs(a.second) > std::abs(b.second);
+                                     });
+
+                            std::vector<EigenvectorComponent> structured_components;
+                            int shown = 0;
+                            for (const auto& comp : components) {
+                                if (shown < max_components_to_show) {
+                                    error_msg << "      Row " << comp.first << ": "
+                                             << std::fixed << std::setprecision(4) << comp.second << "\n";
+                                }
+                                structured_components.push_back(EigenvectorComponent(comp.first, comp.second));
+                                shown++;
+                            }
+
+                            if (components.size() > max_components_to_show) {
+                                error_msg << "      ... (" << (components.size() - max_components_to_show)
+                                         << " more components)\n";
+                            }
+
+                            if (components.empty()) {
+                                error_msg << "      (no components exceed threshold " << component_threshold << ")\n";
+                            }
+
+                            dynadjust::exception::EigenvectorData evd;
+                            evd.eigenvalue = eigenvalues[eig_idx];
+                            evd.components = structured_components;
+                            collected_eigenvectors.push_back(evd);
+                        }
+                    }
                 } else {
                     error_msg << "    Failed to compute eigenvalues (dsyevr info = " << info_eig << ")\n";
                 }
@@ -1131,9 +1191,22 @@ matrix_2d matrix_2d::cholesky_inverse(bool LOWER_IS_CLEARED /*=false*/) {
 
         // Clean up backup buffer before throwing
         delete[] backup_buffer;
-#endif
 
+        MatrixInversionException exc(
+            error_msg.str(),
+            _rows,
+            info,
+            gershgorin_critical_row
+        );
+
+        for (const auto& evd : collected_eigenvectors) {
+            exc.add_eigenvector(evd.eigenvalue, evd.components);
+        }
+
+        throw exc;
+#else
         throw std::runtime_error(error_msg.str());
+#endif
     }
 
     // Perform Cholesky inverse

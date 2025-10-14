@@ -31,6 +31,7 @@
 /// \cond
 #include <exception>
 #include <stdexcept>
+#include <vector>
 /// \endcond
 
 #include <include/config/dnatypes-fwd.hpp>
@@ -177,6 +178,61 @@ public:
 private:
 	std::string what_;
 	size_t exception_type_;
+};
+
+struct EigenvectorComponent {
+	UINT32 row;
+	double value;
+
+	EigenvectorComponent(UINT32 r, double v) : row(r), value(v) {}
+};
+
+struct EigenvectorData {
+	double eigenvalue;
+	std::vector<EigenvectorComponent> components;
+
+	EigenvectorData() : eigenvalue(0.0) {}
+};
+
+class MatrixInversionException : public std::exception
+{
+public:
+	explicit MatrixInversionException(
+		const std::string& message,
+		UINT32 matrix_size,
+		int dpotrf_info,
+		int gershgorin_critical_row)
+		: message_(message)
+		, matrix_size_(matrix_size)
+		, dpotrf_info_(dpotrf_info)
+		, gershgorin_critical_row_(gershgorin_critical_row)
+		, has_eigendata_(false)
+	{}
+
+	virtual const char* what() const throw() { return message_.c_str(); }
+	virtual ~MatrixInversionException() throw() {}
+
+	inline UINT32 matrix_size() const { return matrix_size_; }
+	inline int dpotrf_info() const { return dpotrf_info_; }
+	inline int gershgorin_critical_row() const { return gershgorin_critical_row_; }
+	inline bool has_eigendata() const { return has_eigendata_; }
+	inline const std::vector<EigenvectorData>& eigenvectors() const { return eigenvectors_; }
+
+	void add_eigenvector(double eigenvalue, const std::vector<EigenvectorComponent>& components) {
+		EigenvectorData evd;
+		evd.eigenvalue = eigenvalue;
+		evd.components = components;
+		eigenvectors_.push_back(evd);
+		has_eigendata_ = true;
+	}
+
+private:
+	std::string message_;
+	UINT32 matrix_size_;
+	int dpotrf_info_;
+	int gershgorin_critical_row_;
+	bool has_eigendata_;
+	std::vector<EigenvectorData> eigenvectors_;
 };
 
 
