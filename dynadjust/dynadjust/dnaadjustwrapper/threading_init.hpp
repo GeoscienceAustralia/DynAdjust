@@ -73,6 +73,15 @@ inline int init_linear_algebra_threads(int requested_threads = 0) {
     if (n <= 0) n = 1;
 #endif
 
+#if !defined(USE_MKL)
+    if (n <= 0) {
+        if (const char* env = std::getenv("OPENBLAS_NUM_THREADS"); env && *env) {
+            int v = std::atoi(env);
+            if (v > 0) n = v;
+        }
+    }
+#endif
+
 #if defined(_OPENMP)
     omp_set_dynamic(0);
 #if _OPENMP >= 201511

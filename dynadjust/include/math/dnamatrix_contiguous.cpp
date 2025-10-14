@@ -32,7 +32,7 @@
 namespace dynadjust {
 namespace math {
 
-#define DEBUG_MATRIX_2D 0
+#define DEBUG_MATRIX_2D 1
 
 std::ostream& operator<<(std::ostream& os, const matrix_2d& rhs) {
     if (os.iword(0) == binary) {
