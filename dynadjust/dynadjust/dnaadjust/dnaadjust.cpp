@@ -6566,29 +6566,39 @@ void dna_adjust::Solve(bool COMPUTE_INVERSE, const UINT32& block)
 
 		if (!problematic_stations.empty()) {
 			std::vector<const measurement_t*> related_measurements;
-			for (const auto& msr : bmsBinaryRecords_) {
-				if (msr.ignore)
+			std::set<UINT32> added_measurements;
+
+			for (UINT32 station_idx : problematic_stations) {
+				if (station_idx >= vAssocStnList_.size())
 					continue;
 
-				bool involves_problematic = false;
-				if (problematic_stations.count(msr.station1) > 0)
-					involves_problematic = true;
-				if (msr.measurementStations >= 2 && problematic_stations.count(msr.station2) > 0)
-					involves_problematic = true;
-				if (msr.measurementStations >= 3 && problematic_stations.count(msr.station3) > 0)
-					involves_problematic = true;
+				const CAStationList& asl = vAssocStnList_.at(station_idx);
+				UINT32 msr_count = asl.GetAssocMsrCount();
+				UINT32 aml_start = asl.GetAMLStnIndex();
 
-				if (involves_problematic)
-					related_measurements.push_back(&msr);
+				for (UINT32 m = 0; m < msr_count; ++m) {
+					UINT32 aml_index = aml_start + m;
+					if (aml_index >= vAssocMsrList_.size())
+						continue;
+
+					UINT32 bmsr_index = vAssocMsrList_.at(aml_index).bmsr_index;
+					if (bmsr_index >= bmsBinaryRecords_.size())
+						continue;
+
+					if (added_measurements.count(bmsr_index) > 0)
+						continue;
+
+					const measurement_t& msr = bmsBinaryRecords_.at(bmsr_index);
+					if (!msr.ignore) {
+						related_measurements.push_back(&msr);
+						added_measurements.insert(bmsr_index);
+					}
+				}
 			}
 
 			if (!related_measurements.empty()) {
 				enhanced_msg << "\n\nMeasurements involving problematic stations ("
-							 << related_measurements.size() << " total";
-				size_t display_count = std::min(related_measurements.size(), size_t(20));
-				if (display_count < related_measurements.size())
-					enhanced_msg << ", showing first " << display_count;
-				enhanced_msg << "):\n";
+							 << related_measurements.size() << " total):\n";
 				enhanced_msg << "  " << std::left
 							 << std::setw(6) << "Type"
 							 << std::setw(8) << "FileOrd"
@@ -6603,7 +6613,7 @@ void dna_adjust::Solve(bool COMPUTE_INVERSE, const UINT32& block)
 							 << std::setw(8) << "Cluster" << "\n";
 				enhanced_msg << "  " << std::string(145, '-') << "\n";
 
-				for (size_t i = 0; i < display_count; ++i) {
+				for (size_t i = 0; i < related_measurements.size(); ++i) {
 					const measurement_t* msr = related_measurements[i];
 					const char* stn1_name = bstBinaryRecords_.at(msr->station1).stationName;
 					const char* stn2_name = (msr->measurementStations >= 2) ?
