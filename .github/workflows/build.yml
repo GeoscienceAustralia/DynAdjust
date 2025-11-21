@@ -1,0 +1,612 @@
+# Compile and build binaries
+#
+# For updated Intel OneAPI URLs, see:
+# https://github.com/oneapi-src/oneapi-ci/blob/master/.github/workflows/build_all.yml
+
+name: Build binaries (Linux, Mac, Windows)
+
+on:
+  workflow_dispatch:
+  push:
+
+env:
+  WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/f5881e61-dcdc-40f1-9bd9-717081ac623c/intel-oneapi-base-toolkit-2025.2.1.46_offline.exe
+  LINUX_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/3b7a16b3-a7b0-460f-be16-de0d64fa6b1e/intel-oneapi-base-toolkit-2025.2.1.44_offline.sh
+
+
+jobs:
+#------------------------------------------------
+
+  build_linux_dyn_openblas:
+    name: Linux build (openblas)
+    runs-on: ubuntu-latest
+    env:
+      BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+      PKGS: >
+        libxerces-c-dev xsdcxx libboost-program-options-dev libopenblas-dev liblapacke-dev
+
+    steps:
+
+      - name: root suid tar
+        run: sudo chown root /bin/tar && sudo chmod u+s /bin/tar
+
+      - name: Generate cache triggers
+        shell: bash
+        run: |
+          echo APT_HASH=$(echo "${{ env.PKGS }}" | md5sum | cut -f 1 -d" ") >> $GITHUB_ENV
+
+      - name: Cache installed packages
+        id: cache-apt
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-install-cache
+          key: apt-installed-${{ runner.os }}-${{ env.APT_HASH }}
+
+      - name: Restore packages from cache
+        if: steps.cache-apt.outputs.cache-hit == 'true'
+        run: |
+          sudo tar -xf ~/apt-install-cache/packages.tar -C /var/cache/apt/archives/ --strip-components=1
+          sudo dpkg -i /var/cache/apt/archives/*.deb
+          sudo ldconfig
+
+      - name: Install dependencies
+        if: steps.cache-apt.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ${{ env.PKGS }}
+
+          mkdir -p ~/apt-install-cache
+          sudo tar -cf ~/apt-install-cache/packages.tar -C /var/cache/apt/archives/ .
+          sudo chown $USER ~/apt-install-cache/packages.tar
+
+      - name: Check branch name
+        shell: bash
+        run: echo ${{ env.BRANCH_NAME }}
+          
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH_NAME }}
+
+      - name: Build with CMake
+        run: |
+          cmake dynadjust -DBUILD_TESTING=OFF -DUSE_UNITY_BUILD=ON -DBLA_VENDOR=OpenBLAS
+          make -j2
+          ls -la bin/
+          
+#------------------------------------------------
+
+  build_linux_dyn_mkl:
+    name: Linux build (mkl)
+    runs-on: ubuntu-latest
+    env:
+      BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+      PKGS: >
+        libxerces-c-dev xsdcxx libboost-program-options-dev
+
+    steps:
+
+      - name: root suid tar
+        run: sudo chown root /bin/tar && sudo chmod u+s /bin/tar
+
+      - name: Generate cache triggers
+        shell: bash
+        run: |
+          echo ONEAPI_HASH=$(echo "${LINUX_BASEKIT_URL}" | md5sum | cut -f 1 -d" ") >> $GITHUB_ENV
+          echo APT_HASH=$(echo "${{ env.PKGS }}" | md5sum | cut -f 1 -d" ") >> $GITHUB_ENV
+
+      - name: Cache installed packages
+        id: cache-apt
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-install-cache
+          key: apt-installed-${{ runner.os }}-${{ env.APT_HASH }}
+
+      - name: Restore packages from cache
+        if: steps.cache-apt.outputs.cache-hit == 'true'
+        run: |
+          sudo tar -xf ~/apt-install-cache/packages.tar -C /var/cache/apt/archives/ --strip-components=1
+          sudo dpkg -i /var/cache/apt/archives/*.deb
+          sudo ldconfig
+
+      - name: Install dependencies
+        if: steps.cache-apt.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ${{ env.PKGS }}
+
+          mkdir -p ~/apt-install-cache
+          sudo tar -cf ~/apt-install-cache/packages.tar -C /var/cache/apt/archives/ .
+          sudo chown $USER ~/apt-install-cache/packages.tar
+
+      - name: Cache Intel OneAPI
+        id: cache-oneapi
+        uses: actions/cache@v4
+        with:
+          path: /opt/intel
+          key: intel-oneapi-linux-${{ env.ONEAPI_HASH }}
+          restore-keys: |
+            intel-oneapi-linux-
+
+      - name: Install Intel OneAPI
+        if: steps.cache-oneapi.outputs.cache-hit != 'true'
+        run: |
+          curl -L $LINUX_BASEKIT_URL -o install.sh
+          sudo sh install.sh -a --action install --components intel.oneapi.lin.mkl.devel --eula=accept -s
+
+      - name: Check branch name
+        shell: bash
+        run: echo ${{ env.BRANCH_NAME }}
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH_NAME }}
+
+      - name: Build with CMake
+        run: |
+          source /opt/intel/oneapi/setvars.sh
+          cmake dynadjust -DUSE_MKL=ON -DBUILD_TESTING=OFF -DUSE_UNITY_BUILD=ON
+          make -j2
+          ls -la bin/
+
+      - name: Prepare artifacts
+        run: |
+          for f in ./bin/*; do strip $f 2>/dev/null || true; done
+          mkdir -p ./zip/dynadjust-linux-mkl
+          mv ./bin/* ./zip/dynadjust-linux-mkl
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dynadjust-linux-mkl
+          path: ./zip/
+
+#------------------------------------------------
+
+  build_linux_static_openblas:
+    name: Linux build (openblas / static)
+    runs-on: ubuntu-latest
+    env:
+      BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+      PKGS: >
+        xsdcxx libboost-program-options-dev libopenblas-dev liblapacke-dev
+      XERCES_VERSION: 3.2.4
+
+    steps:
+
+      - name: root suid tar
+        run: sudo chown root /bin/tar && sudo chmod u+s /bin/tar
+
+      - name: Generate cache triggers
+        shell: bash
+        run: |
+          echo APT_HASH=$(echo "${{ env.PKGS }}" | md5sum | cut -f 1 -d" ") >> $GITHUB_ENV
+
+      - name: Cache installed packages
+        id: cache-apt
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-install-cache
+          key: apt-installed-${{ runner.os }}-${{ env.APT_HASH }}
+
+      - name: Restore packages from cache
+        if: steps.cache-apt.outputs.cache-hit == 'true'
+        run: |
+          sudo tar -xf ~/apt-install-cache/packages.tar -C /var/cache/apt/archives/ --strip-components=1
+          sudo dpkg -i /var/cache/apt/archives/*.deb
+          sudo ldconfig
+
+      - name: Install dependencies
+        if: steps.cache-apt.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ${{ env.PKGS }}
+
+          mkdir -p ~/apt-install-cache
+          sudo tar -cf ~/apt-install-cache/packages.tar -C /var/cache/apt/archives/ .
+          sudo chown $USER ~/apt-install-cache/packages.tar
+
+      - name: Check branch name
+        shell: bash
+        run: echo ${{ env.BRANCH_NAME }}
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH_NAME }}
+
+      - name: Cache static xerces
+        id: cache-xerces
+        uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/lib/libxerces-c*.a
+            /usr/local/include/xercesc
+            /usr/local/lib/pkgconfig/xerces-c.pc
+          key: xerces-static-${{ env.XERCES_VERSION }}-${{ runner.os }}
+
+      - name: Build static xerces
+        if: steps.cache-xerces.outputs.cache-hit != 'true'
+        run: |
+          curl -L -O https://archive.apache.org/dist/xerces/c/3/sources/xerces-c-${{ env.XERCES_VERSION }}.tar.bz2
+          bzip2 -dc xerces-c-${{ env.XERCES_VERSION }}.tar.bz2 | tar xvf -
+ 
+          sudo chown -R $USER xerces-c-${{ env.XERCES_VERSION }}
+
+          cd xerces-c-${{ env.XERCES_VERSION }}
+
+          PKG_CONFIG="pkg-config --static" ./configure --without-curl --without-icu --enable-static --disable-shared
+          make -j2
+          sudo make install 
+
+      - name: Build with CMake
+        run: |
+          cmake -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DUSE_UNITY_BUILD=ON dynadjust
+          make -j2
+          ls -la bin/
+
+      - name: Prepare artifacts
+        run: |
+          for f in ./bin/*; do strip $f; done
+          mkdir -p ./zip/dynadjust-linux-static
+          mv ./bin/* ./zip/dynadjust-linux-static
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dynadjust-linux-openblas-static
+          path: ./zip/
+
+#------------------------------------------------
+
+  build_mac_dyn:
+    name: Mac build (accelerate)
+    runs-on: macos-15
+    env:
+      BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+      BREW_PACKAGES: boost xerces-c xsd
+
+    steps:
+
+      - name: Generate cache triggers
+        shell: bash
+        run: |
+          echo BREW_HASH=$(echo "${{ env.BREW_PACKAGES }}" | md5 | cut -f 1 -d" ") >> $GITHUB_ENV
+
+      - name: Cache Homebrew packages
+        id: cache-brew
+        uses: actions/cache@v4
+        with:
+          path: |
+            /opt/homebrew/Cellar/boost
+            /opt/homebrew/Cellar/xerces-c
+            /opt/homebrew/Cellar/xsd
+          key: brew-${{ runner.os }}-${{ env.BREW_HASH }}
+          restore-keys: |
+            brew-${{ runner.os }}-
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if [ "${{ steps.cache-brew.outputs.cache-hit }}" != "true" ]; then
+            brew update
+            brew install ${{ env.BREW_PACKAGES }}
+          else
+            export HOMEBREW_NO_AUTO_UPDATE=1
+            for pkg in ${{ env.BREW_PACKAGES }}; do
+              brew link --overwrite --force $pkg 2>/dev/null || brew install $pkg
+            done
+          fi
+
+      - name: Check branch name
+        shell: bash
+        run: echo ${{ env.BRANCH_NAME }}
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH_NAME }}
+
+      - name: Build with CMake
+        run: |
+          cmake dynadjust -DBUILD_TESTING=OFF -DUSE_UNITY_BUILD=ON
+          make -j2 VERBOSE=1
+          ls -la bin/
+
+#------------------------------------------------
+
+  build_mac_static:
+    name: Mac build (accelerate / static)
+    runs-on: macos-15
+    env:
+      BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+      BREW_PACKAGES: boost xerces-c xsd
+
+    steps:
+
+      - name: Generate cache triggers
+        shell: bash
+        run: |
+          echo BREW_HASH=$(echo "${{ env.BREW_PACKAGES }}" | md5 | cut -f 1 -d" ") >> $GITHUB_ENV
+
+      - name: Cache Homebrew packages
+        id: cache-brew
+        uses: actions/cache@v4
+        with:
+          path: |
+            /opt/homebrew/Cellar/boost
+            /opt/homebrew/Cellar/xerces-c
+            /opt/homebrew/Cellar/xsd
+          key: brew-${{ runner.os }}-${{ env.BREW_HASH }}
+          restore-keys: |
+            brew-${{ runner.os }}-
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if [ "${{ steps.cache-brew.outputs.cache-hit }}" != "true" ]; then
+            brew update
+            brew install ${{ env.BREW_PACKAGES }}
+          else
+            export HOMEBREW_NO_AUTO_UPDATE=1
+            for pkg in ${{ env.BREW_PACKAGES }}; do
+              brew link --overwrite --force $pkg 2>/dev/null || brew install $pkg
+            done
+          fi
+
+      - name: Check branch name
+        shell: bash
+        run: echo ${{ env.BRANCH_NAME }}
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH_NAME }}
+
+      - name: Build with CMake
+        run: |
+          cmake -DBUILD_STATIC=ON -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release -DUSE_UNITY_BUILD=ON dynadjust
+          make -j2 VERBOSE=1
+          ls -la bin/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dynadjust-macos-static
+          path: ./bin/
+
+#------------------------------------------------
+
+  build_windows_dyn_mkl:
+    name: Windows build (mkl)
+    runs-on: windows-2025
+    env:
+      BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+      VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess xerces-c vcpkg-tool-ninja
+      VCPKG_INSTALLATION_ROOT: "C:/vcpkg"
+      VCPKG_BINARY_SOURCES: "clear"
+      ONEAPI_VERSION: "2025.2"
+
+    steps:
+
+    - name: Generate cache triggers
+      shell: bash
+      run: |
+        echo VCPKG_HASH=$(echo "${VCPKG_PACKAGES}" | sed "s/ /_/g" | md5sum | cut -f 1 -d" ") >> $GITHUB_ENV
+        echo ONEAPI_HASH=$(echo "${WINDOWS_BASEKIT_URL}" | md5sum | cut -f 1 -d" ") >> $GITHUB_ENV
+
+    - name: Cache vcpkg
+      id: cache-vcpkg
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
+        key: vcpkg-${{ runner.os }}-mkl-${{ env.VCPKG_HASH }}
+        restore-keys: |
+          vcpkg-${{ runner.os }}-mkl-
+          vcpkg-${{ runner.os }}-
+
+    - name: Cache Intel OneAPI
+      id: cache-oneapi
+      uses: actions/cache@v4
+      with:
+        path: C:\Program Files (x86)\Intel\oneAPI
+        key: intel-oneapi-windows-${{ env.ONEAPI_HASH }}
+        restore-keys: |
+          intel-oneapi-windows-
+
+    - name: Install vcpkg prerequisites
+      if: steps.cache-vcpkg.outputs.cache-hit != 'true'
+      shell: powershell
+      run: |
+        vcpkg.exe --triplet=x64-windows install ${{ env.VCPKG_PACKAGES }}
+        Remove-Item -Recurse -Force ${{ env.VCPKG_INSTALLATION_ROOT }}/.git -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force ${{ env.VCPKG_INSTALLATION_ROOT }}/buildtrees -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force ${{ env.VCPKG_INSTALLATION_ROOT }}/downloads -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force ${{ env.VCPKG_INSTALLATION_ROOT }}/.github -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force ${{ env.VCPKG_INSTALLATION_ROOT }}/docs -ErrorAction SilentlyContinue
+
+    - name: List installed packages
+      shell: powershell
+      run: vcpkg.exe list
+
+    - name: Install Intel OneAPI
+      if: steps.cache-oneapi.outputs.cache-hit != 'true'
+      shell: powershell
+      run: |
+        Write-Host "Installing Intel OneAPI..."
+        $url = $env:WINDOWS_BASEKIT_URL
+        $components = "intel.oneapi.win.mkl.devel"
+        $tempExe = Join-Path $env:TEMP "webimage.exe"
+
+        Write-Host "Downloading installer from $url..."
+        curl.exe -L $url -o $tempExe
+
+        Write-Host "Extracting installer..."
+        $installerArgs = "-s -x -f webimage_extracted --log extract.log"
+        $proc = Start-Process -FilePath $tempExe -ArgumentList $installerArgs -NoNewWindow -Wait -PassThru
+        Remove-Item $tempExe -Force
+
+        $bootstrapperPath = Join-Path -Path (Join-Path $PWD "webimage_extracted") "bootstrapper.exe"
+
+        Write-Host "Listing available components..."
+        $procBootstrap = Start-Process -FilePath $bootstrapperPath -ArgumentList "--list-components" -NoNewWindow -Wait -PassThru -RedirectStandardOutput components
+        get-content components
+
+        Write-Host "Running bootstrapper..."
+        $bootstrapArgs = "-s --action install --components=$components --eula=accept -p=NEED_VS2017_INTEGRATION=0 -p=NEED_VS2019_INTEGRATION=0 -p=NEED_VS2022_INTEGRATION=0 --log-dir=."
+        $procBootstrap = Start-Process -FilePath $bootstrapperPath -ArgumentList $bootstrapArgs -NoNewWindow -Wait -PassThru
+        Remove-Item -Recurse -Force "webimage_extracted"
+
+    - name: Check branch name
+      shell: bash
+      run: echo ${{ env.BRANCH_NAME }}
+
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ env.BRANCH_NAME }}
+        path: "./src"
+
+    - name: Download and install xsd
+      working-directory: "./src"
+      shell: bash
+      run: |
+        curl.exe -L -O https://www.codesynthesis.com/download/xsd/4.2/libxsd-4.2.0.tar.gz
+        tar zxvf libxsd-4.2.0.tar.gz
+
+    - name: Extract OneAPI version
+      shell: powershell
+      run: |
+        # Extract version from URL (e.g., 2025.2.1 -> 2025.2)
+        $url = "${{ env.WINDOWS_BASEKIT_URL }}"
+        if ($url -match 'toolkit-(\d+\.\d+)\.\d+') {
+          $version = $matches[1]
+          echo "ONEAPI_VERSION=$version" >> $env:GITHUB_ENV
+          Write-Host "Extracted OneAPI version: $version"
+        } else {
+          Write-Host "Failed to extract version, using default 2025.2"
+          echo "ONEAPI_VERSION=2025.2" >> $env:GITHUB_ENV
+        }
+
+    - name: Build with CMake
+      working-directory: "./src"
+      shell: cmd
+      run: |
+        vcpkg.exe integrate install
+        call "C:\Program Files (x86)\Intel\oneAPI\compiler\%ONEAPI_VERSION%\env\vars.bat"
+        call "C:\Program Files (x86)\Intel\oneAPI\mkl\%ONEAPI_VERSION%\env\vars.bat"
+        set XSDROOT=%cd%\libxsd-4.2.0
+        set VPKG_INCLUDE=${{ env.VCPKG_INSTALLATION_ROOT }}\installed\x64-windows\include
+        set INCLUDE=%XSDROOT%;%VPKG_INCLUDE%;%INCLUDE%
+        set UseEnv=true
+        cmake -DUSE_MKL=ON ^
+              -DVCPKG_MANIFEST_MODE=OFF ^
+              -DCMAKE_TOOLCHAIN_FILE"=${{ env.VCPKG_INSTALLATION_ROOT }}/scripts/buildsystems/vcpkg.cmake" ^
+              -DBUILD_TESTING=OFF ^
+              -DUSE_UNITY_BUILD=ON ^
+              -G "Visual Studio 17 2022" -A x64 dynadjust
+        cmake --build %cd% --config Release --parallel 2
+
+    - name: Collate artifacts
+      shell: bash
+      run: |
+        # collating artifacts
+        mkdir -p release
+        mkdir -p release/DynAdjust-Windows
+        echo "Copying files into release folder"
+        cp -f ./src/bin/*.dll ./release/DynAdjust-Windows/ 2>/dev/null || true
+        cp -f ./src/bin/*.exe ./release/DynAdjust-Windows/ 2>/dev/null || true
+        ls -la ./release/DynAdjust-Windows/
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: dynadjust-windows-mkl
+        path: ./release/
+
+#------------------------------------------------  
+  
+  build_windows_dyn_openblas:
+    name: Windows build (openblas)
+    runs-on: windows-2025
+    env:
+      BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+      VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess xerces-c vcpkg-tool-ninja openblas lapack-reference
+      VCPKG_INSTALLATION_ROOT: "C:/vcpkg"
+      VCPKG_BINARY_SOURCES: "clear"
+
+    steps:
+
+    - name: Generate cache triggers
+      shell: bash
+      run: |
+        echo VCPKG_HASH=$(echo "${VCPKG_PACKAGES}" | sed "s/ /_/g" | md5sum | cut -f 1 -d" ") >> $GITHUB_ENV
+
+    - name: Cache vcpkg
+      id: cache-vcpkg
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
+        key: vcpkg-${{ runner.os }}-openblas-${{ env.VCPKG_HASH }}
+        restore-keys: |
+          vcpkg-${{ runner.os }}-openblas-
+          vcpkg-${{ runner.os }}-
+
+    - name: Install vcpkg prerequisites
+      if: steps.cache-vcpkg.outputs.cache-hit != 'true'
+      shell: powershell
+      run: |
+        vcpkg.exe --triplet=x64-windows install ${{ env.VCPKG_PACKAGES }}
+        Remove-Item -Recurse -Force ${{ env.VCPKG_INSTALLATION_ROOT }}/.git -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force ${{ env.VCPKG_INSTALLATION_ROOT }}/buildtrees -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force ${{ env.VCPKG_INSTALLATION_ROOT }}/downloads -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force ${{ env.VCPKG_INSTALLATION_ROOT }}/.github -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force ${{ env.VCPKG_INSTALLATION_ROOT }}/docs -ErrorAction SilentlyContinue
+
+    - name: List installed packages
+      shell: powershell
+      run: vcpkg.exe list
+
+    - name: Check branch name
+      shell: bash
+      run: echo ${{ env.BRANCH_NAME }}
+
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ env.BRANCH_NAME }}
+        path: "./src"
+
+    - name: Download and install xsd
+      working-directory: "./src"
+      shell: bash
+      run: |
+        curl.exe -L -O https://www.codesynthesis.com/download/xsd/4.2/libxsd-4.2.0.tar.gz
+        tar zxvf libxsd-4.2.0.tar.gz
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Build with CMake
+      working-directory: "./src"
+      shell: cmd
+      run: |
+        vcpkg.exe integrate install
+        setx WindowsTargetPlatformVersion 10.0.22621.0
+        set XSDROOT=%cd%\libxsd-4.2.0
+        cmake -DUSE_MKL=OFF ^
+              -DVCPKG_MANIFEST_MODE=OFF ^
+              -DBUILD_TESTING=OFF ^
+              -DUSE_UNITY_BUILD=ON ^
+              -DCMAKE_TOOLCHAIN_FILE"=${{ env.VCPKG_INSTALLATION_ROOT }}/scripts/buildsystems/vcpkg.cmake" ^
+              -G "Visual Studio 17 2022" -A x64 dynadjust
+        cmake --build %cd% --config Release --parallel 2
+
+    - name: Collate artifacts
+      shell: bash
+      run: |
+        # collating artifacts
+        mkdir -p release
+        mkdir -p release/DynAdjust-Windows
+        echo "Copying files into release folder"
+        cp -f ./src/bin/*.dll ./release/DynAdjust-Windows/ 2>/dev/null || true
+        cp -f ./src/bin/*.exe ./release/DynAdjust-Windows/ 2>/dev/null || true
+        ls -la ./release/DynAdjust-Windows/
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: dynadjust-windows-openblas
+        path: ./release/

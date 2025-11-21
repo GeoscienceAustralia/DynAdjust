@@ -1,0 +1,83 @@
+name: Check code formatting
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+
+env:
+  BUILD_TYPE: Debug
+
+jobs:
+  format_check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install clang-format
+        uses: aminya/setup-cpp@v1
+        with:
+          clang-format: true
+
+      - name: Check clang-format version
+        run: clang-format --version
+
+      - name: Check formatting in repo
+        id: fmt
+        continue-on-error: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          echo "Checking formatting in repo"
+          rm -f /tmp/clang_format_errors.txt
+
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            echo "Pull request detected. Running clang-format on changed files only."
+            base_sha="${{ github.event.pull_request.base.sha }}"
+            head_sha="${{ github.event.pull_request.head.sha }}"
+            changed=$(git diff --name-only "$base_sha" "$head_sha" | grep -E '\.(cpp|h|hpp)$' || true)
+          else
+            echo "Non-PR event. Running clang-format on all files."
+            changed=$(find . -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.hpp' \))
+          fi
+
+          # Process each file and check formatting
+          printf '%s\n' "$changed" | while IFS= read -r f; do
+            if [ -n "$f" ]; then
+              if ! clang-format -Werror --dry-run --ferror-limit=1 "$f" 2>/dev/null; then
+                echo "::warning file=$f::Formatting issues in $f"
+                echo "- $f" >> /tmp/clang_format_errors.txt
+              fi
+            fi
+          done
+
+          ERRORS=$(cat /tmp/clang_format_errors.txt 2>/dev/null)
+          echo "errors<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$ERRORS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "DEBUG: Contents of GITHUB_OUTPUT file:" 
+          cat "$GITHUB_OUTPUT"
+
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            exit 0
+          else
+            if [ -n "$ERRORS" ]; then
+              exit 1
+            else
+              exit 0
+            fi
+          fi
+
+      - name: Post comment on PR
+        if: ${{ github.event_name == 'pull_request' && steps.fmt.outputs.errors != '' }}
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const err = `${{ steps.fmt.outputs.errors }}`;
+            const msg = `### Code Formatting Issues\nThe following files do not adhere to the clang-format style:\n${err}`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: msg
+            });

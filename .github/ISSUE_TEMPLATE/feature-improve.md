@@ -22,4 +22,4 @@ A clear and concise description of the fundamental user requirements to be satis
 If applicable, please provide snippets of suggested text file output or images relevant to the desired behaviour. 
 
 **Priority**
-Please indicate your desired priority level from [Label](https://github.com/icsm-au/DynAdjust/issues/labels)
+Please indicate your desired priority level from [Label](https://github.com/geoscienceaustralia/DynAdjust/issues/labels)
