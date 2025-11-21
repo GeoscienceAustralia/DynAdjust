@@ -146,7 +146,8 @@ jobs:
       - name: Build with CMake
         run: |
           source /opt/intel/oneapi/setvars.sh
-          cmake dynadjust -DUSE_MKL=ON -DBUILD_TESTING=OFF -DUSE_UNITY_BUILD=ON
+          cmake dynadjust -DUSE_MKL=ON -DBUILD_TESTING=OFF -DUSE_UNITY_BUILD=ON \
+            -DCMAKE_CXX_FLAGS="-UMKL_ILP64" -DCMAKE_C_FLAGS="-UMKL_ILP64"
           make -j2
           ls -la bin/
 

@@ -348,6 +348,17 @@ else()
         # Use Intel MKL's native CMake config
         add_compile_options("-DUSE_MKL")
 
+        # Explicitly control the MKL interface at compile time
+        if(NOT ILP64)
+            # Undefine MKL_ILP64 to prevent OneAPI environment from forcing ILP64
+            # Use CMAKE_CXX_FLAGS to ensure this is applied early
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -UMKL_ILP64")
+            set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -UMKL_ILP64")
+            message(STATUS "LP64 interface selected: added -UMKL_ILP64 to compiler flags")
+        else()
+            message(STATUS "ILP64 interface selected")
+        endif()
+
         # Use FindBLAS to locate Intel MKL with explicit interface selection
         # Note: MKLConfig.cmake in OneAPI 2025.x has issues with interface selection,
         # so we use FindBLAS which allows explicit LP64/ILP64 selection via BLA_VENDOR
