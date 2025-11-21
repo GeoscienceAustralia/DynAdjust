@@ -29,7 +29,8 @@
 #endif
 #endif
 
-#include <mkl.h>
+// MKL/BLAS/LAPACK is included via dnamatrix_contiguous.hpp
+// #include <mkl.h>
 
 #include <exception>
 #include <system_error>

@@ -1,16 +1,15 @@
-//===========================================================================
+//============================================================================
 // Name         : dnamatrix_contiguous.hpp
 // Author       : Roger Fraser
-// Contributors :
-// Version      : 1.00
-// Copyright    : Copyright 2017 Geoscience Australia
+// Contributors : Dale Roberts <dale.o.roberts@gmail.com>
+// Copyright    : Copyright 2017-2025 Geoscience Australia
 //
 //                Licensed under the Apache License, Version 2.0 (the "License");
 //                you may not use this file except in compliance with the License.
 //                You may obtain a copy of the License at
-//               
+//
 //                http ://www.apache.org/licenses/LICENSE-2.0
-//               
+//
 //                Unless required by applicable law or agreed to in writing, software
 //                distributed under the License is distributed on an "AS IS" BASIS,
 //                WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,96 +17,202 @@
 //                limitations under the License.
 //
 // Description  : DynAdjust Matrix library
-//                Matrices are stored as a contiguous 1 dimensional array [row * column]
-//                Storage buffer is ordered column wise to achieve highest efficiency with
-//                Intel MKL
 //============================================================================
 
 #ifndef DNAMATRIX_CONTIGUOUS_H_
 #define DNAMATRIX_CONTIGUOUS_H_
 
-#if defined(_MSC_VER)
-	#if defined(LIST_INCLUDES_ON_BUILD) 
-		#pragma message("  " __FILE__) 
-	#endif
-#endif
+/// \cond
+#include <cstring>
+/// \endcond
 
-#include <mkl.h>
-
-#include <exception>
-#include <stdexcept>
-#include <iostream>
-#include <iomanip>
-#include <sstream>
-#include <string>
-#include <vector>
 #include <include/config/dnatypes.hpp>
 #include <include/config/dnaversion.hpp>
-#include <include/config/dnaconsts.hpp>
+#include <include/config/dnaexports.hpp>
 #include <include/exception/dnaexception.hpp>
-#include <include/memory/dnamemory_handler.hpp>
 #include <include/functions/dnatemplatecalcfuncs.hpp>
+#include <include/memory/dnamemory_handler.hpp>
 
 #ifdef _MSDEBUG
 #include <include/ide/trace.hpp>
 #endif
 
-//#include <boost/algorithm/string.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/bind/bind.hpp>
+#if defined(__APPLE__)
+// Apple Accelerate Framework
 
-#include <math.h>
-#include <cstring>		// memset
+#ifndef ACCELERATE_NEW_LAPACK
+#define ACCELERATE_NEW_LAPACK
+#endif
 
-using namespace std;
-using namespace boost;
-using namespace dynadjust::memory;
-using namespace dynadjust::exception;
+// Prevent inclusion of deprecated Carbon headers that conflict with Boost
+#define __CARBONCOR__
+#define __COLLECTIONS__
+#include <Accelerate/Accelerate.h>
+#undef __COLLECTIONS__
+#undef __CARBONCORE__
 
-namespace dynadjust { namespace math {
+#ifdef USE_ILP64
 
-class matrix_2d;
-typedef vector<matrix_2d> v_mat_2d, *pv_mat_2d;
-typedef v_mat_2d::iterator _it_v_mat_2d;
-typedef v_mat_2d::const_iterator _it_v_mat_2d_const;
-typedef vector<v_mat_2d> vv_mat_2d;
+#ifndef ACCELERATE_LAPACK_ILP64
+#define ACCELERATE_LAPACK_ILP64
+#endif
 
-// Uncomment the following to store matrices in row-wise fashion
-//#define DNAMATRIX_ROW_WISE
+#define LAPACK_SYMBOL_PREFIX
+#define LAPACK_FORTRAN_SUFFIX
+#define LAPACK_SYMBOL_SUFFIX $NEWLAPACK$ILP64
+#define BLAS_SYMBOL_PREFIX cblas_
+#define BLAS_FORTRAN_SUFFIX
+#define BLAS_SYMBOL_SUFFIX $NEWLAPACK$ILP64
+typedef long lapack_int;
 
-#if defined(DNAMATRIX_ROW_WISE)
+#else
 
-// row * _mem_cols + column
-#define DNAMATRIX_INDEX(no_rows, no_cols, row, column) row * no_cols + column
-
-#else // DNAMATRIX_COL_WISE
-
-// column * _mem_rows + row
-#define DNAMATRIX_INDEX(no_rows, no_cols, row, column) column * no_rows + row
+#define LAPACK_SYMBOL_PREFIX
+#define LAPACK_FORTRAN_SUFFIX
+#define LAPACK_SYMBOL_SUFFIX $NEWLAPACK
+#define BLAS_SYMBOL_PREFIX cblas_
+#define BLAS_FORTRAN_SUFFIX
+#define BLAS_SYMBOL_SUFFIX $NEWLAPACK
+typedef int lapack_int;
 
 #endif
 
-#define DNAMATRIX_ELEMENT(A, no_rows, no_cols, row, column) A[ DNAMATRIX_INDEX(no_rows, no_cols, row, column) ]
+// End - Apple Accelerate Framework
 
+#elif defined(USE_MKL) || defined(__MKL__)
+// Intel MKL
+// #pragma message("Using Intel MKL for LAPACK/BLAS")
 
-template <typename T>
-std::size_t byteSize(const UINT32 elements=1)
-{
-	return elements * sizeof(T);
+#include <mkl.h>
+
+#ifdef USE_ILP64
+
+// Force Intel MKL to use ILP64 interface
+#ifndef MKL_ILP64
+#define MKL_ILP64
+#endif
+
+#define LAPACK_SYMBOL_PREFIX
+#define LAPACK_FORTRAN_SUFFIX _
+#define LAPACK_SYMBOL_SUFFIX
+#define BLAS_SYMBOL_PREFIX cblas_
+#define BLAS_FORTRAN_SUFFIX
+#define BLAS_SYMBOL_SUFFIX
+
+#define lapack_int MKL_INT
+
+#else
+
+#define LAPACK_SYMBOL_PREFIX
+#define LAPACK_FORTRAN_SUFFIX _
+#define LAPACK_SYMBOL_SUFFIX
+#define BLAS_SYMBOL_PREFIX cblas_
+#define BLAS_FORTRAN_SUFFIX
+#define BLAS_SYMBOL_SUFFIX
+
+#define lapack_int MKL_INT
+
+#endif
+
+// End - Intel MKL
+
+#else
+// Default LAPACK/BLAS
+// #pragma message("Using default LAPACK/BLAS")
+
+#include <cblas.h>
+
+#ifdef USE_ILP64
+
+#define LAPACK_SYMBOL_PREFIX
+#define LAPACK_FORTRAN_SUFFIX _
+#define LAPACK_SYMBOL_SUFFIX 64_
+#define BLAS_SYMBOL_PREFIX cblas_
+#define BLAS_FORTRAN_SUFFIX
+#define BLAS_SYMBOL_SUFFIX 64_
+typedef long lapack_int;
+
+#else
+
+#define LAPACK_SYMBOL_PREFIX
+#define LAPACK_FORTRAN_SUFFIX _
+#define LAPACK_SYMBOL_SUFFIX
+#define BLAS_SYMBOL_PREFIX cblas_
+#define BLAS_FORTRAN_SUFFIX
+#define BLAS_SYMBOL_SUFFIX
+typedef int lapack_int;
+
+#endif
+
+// End - Default LAPACK/BLAS
+#endif
+
+#ifdef USE_ILP64
+// Ensure that lapack_int is 64 bits for ILP64
+static_assert(sizeof(lapack_int) == 8, "ILP64 interface requires 64-bit integers");
+#else
+// Ensure that lapack_int is 32 bits for LP64
+static_assert(sizeof(lapack_int) == 4, "LP64 interface requires 32-bit integers");
+#endif
+
+#define DNAMATRIX_INDEX(no_rows, no_cols, row, column) column* no_rows + row
+#define DNAMATRIX_ELEMENT(A, no_rows, no_cols, row, column) A[DNAMATRIX_INDEX(no_rows, no_cols, row, column)]
+
+#define LAPACK_FUNC_CONCAT(name, prefix, suffix, suffix2) prefix##name##suffix##suffix2
+#define LAPACK_FUNC_EXPAND(name, prefix, suffix, suffix2) LAPACK_FUNC_CONCAT(name, prefix, suffix, suffix2)
+#define LAPACK_FUNC(name) LAPACK_FUNC_EXPAND(name, LAPACK_SYMBOL_PREFIX, LAPACK_FORTRAN_SUFFIX, LAPACK_SYMBOL_SUFFIX)
+
+#define BLAS_FUNC_CONCAT(name, prefix, suffix, suffix2) prefix##name##suffix##suffix2
+#define BLAS_FUNC_EXPAND(name, prefix, suffix, suffix2) BLAS_FUNC_CONCAT(name, prefix, suffix, suffix2)
+#define BLAS_FUNC(name) BLAS_FUNC_EXPAND(name, BLAS_SYMBOL_PREFIX, BLAS_FORTRAN_SUFFIX, BLAS_SYMBOL_SUFFIX)
+
+#ifndef USE_MKL
+extern "C" {
+void LAPACK_FUNC(dpotrf)(const char* uplo, const lapack_int* n, double* a, const lapack_int* lda, lapack_int* info);
+void LAPACK_FUNC(dpotri)(const char* uplo, const lapack_int* n, double* a, const lapack_int* lda, lapack_int* info);
+void LAPACK_FUNC(dsyevr)(const char* jobz, const char* range, const char* uplo, const lapack_int* n,
+                        double* a, const lapack_int* lda, const double* vl, const double* vu,
+                        const lapack_int* il, const lapack_int* iu, const double* abstol,
+                        lapack_int* m, double* w, double* z, const lapack_int* ldz,
+                        lapack_int* isuppz, double* work, const lapack_int* lwork,
+                        lapack_int* iwork, const lapack_int* liwork, lapack_int* info);
+void BLAS_FUNC(dgemm)(const enum CBLAS_ORDER ORDER, const enum CBLAS_TRANSPOSE TRANSA,
+                      const enum CBLAS_TRANSPOSE TRANSB, const lapack_int M, const lapack_int N, const lapack_int K,
+                      const double ALPHA, const double* A, const lapack_int LDA, const double* B, const lapack_int LDB,
+                      const double BETA, double* C, const lapack_int LDC);
 }
+#endif
 
-class matrix_2d: public new_handler_support<matrix_2d>
-{
-public:
-	// Constructors/deconstructors
-	matrix_2d();
-	matrix_2d(const UINT32& rows, const UINT32& columns);		// explicit constructor
-	matrix_2d(const UINT32& rows, const UINT32& columns, 
-		const double data[], const UINT32& data_size, const UINT32& matrix_type = mtx_full);
-	matrix_2d(const matrix_2d&);	// copy constructor
-	~matrix_2d();					// destructor
+using namespace dynadjust::memory;
+using namespace dynadjust::exception;
 
-	inline bool empty() { return _buffer == NULL; }
+namespace dynadjust {
+namespace math {
+
+// Debug flags
+#ifndef DEBUG_MATRIX_2D
+#define DEBUG_MATRIX_2D 0
+#endif
+
+class matrix_2d;
+typedef std::vector<matrix_2d> v_mat_2d, *pv_mat_2d;
+typedef v_mat_2d::iterator _it_v_mat_2d;
+typedef v_mat_2d::const_iterator _it_v_mat_2d_const;
+typedef std::vector<v_mat_2d> vv_mat_2d;
+
+template <typename T> std::size_t byteSize(const UINT32 elements = 1) { return elements * sizeof(T); }
+
+class matrix_2d : public new_handler_support<matrix_2d> {
+  public:
+    // Constructors/deconstructors
+    matrix_2d();
+    matrix_2d(const UINT32& rows, const UINT32& columns); // explicit constructor
+    matrix_2d(const UINT32& rows, const UINT32& columns, const double data[], const std::size_t& data_size,
+              const UINT32& matrix_type = mtx_full);
+    matrix_2d(const matrix_2d&); // copy constructor
+    ~matrix_2d();                // destructor
+
+    inline bool empty() { return _buffer == nullptr; }
 
 	std::size_t get_size();
 
@@ -194,27 +299,12 @@ public:
 	matrix_2d add(const matrix_2d& rhs);
 	matrix_2d add(const matrix_2d& lhs, const matrix_2d& rhs);
 	
-	//matrix_2d multiply(const matrix_2d& rhs);			// multiplication
-	//matrix_2d multiply(const matrix_2d& lhs, 
-	//	const matrix_2d& rhs);							// multiplication
+    matrix_2d multiply_mkl(const char* lhs_trans, const matrix_2d& rhs, const char* rhs_trans); // multiplication
+    matrix_2d multiply_mkl(const matrix_2d& lhs, const char* lhs_trans, const matrix_2d& rhs,
+                       const char* rhs_trans); // multiplication
 
-	matrix_2d multiply_mkl(const char* lhs_trans, 
-		const matrix_2d& rhs, const char* rhs_trans);			// multiplication
-	matrix_2d multiply_mkl(const matrix_2d& lhs, const char* lhs_trans, 
-		const matrix_2d& rhs, const char* rhs_trans);			// multiplication
-
-	//matrix_2d multiply_square(const matrix_2d& lhs,		// multiplication, calculate upper triangle only, then copy to lower
-	//	const matrix_2d& rhs);							
-	//matrix_2d multiply_square_triangular(const matrix_2d& lhs,		// multiplication, calculate upper triangle only, then copy to lower
-	//	const matrix_2d& rhs);							
-	//matrix_2d multiply_square_t(const matrix_2d& lhs,	// same as multiply_square, except lhs is multiplied by transpose of rhs.
-	//	const matrix_2d& rhs);							
-	matrix_2d sweepinverse();							// Sweep inverse (good for rotation matrices)
-	//matrix_2d gaussianinverse();						// Gaussian inverse
-	//matrix_2d choleskyinverse(bool LOWER_IS_CLEARED=false);				// Cholesky inverse
-	//void decomposeupper();								// Cholesky decomposition 
-	
-	matrix_2d choleskyinverse_mkl(bool LOWER_IS_CLEARED=false);	// Cholesky inverse using MKL
+    matrix_2d sweepinverse();                                  // Sweep inverse (good for rotation matrices)
+    matrix_2d choleskyinverse_mkl(bool LOWER_IS_CLEARED = false); // Cholesky inverse
 
 	matrix_2d transpose(const matrix_2d&);				// Transpose
 	matrix_2d transpose();								//  ''

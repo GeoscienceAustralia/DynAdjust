@@ -17,6 +17,7 @@
 #include <boost/program_options/parsers.hpp>
 #include <boost/program_options/variables_map.hpp>
 #include <boost/filesystem.hpp>
+#include <libgen.h>
 #include <boost/algorithm/string/predicate.hpp>
 
 using namespace std;
@@ -208,7 +209,7 @@ int main(int argc, char* argv[])
 
 	if (vm.count(PROJECT_FILE) && vm.count(NETWORK_NAME))
 	{
-		if (equals(basename(p.g.project_file), p.g.network_name))
+		if (equals(path(p.g.project_file).stem().string(), p.g.network_name))
 		{
 			cout << endl << "- Error: project file name doesn't match network name.  Provide" << endl;  
 			cout << endl << "         either a project file path or the network name. " << endl << endl;  

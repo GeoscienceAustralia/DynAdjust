@@ -4,7 +4,7 @@ project (dnaplotwrapper)
 # build dnaplot library first
 add_subdirectory (${CMAKE_SOURCE_DIR}/dynadjust/dnaplot ${CMAKE_BINARY_DIR}/dynadjust/dnaplot)
 
-add_definitions (-DBUILD_PLOT_EXE -DMKL_ILP64 -fopenmp)
+add_definitions (-DBUILD_PLOT_EXE -DMKL_ILP64)
 
 include_directories (${PROJECT_SOURCE_DIR})
 

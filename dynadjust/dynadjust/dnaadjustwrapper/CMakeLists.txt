@@ -4,7 +4,7 @@ project (dnaadjustwrapper)
 # build dnaadjust library first
 add_subdirectory (${CMAKE_SOURCE_DIR}/dynadjust/dnaadjust ${CMAKE_BINARY_DIR}/dynadjust/dnaadjust)
 
-add_definitions (-DBUILD_ADJUST_EXE -DMULTI_THREAD_ADJUST -DMKL_ILP64 -fopenmp)
+add_definitions (-DBUILD_ADJUST_EXE -DMULTI_THREAD_ADJUST -DMKL_ILP64)
 
 include_directories (${PROJECT_SOURCE_DIR})
 

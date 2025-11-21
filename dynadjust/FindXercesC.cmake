@@ -21,8 +21,14 @@ SET (PKG_MGR_PATH_INCLUDE /usr/include)
 
 # SET THE ROOT DIRECTORY WHERE XERCES-C++ IS INSTALLED
 IF (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-  # Apple
-  SET (XERCESC_ROOT_DIR /usr/local/Cellar/xerces-c/3.2.2)
+  # Apple - try homebrew locations first
+  IF (EXISTS /opt/homebrew/opt/xerces-c)
+    SET (XERCESC_ROOT_DIR /opt/homebrew/opt/xerces-c)
+  ELSEIF (EXISTS /usr/local/opt/xerces-c)
+    SET (XERCESC_ROOT_DIR /usr/local/opt/xerces-c)
+  ELSE()
+    SET (XERCESC_ROOT_DIR /usr/local/Cellar/xerces-c/3.2.2)
+  ENDIF()
   SET (XERCESC_LIBRARY_DIR ${XERCESC_ROOT_DIR}/lib)
   SET (XERCESC_INCLUDE_DIR ${XERCESC_ROOT_DIR}/include)
 
@@ -74,5 +80,10 @@ IF (EXISTS ${XERCESC_INCLUDE_DIR})
     SET (XERCESC_FOUND TRUE )
   ENDIF ()
 ENDIF ()
+
+# Set CMake-style variables for compatibility
+SET(XercesC_INCLUDE_DIRS ${XERCESC_INCLUDE_DIR})
+SET(XercesC_LIBRARIES ${XERCESC_LIBRARY})
+SET(XercesC_FOUND ${XERCESC_FOUND})
 
 mark_as_advanced(XERCESC_LIBRARY)

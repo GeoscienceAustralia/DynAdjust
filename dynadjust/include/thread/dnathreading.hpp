@@ -412,7 +412,7 @@ public:
 
 private:
 	protected_var(const protected_var& pv, const boost::mutex::scoped_lock& lock)
-		:  var_(pv.var) {}
+		:  var_(pv.var_) {}
 
 
 private:

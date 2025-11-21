@@ -1,16 +1,15 @@
 //============================================================================
 // Name         : dnamatrix_contiguous.cpp
 // Author       : Roger Fraser
-// Contributors :
-// Version      : 1.00
-// Copyright    : Copyright 2017 Geoscience Australia
+// Contributors : Dale Roberts <dale.o.roberts@gmail.com>
+// Copyright    : Copyright 2017-2025 Geoscience Australia
 //
 //                Licensed under the Apache License, Version 2.0 (the "License");
 //                you may not use this file except in compliance with the License.
 //                You may obtain a copy of the License at
-//               
+//
 //                http ://www.apache.org/licenses/LICENSE-2.0
-//               
+//
 //                Unless required by applicable law or agreed to in writing, software
 //                distributed under the License is distributed on an "AS IS" BASIS,
 //                WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,12 +17,14 @@
 //                limitations under the License.
 //
 // Description  : DynAdjust Matrix library
-//                Matrices are stored as a contiguous 1 dimensional array [row * column]
-//                Storage buffer is ordered column wise to achieve highest efficiency with
-//                Intel MKL
 //============================================================================
 
+#include <cmath>
+#include <include/ide/trace.hpp>
 #include <include/math/dnamatrix_contiguous.hpp>
+#include <iomanip>
+#include <limits>
+#include <sstream>
 
 //#include <float.h>
 //DBL_MIN;
@@ -296,8 +297,8 @@ matrix_2d::matrix_2d(const UINT32& rows, const UINT32& columns)
 	allocate(_rows, _cols);
 }
 	
-matrix_2d::matrix_2d(const UINT32& rows, const UINT32& columns, 
-	const double data[], const UINT32& data_size, const UINT32& matrix_type)
+matrix_2d::matrix_2d(const UINT32& rows, const UINT32& columns, const double data[], const std::size_t& data_size,
+                     const UINT32& matrix_type)
 	: _mem_cols(columns)
 	, _mem_rows(rows)
 	, _cols(columns)
@@ -1306,52 +1307,55 @@ matrix_2d matrix_2d::sweepinverse()
 	
 
 // choleskyinverse_mkl()
-//
-// Inverts the calling matrix using MKL's implementation of the Cholesky method.
-// The following assumptions are made:
-//	 - matrix is symmetric, and
-//	 - matrix is upper triangular (or a full matrix). 
-//
-// The inversion does not destroy the contents of the matrix 
-// passed to the function, instead it operates on a copy.
-// Index pointers use UINT32
-matrix_2d matrix_2d::choleskyinverse_mkl(bool LOWER_IS_CLEARED /*=false*/)
-{
-	if (_rows < 1)
-		return *this;
+matrix_2d matrix_2d::choleskyinverse_mkl(bool LOWER_IS_CLEARED /*=false*/) {
+    if (_rows < 1) return *this;
 
-	if (_rows != _cols)
-		throw boost::enable_current_exception(runtime_error("choleskyinverse_mkl(): Matrix is not square."));
+    if (_rows != _cols) throw std::runtime_error("choleskyinverse_mkl(): Matrix is not square.");
 
-	char uplo(LOWER_TRIANGLE);
+    char uplo(LOWER_TRIANGLE);
 
-	// Which triangle is filled - upper or lower?
-	if (LOWER_IS_CLEARED)
-		uplo = UPPER_TRIANGLE;
+    // Which triangle is filled - upper or lower?
+    if (LOWER_IS_CLEARED) uplo = UPPER_TRIANGLE;
 
-#if defined(_WIN64) || defined(__linux) || defined(sun) || defined(__unix__) || defined(__APPLE__)
-	long long info, n = _rows;
-#else // defined(_WIN32) || defined(__WIN32__)
-	int info, n = _rows;
-#endif	
+    lapack_int info, n = _rows;
 
-	// Perform Cholesky factorisation
-	dpotrf(&uplo, &n, _buffer, &n, &info);
-	if(info != 0)
-		throw boost::enable_current_exception(runtime_error("choleskyinverse_mkl(): Cholesky factorisation failed."));
-	
-	// Perform Cholesky inverse
-	dpotri(&uplo, &n, _buffer, &n, &info); 
-	if(info != 0)
-		throw boost::enable_current_exception(runtime_error("choleskyinverse_mkl(): Cholesky inversion failed."));
+    // Perform Cholesky factorisation
+    LAPACK_FUNC(dpotrf)(&uplo, &n, _buffer, &n, &info);
 
-	// Copy empty triangle part
-	if (LOWER_IS_CLEARED)
-		filllower();
-	else
-		fillupper();
+    if (info != 0) {
+        std::stringstream error_msg;
+        error_msg << "choleskyinverse_mkl(): Cholesky factorisation failed.\n";
+        error_msg << "  dpotrf info = " << info << "\n";
+        if (info < 0) {
+            error_msg << "  Meaning: Argument " << -info << " had an illegal value\n";
+        } else {
+            error_msg << "  Meaning: The leading minor of order " << info << " is not positive definite\n";
+        }
+        throw std::runtime_error(error_msg.str());
+    }
 
-	return *this;
+    // Perform Cholesky inverse
+    LAPACK_FUNC(dpotri)(&uplo, &n, _buffer, &n, &info);
+
+    if (info != 0) {
+        std::stringstream error_msg;
+        error_msg << "choleskyinverse_mkl(): Cholesky inversion failed.\n";
+        error_msg << "  dpotri info = " << info << "\n";
+        if (info < 0) {
+            error_msg << "  Meaning: Argument " << -info << " had an illegal value\n";
+        } else {
+            error_msg << "  Meaning: The (" << info << "," << info << ") element of the factor U or L is zero\n";
+        }
+        throw std::runtime_error(error_msg.str());
+    }
+
+    // Copy empty triangle part
+    if (LOWER_IS_CLEARED)
+        filllower();
+    else
+        fillupper();
+
+    return *this;
 }
 
 //// Choleskyinverse()
@@ -1901,58 +1905,39 @@ matrix_2d matrix_2d::add(const matrix_2d& rhs)
 //}
 	
 // multiplies this matrix by rhs and stores the result in a new matrix
-// Uses Intel MKL dgemm
-matrix_2d matrix_2d::multiply_mkl(const char* lhs_trans, const matrix_2d& rhs, const char* rhs_trans)
-{
-	matrix_2d m(_rows, rhs.columns());
-	
-	const double one = 1.0;
-	const double zero = 0.0;
+// Uses BLAS dgemm
+matrix_2d matrix_2d::multiply_mkl(const char* lhs_trans, const matrix_2d& rhs, const char* rhs_trans) {
+    matrix_2d m(_rows, rhs.columns());
 
-#if defined(_WIN64) || defined(__linux) || defined(sun) || defined(__unix__) || defined(__APPLE__)
-	long long lhs_rows(rows()), rhs_cols(rhs.columns());
-	long long lhs_cols(columns()), rhs_rows(rhs.rows());
-	long long new_mem_rows(memRows());
-	long long lhs_mem_rows(memRows());
-	long long rhs_mem_rows(memRows());
-#else // defined(_WIN32) || defined(__WIN32__)
-	int lhs_rows(rows()), rhs_cols(rhs.columns());
-	int lhs_cols(columns()), rhs_rows(rhs.rows());
-	int new_mem_rows(memRows());
-	int lhs_mem_rows(memRows());
-	int rhs_mem_rows(memRows());
-#endif	
+    const double one = 1.0;
+    const double zero = 0.0;
 
-	if (strcmp(lhs_trans, "T") == 0)
-	{
-		lhs_rows = columns();		// transpose
-		lhs_cols = rows();			// transpose
-	}
+    lapack_int lhs_rows(rows()), rhs_cols(rhs.columns());
+    lapack_int lhs_cols(columns()), rhs_rows(rhs.rows());
+    lapack_int new_mem_rows(memRows());
+    lapack_int lhs_mem_rows(memRows());
+    lapack_int rhs_mem_rows(memRows());
 
-	//if (rhs_trans == "T")
-	if (strcmp(rhs_trans, "T") == 0)
-	{
-		rhs_rows = rhs.columns();		// transpose
-		rhs_cols = rhs.rows();			// transpose
-	}
+    if (strcmp(lhs_trans, "T") == 0) {
+        lhs_rows = columns();  // transpose
+        lhs_cols = rows();     // transpose
+    }
 
-	if (lhs_cols != rhs_rows)
-		throw boost::enable_current_exception(runtime_error("multiply_mkl(): Matrix dimensions are incompatible."));
-	else if (_rows != lhs_rows || _cols != rhs_cols)
-		throw boost::enable_current_exception(runtime_error("multiply_mkl(): Result matrix dimensions are incompatible."));
+    if (strcmp(rhs_trans, "T") == 0) {
+        rhs_rows = rhs.columns();  // transpose
+        rhs_cols = rhs.rows();     // transpose
+    }
 
-	dgemm(lhs_trans, rhs_trans,         // Type of matrices  
-		&lhs_rows,                      // rows of A
-		&rhs_cols, 						// columns of B
-		&lhs_cols,						// columns of A = rows of B
-		&one,							// scalar: 1 (one)
-		_buffer,						// A matrix (this)
-		&lhs_mem_rows,					// rows of A
-		rhs.getbuffer(),				// the B matrix
-		&rhs_mem_rows,					// same as rhs_rows	(columns of A = rows of B)
-		&zero,							// scalar: 0 (zero)
-		m.getbuffer(),					// the resultant matrix
-		&new_mem_rows);					// rows of the resultant matrix
+    if (lhs_cols != rhs_rows)
+        throw std::runtime_error("multiply_mkl(): Matrix dimensions are incompatible.");
+    else if (_rows != lhs_rows || _cols != rhs_cols)
+        throw std::runtime_error("multiply_mkl(): Result matrix dimensions are incompatible.");
+
+    CBLAS_TRANSPOSE tA = (strcmp(lhs_trans, "T") == 0) ? CblasTrans : CblasNoTrans;
+    CBLAS_TRANSPOSE tB = (strcmp(rhs_trans, "T") == 0) ? CblasTrans : CblasNoTrans;
+
+    BLAS_FUNC(dgemm)(CblasColMajor, tA, tB, lhs_rows, rhs_cols, lhs_cols, 1.0, _buffer, _mem_rows, rhs.getbuffer(),
+                     rhs.memRows(), 0.0, m.getbuffer(), m.memRows());
 	
 	return (*this = m);
 }
@@ -1980,59 +1965,41 @@ matrix_2d matrix_2d::multiply_mkl(const char* lhs_trans, const matrix_2d& rhs, c
 	
 
 // Multiplies lhs by rhs and stores the result in this.
-// Uses Intel MKL dgemm
-matrix_2d matrix_2d::multiply_mkl(const matrix_2d& lhs, const char* lhs_trans, 
-	const matrix_2d& rhs, const char* rhs_trans)
-{
-	const double one = 1.0;
-	const double zero = 0.0;
+// Uses BLAS dgemm
+matrix_2d
+matrix_2d::multiply_mkl(const matrix_2d& lhs, const char* lhs_trans, const matrix_2d& rhs, const char* rhs_trans) {
+    const double one = 1.0;
+    const double zero = 0.0;
 
-#if defined(_WIN64) || defined(__linux) || defined(sun) || defined(__unix__) || defined(__APPLE__)
-	long long lhs_rows(lhs.rows()), rhs_cols(rhs.columns());
-	long long lhs_cols(lhs.columns()), rhs_rows(rhs.rows());
-	long long new_mem_rows(memRows());
-	long long lhs_mem_rows(lhs.memRows());
-	long long rhs_mem_rows(rhs.memRows());
-#else // defined(_WIN32) || defined(__WIN32__)
-	int lhs_rows(lhs.rows()), rhs_cols(rhs.columns());
-	int lhs_cols(lhs.columns()), rhs_rows(rhs.rows());
-	int new_mem_rows(memRows());
-	int lhs_mem_rows(lhs.memRows());
-	int rhs_mem_rows(rhs.memRows());
-#endif	
+    lapack_int lhs_rows(lhs.rows()), rhs_cols(rhs.columns());
+    lapack_int lhs_cols(lhs.columns()), rhs_rows(rhs.rows());
+    lapack_int new_mem_rows(memRows());
+    lapack_int lhs_mem_rows(lhs.memRows());
+    lapack_int rhs_mem_rows(rhs.memRows());
 
-	if (strncmp(lhs_trans, "T", 1) == 0)
-	{
-		lhs_rows = lhs.columns();		// transpose
-		lhs_cols = lhs.rows();			// transpose
-	}
+    if (strncmp(lhs_trans, "T", 1) == 0) {
+        lhs_rows = lhs.columns();  // transpose
+        lhs_cols = lhs.rows();     // transpose
+    }
 
-	if (strncmp(rhs_trans, "T", 1) == 0)
-	{
-		rhs_rows = rhs.columns();		// transpose
-		rhs_cols = rhs.rows();			// transpose
-	}
+    if (strncmp(rhs_trans, "T", 1) == 0) {
+        rhs_rows = rhs.columns();  // transpose
+        rhs_cols = rhs.rows();     // transpose
+    }
 
-	if (lhs_cols != rhs_rows)
-		throw boost::enable_current_exception(runtime_error("multiply_mkl(): Matrix dimensions are incompatible."));
-	else if (_rows != lhs_rows || _cols != rhs_cols)
-		throw boost::enable_current_exception(runtime_error("multiply_mkl(): Result matrix dimensions are incompatible."));
+    if (lhs_cols != rhs_rows)
+        throw std::runtime_error("multiply_mkl(): Matrix dimensions are incompatible.");
+    else if (_rows != lhs_rows || _cols != rhs_cols)
+        throw std::runtime_error("multiply_mkl(): Result matrix dimensions are incompatible.");
 
-	dgemm(lhs_trans, rhs_trans,         // Type of matrices  
-		&lhs_rows,                      // rows of A
-		&rhs_cols, 						// columns of B
-		&lhs_cols,						// columns of A = rows of B
-		&one,							// scalar: 1 (one)
-		lhs.getbuffer(),				// A matrix
-		&lhs_mem_rows,					// rows of A
-		rhs.getbuffer(),				// the B matrix
-		&rhs_mem_rows,					// same as rhs_rows	(columns of A = rows of B)
-		&zero,							// scalar: 0 (zero)
-		_buffer,						// the resultant matrix (this)
-		&new_mem_rows);					// rows of the resultant matrix
+    CBLAS_TRANSPOSE tA = (strncmp(lhs_trans, "T", 1) == 0) ? CblasTrans : CblasNoTrans;
+    CBLAS_TRANSPOSE tB = (strncmp(rhs_trans, "T", 1) == 0) ? CblasTrans : CblasNoTrans;
 
-	return *this;
-} // Multiply()
+    BLAS_FUNC(dgemm)(CblasColMajor, tA, tB, lhs_rows, rhs_cols, lhs_cols, 1.0, lhs.getbuffer(), lhs.memRows(),
+                     rhs.getbuffer(), rhs.memRows(), 0.0, _buffer, _mem_rows);
+
+    return *this;
+}  // Multiply()
 	
 
 //// Multiply_Square()

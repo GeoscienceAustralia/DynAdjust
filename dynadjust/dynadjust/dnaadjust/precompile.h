@@ -11,7 +11,8 @@
 
 // Support MKL inverse oly if compiler is Intel
 #if defined(__ICC) || defined(__INTEL_COMPILER)		// Intel compiler
-#include <mkl.h>
+// MKL/BLAS/LAPACK is included via dnamatrix_contiguous.hpp
+// #include <mkl.h>
 #endif
 
 #include <include/config/dnaexports.hpp>

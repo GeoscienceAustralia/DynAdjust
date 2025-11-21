@@ -22,9 +22,7 @@
 
 #include <include/functions/dnaprocessfuncs.hpp>
 
-#include <boost/process.hpp>
-
-using namespace boost::process;
+#include <cstdlib>
 
 bool run_command(const string& executable_path, const UINT16& quiet)
 {	
@@ -60,15 +58,18 @@ bool run_command(const string& executable_path, const UINT16& quiet)
 	}
 	return EXIT_SUCCESS;
 
-#elif defined(__linux) || defined(sun) || defined(__unix__) || defined(__APPLE__)		
+#elif defined(__linux) || defined(sun) || defined(__unix__) || defined(__APPLE__)
 
 	int return_value(0);
-		
-	if (quiet)
-		return_value = boost::process::system(executable_path, boost::process::std_out > boost::process::null);
-	else
-		return_value = boost::process::system(executable_path, boost::process::std_out > stdout);
-		
+
+	if (quiet) {
+		// Redirect stdout and stderr to /dev/null
+		std::string cmd = executable_path + " > /dev/null 2>&1";
+		return_value = std::system(cmd.c_str());
+	} else {
+		return_value = std::system(executable_path.c_str());
+	}
+
 	return (return_value == EXIT_SUCCESS);
 
 #endif

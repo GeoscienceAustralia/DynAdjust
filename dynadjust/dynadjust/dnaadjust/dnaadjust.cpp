@@ -208,9 +208,9 @@ void dna_adjust::InitialiseAdjustment()
 	
 	// Confidence interval
 	double conf(projectSettings_.a.confidence_interval * 0.01);
-	normal dist(0.0, 1.0);
+	boost::math::normal normal_dist(0.0, 1.0);
 	conf += (1.0 - conf) / 2.0;
-	criticalValue_ = quantile(dist, conf);
+	criticalValue_ = boost::math::quantile(normal_dist, conf);
 
 	potentialOutlierCount_ = 0;
 

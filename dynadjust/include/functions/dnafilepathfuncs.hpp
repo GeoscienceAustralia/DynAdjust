@@ -63,7 +63,7 @@ T formPath(const T& folder, const T file)
 template <typename T>
 T leafStr(const T& filePath)
 {
-	return path(filePath).leaf().string();
+	return path(filePath).filename().string();
 }
 
 #endif //DNAFILEPATHFUNCS_H_

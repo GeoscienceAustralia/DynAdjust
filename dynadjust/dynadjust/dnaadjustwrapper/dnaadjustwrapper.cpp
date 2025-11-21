@@ -1164,8 +1164,8 @@ int main(int argc, char* argv[])
 						cout << "   " << leafStr<string>(p.a.bst_file) << "  last modified on  " << ctime(&t_bst);
 						cout << "   " << leafStr<string>(p.a.bms_file) << "  last modified on  " << ctime(&t_bms) << endl;
 						cout << "   " << leafStr<string>(p.a.seg_file) << "  created on  " << ctime(&t_seg) << endl;
-						cout << "  Run 'segment " << p.g.network_name << " [options]' to re-create the segmentation file, or re-run" << endl << 
-							"  adjust using the --" << SEG_FILE << " option if the file " << basename(p.a.seg_file) << " must\n  be used." << endl << endl;
+						cout << "  Run 'segment " << p.g.network_name << " [options]' to re-create the segmentation file, or re-run" << endl <<
+							"  adjust using the --" << SEG_FILE << " option if the file " << path(p.a.seg_file).filename().string() << " must\n  be used." << endl << endl;
 						cout_mutex.unlock();
 						return EXIT_FAILURE;
 					}

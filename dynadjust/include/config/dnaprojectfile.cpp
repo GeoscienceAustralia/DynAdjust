@@ -769,7 +769,7 @@ void CDnaProjectFile::LoadSettingImport(const settingMode mSetting, const string
   			break;
 		}
 	}
-	else if (iequals(var, MAP_FILE))
+	else if (iequals(var, MAP_FILE_OPT))
 	{
 		if (val.empty())
 			return;
