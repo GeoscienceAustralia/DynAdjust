@@ -347,14 +347,24 @@ else()
     if(USE_MKL)
         # Use Intel MKL's native CMake config
         add_compile_options("-DUSE_MKL")
-        
+
         # Set MKL interface based on ILP64 option
         if(ILP64)
-            set(MKL_INTERFACE "ilp64")
+            set(MKL_INTERFACE "ilp64" CACHE STRING "MKL interface layer")
         else()
-            set(MKL_INTERFACE "lp64")
+            set(MKL_INTERFACE "lp64" CACHE STRING "MKL interface layer")
         endif()
-        
+
+        # Set MKL threading (required for proper configuration)
+        if(NOT DEFINED MKL_THREADING)
+            set(MKL_THREADING "gnu_thread" CACHE STRING "MKL threading layer")
+        endif()
+
+        # Set MKL link type
+        if(NOT DEFINED MKL_LINK)
+            set(MKL_LINK "dynamic" CACHE STRING "MKL link type")
+        endif()
+
         # Find MKL using its CMake config
         find_package(MKL CONFIG)
         
@@ -363,7 +373,15 @@ else()
             message(STATUS "  MKL Version: ${MKL_VERSION}")
             message(STATUS "  MKL Interface: ${MKL_INTERFACE}")
             message(STATUS "  MKL Threading: ${MKL_THREADING}")
-            
+            message(STATUS "  MKL Link: ${MKL_LINK}")
+
+            # Explicitly ensure we're not using ILP64 when in LP64 mode
+            if(NOT ILP64)
+                # Remove any MKL_ILP64 definition that might have been set
+                remove_definitions(-DMKL_ILP64)
+                add_compile_definitions(MKL_LP64)
+            endif()
+
             # Use the modern MKL target
             list(APPEND DNA_LIBRARIES MKL::MKL)
         else()
