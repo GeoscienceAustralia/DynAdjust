@@ -23,7 +23,7 @@ jobs:
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       PKGS: >
-        libxerces-c-dev xsdcxx libboost-program-options-dev libopenblas-dev liblapacke-dev
+        libxerces-c-dev xsdcxx libboost-program-options-dev libboost-filesystem-dev libboost-timer-dev libboost-chrono-dev libboost-thread-dev libopenblas-dev liblapacke-dev
 
     steps:
 
@@ -82,7 +82,7 @@ jobs:
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       PKGS: >
-        libxerces-c-dev xsdcxx libboost-program-options-dev
+        libxerces-c-dev xsdcxx libboost-program-options-dev libboost-filesystem-dev libboost-timer-dev libboost-chrono-dev libboost-thread-dev
 
     steps:
 
@@ -169,7 +169,7 @@ jobs:
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       PKGS: >
-        xsdcxx libboost-program-options-dev libopenblas-dev liblapacke-dev
+        xsdcxx libboost-program-options-dev libboost-filesystem-dev libboost-timer-dev libboost-chrono-dev libboost-thread-dev libopenblas-dev liblapacke-dev
       XERCES_VERSION: 3.2.4
 
     steps:
