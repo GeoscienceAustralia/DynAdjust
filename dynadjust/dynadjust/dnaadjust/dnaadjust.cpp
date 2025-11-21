@@ -14487,7 +14487,7 @@ void dna_adjust::ApplyAdditionalConstraints()
 		}
 
 		// set constraint
-		sprintf(bstBinaryRecords_.at(it_stnmap_range.first->second).stationConst, (constraint).c_str());
+		sprintf(bstBinaryRecords_.at(it_stnmap_range.first->second).stationConst, "%s", (constraint).c_str());
 	}
 }
 	
