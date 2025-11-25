@@ -567,7 +567,10 @@ if(BUILD_STATIC)
 
         message("")
         message(STATUS "STATIC_LIBS_LIST=${STATIC_LIBS_LIST}")
-        
+
+        # Replace DNA_LIBRARIES with static equivalents, keeping system libraries
+        set(DNA_LIBRARIES ${STATIC_LIBS_LIST} -lm -ldl)
+
         # Print sizes of static libraries
         message(STATUS "")
         message(STATUS "Static library sizes:")
