@@ -67,6 +67,10 @@ if (BUILD_STATIC)
     # Build internal libraries as static instead of shared
     set(DNA_LIBRARY_TYPE STATIC)
 
+    # For maximum portability, statically link libstdc++ and libgcc
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libstdc++ -static-libgcc")
+    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -static-libstdc++ -static-libgcc")
+
     # Include static build optimizations
     include(${CMAKE_CURRENT_LIST_DIR}/cmake/StaticBuildOptimizations.cmake)
     
@@ -571,9 +575,6 @@ if(BUILD_STATIC)
 
         message("")
         message(STATUS "STATIC_LIBS_LIST=${STATIC_LIBS_LIST}")
-
-        # For maximum portability, statically link libstdc++ and libgcc
-        add_link_options(-static-libstdc++ -static-libgcc)
 
         # Find static versions of xerces-c dependencies (curl and ICU)
         find_library(CURL_STATIC_LIB NAMES libcurl.a HINTS
