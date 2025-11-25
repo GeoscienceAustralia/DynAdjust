@@ -5,7 +5,7 @@ add_definitions(-DBUILD_DNAIMPORT_DLL -DBUILD_EXPORTDNATYPES -DMKL_ILP64)
 
 include_directories (${PROJECT_SOURCE_DIR})
 
-add_library (${PROJECT_NAME} SHARED
+add_library (${PROJECT_NAME} ${DNA_LIBRARY_TYPE}
              ${CMAKE_SOURCE_DIR}/include/io/dnaioaml.cpp
              ${CMAKE_SOURCE_DIR}/include/io/dnaioasl.cpp
              ${CMAKE_SOURCE_DIR}/include/io/dnaiobase.cpp

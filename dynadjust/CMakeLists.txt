@@ -63,7 +63,10 @@ endforeach()
 
 if (BUILD_STATIC)
     message(STATUS "Static building enabled (BUILD_STATIC=ON)")
-    
+
+    # Build internal libraries as static instead of shared
+    set(DNA_LIBRARY_TYPE STATIC)
+
     # Include static build optimizations
     include(${CMAKE_CURRENT_LIST_DIR}/cmake/StaticBuildOptimizations.cmake)
     
@@ -121,6 +124,7 @@ if (BUILD_STATIC)
     endif()
 else()
     message(STATUS "Static building disabled (BUILD_STATIC=OFF)")
+    set(DNA_LIBRARY_TYPE SHARED)
 endif()
 
 if(UNIX)
