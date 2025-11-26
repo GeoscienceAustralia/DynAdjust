@@ -576,61 +576,7 @@ if(BUILD_STATIC)
         message("")
         message(STATUS "STATIC_LIBS_LIST=${STATIC_LIBS_LIST}")
 
-        # Find static versions of xerces-c dependencies (curl and ICU)
-        find_library(CURL_STATIC_LIB NAMES libcurl.a HINTS
-            ENV LIBRARY_PATH /g/data/ms9/.envbin/lib /usr/lib64 /usr/lib)
-        find_library(ICUUC_STATIC_LIB NAMES libicuuc.a HINTS
-            ENV LIBRARY_PATH /g/data/ms9/.envbin/lib /usr/lib64 /usr/lib)
-        find_library(ICUI18N_STATIC_LIB NAMES libicui18n.a HINTS
-            ENV LIBRARY_PATH /g/data/ms9/.envbin/lib /usr/lib64 /usr/lib)
-        find_library(ICUDATA_STATIC_LIB NAMES libicudata.a HINTS
-            ENV LIBRARY_PATH /g/data/ms9/.envbin/lib /usr/lib64 /usr/lib)
-        find_library(SSL_STATIC_LIB NAMES libssl.a HINTS
-            ENV LIBRARY_PATH /g/data/ms9/.envbin/lib /usr/lib64 /usr/lib)
-        find_library(CRYPTO_STATIC_LIB NAMES libcrypto.a HINTS
-            ENV LIBRARY_PATH /g/data/ms9/.envbin/lib /usr/lib64 /usr/lib)
-        find_library(Z_STATIC_LIB NAMES libz.a HINTS
-            ENV LIBRARY_PATH /g/data/ms9/.envbin/lib /usr/lib64 /usr/lib)
-
-        # Build the list of xerces-c dependencies, preferring static
-        set(XERCES_DEPS "")
-
-        # ICU libraries (order matters: i18n depends on uc, both depend on data)
-        if(ICUI18N_STATIC_LIB AND ICUUC_STATIC_LIB AND ICUDATA_STATIC_LIB)
-            message(STATUS "Found static ICU: ${ICUUC_STATIC_LIB}")
-            list(APPEND XERCES_DEPS ${ICUI18N_STATIC_LIB} ${ICUUC_STATIC_LIB} ${ICUDATA_STATIC_LIB})
-        else()
-            message(STATUS "Static ICU not found, using dynamic")
-            list(APPEND XERCES_DEPS -licui18n -licuuc -licudata)
-        endif()
-
-        # curl and its dependencies
-        if(CURL_STATIC_LIB)
-            message(STATUS "Found static curl: ${CURL_STATIC_LIB}")
-            list(APPEND XERCES_DEPS ${CURL_STATIC_LIB})
-            # curl's dependencies
-            if(SSL_STATIC_LIB AND CRYPTO_STATIC_LIB)
-                message(STATUS "Found static OpenSSL")
-                list(APPEND XERCES_DEPS ${SSL_STATIC_LIB} ${CRYPTO_STATIC_LIB})
-            else()
-                list(APPEND XERCES_DEPS -lssl -lcrypto)
-            endif()
-            if(Z_STATIC_LIB)
-                message(STATUS "Found static zlib: ${Z_STATIC_LIB}")
-                list(APPEND XERCES_DEPS ${Z_STATIC_LIB})
-            else()
-                list(APPEND XERCES_DEPS -lz)
-            endif()
-            # Other curl deps that are usually only available as shared
-            list(APPEND XERCES_DEPS -lnghttp2 -lidn2 -lssh -lpsl -lbrotlidec -lbrotlicommon)
-        else()
-            message(STATUS "Static curl not found, using dynamic")
-            list(APPEND XERCES_DEPS -lcurl)
-        endif()
-
-        # Set DNA_LIBRARIES with all dependencies
-        # System libs at the end
-        set(DNA_LIBRARIES ${STATIC_LIBS_LIST} ${XERCES_DEPS} -lpthread -lrt -lm -ldl)
+        set(DNA_LIBRARIES ${STATIC_LIBS_LIST} -lpthread -lrt -lm -ldl)
 
         # Print sizes of static libraries
         message(STATUS "")
