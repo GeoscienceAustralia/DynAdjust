@@ -24,6 +24,7 @@
 #include <fstream>
 #include <ios>
 #include <iostream>
+#include <map>
 #include <sstream>
 
 #include <include/functions/dnaiostreamfuncs.hpp>
@@ -245,6 +246,29 @@ void BmsFileLoader::WriteFile(const std::string& bms_filename,
   UINT32 msrIndex(0);
 
   try {
+    // Build unique source file index map
+    std::map<std::string, UINT32> sourceFileMap;
+    std::vector<std::string> sourceFileList;
+    for (it_msr = vMeasurements->begin(); it_msr != vMeasurements->end(); ++it_msr) {
+      std::string src = it_msr->get()->GetSource();
+      if (sourceFileMap.find(src) == sourceFileMap.end()) {
+        sourceFileMap[src] = static_cast<UINT32>(sourceFileList.size());
+        sourceFileList.push_back(src);
+      }
+      it_msr->get()->SetSourceFileIndex(sourceFileMap[src]);
+    }
+
+    // Populate source file metadata
+    bms_meta.sourceFileCount = sourceFileList.size();
+    if (bms_meta.sourceFileMeta != nullptr)
+      delete[] bms_meta.sourceFileMeta;
+    bms_meta.sourceFileMeta = new source_file_meta_t[bms_meta.sourceFileCount];
+    for (std::uint64_t i(0); i < bms_meta.sourceFileCount; ++i) {
+      memset(bms_meta.sourceFileMeta[i].filename, '\0', sizeof(bms_meta.sourceFileMeta[i].filename));
+      snprintf(bms_meta.sourceFileMeta[i].filename, sizeof(bms_meta.sourceFileMeta[i].filename),
+        "%s", sourceFileList[i].c_str());
+    }
+
     writeFileInfo(bms_file);
     writeFileMetadata(bms_file, bms_meta);
 

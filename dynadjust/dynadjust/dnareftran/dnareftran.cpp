@@ -1938,7 +1938,8 @@ void dna_reftran::SerialiseDNA(const std::string& stnfilename, const std::string
 			comment.append(", epoch ").append(datumTo_.GetEpoch_s());
 		comment.append(".  Exported by reftran.");
 		dna.set_dbid_ptr(&v_msr_db_map_);
-		dna.write_dna_files(&bstBinaryRecords_, &bmsBinaryRecords_, 
+		dna.set_source_file_meta_ptr(bms_meta_.sourceFileMeta, bms_meta_.sourceFileCount);
+		dna.write_dna_files(&bstBinaryRecords_, &bmsBinaryRecords_,
 			stnfilename, msrfilename, projectSettings_.g.network_name,
 			datumTo_, projection, flagUnused, "Station coordinates" + comment, "GNSS measurements" + comment);
 	}
@@ -2124,6 +2125,7 @@ void dna_reftran::SerialiseDynaMLMsr(std::ofstream* xml_file)
 		}
 
 		msrPtr->SetMeasurementRec(bstBinaryRecords_, _it_msr, _it_dbid);
+		msrPtr->ResolveSourceFile(bms_meta_.sourceFileMeta, bms_meta_.sourceFileCount);
 		msrPtr->WriteDynaMLMsr(xml_file, comment);
 	}
 }

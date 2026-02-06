@@ -133,7 +133,7 @@ typedef std::shared_ptr< std::vector<CDnaCovariance> > vecCovariancePtr;
 typedef struct msr_t {
 	msr_t()
 		: measType('\0'), measStart(0), measurementStations(1), ignore(false), station1(0), station2(0)
-		, station3(0), vectorCount1(0), vectorCount2(0), clusterID(0), fileOrder(0)
+		, station3(0), vectorCount1(0), vectorCount2(0), clusterID(0), fileOrder(0), sourceFileIndex(0)
 		, term1(0.), term2(0.), term3(0.), term4(0.), scale1(1.), scale2(1.), scale3(1.), scale4(1.)
 		, measAdj(0.), measCorr(0.), measAdjPrec(0.), residualPrec(0.)
 		, NStat(0.), TStat(0.), PelzerRel(0.)
@@ -163,6 +163,7 @@ typedef struct msr_t {
 									// number of non-ignored directions
 	UINT32	clusterID;				// cluster ID (which cluster this measurement belongs to)
 	UINT32	fileOrder;				// original file order
+	UINT32	sourceFileIndex;		// index into source file metadata list
 	double	term1;					// measurement, X, Y, Z, dX, dY, dZ value
 									// direction
 	double	term2;					// measurement, XX, XY or XZ variance
@@ -312,6 +313,7 @@ public:
 
 	inline std::string GetEpsg() const { return m_epsgCode; }
 	inline std::string GetSource() const { return m_sourceFile; }
+	inline UINT32 GetSourceFileIndex() const { return m_sourceFileIndex; }
 
 	inline bool GetInsufficient() const { return m_bInsufficient; }
 
@@ -321,7 +323,8 @@ public:
 	
 	inline void SetEpsg(const std::string& e) { m_epsgCode = trimstr(e); }
 	inline void SetSource(const std::string& source) { m_sourceFile = source; }
-	
+	inline void SetSourceFileIndex(const UINT32& idx) { m_sourceFileIndex = idx; }
+
 	inline void SetInsufficient(const bool bval) { m_bInsufficient = bval; }
 
 	inline void SetMsrIndex(const UINT32& order) { m_lmeasurementIndex = order; }
@@ -450,6 +453,11 @@ public:
 
 	virtual void SerialiseDatabaseMap(std::ofstream* os);
 
+	void ResolveSourceFile(const source_file_meta_t* sourceFiles, std::uint64_t sourceFileCount) {
+		if (sourceFileCount > 0 && m_sourceFileIndex < sourceFileCount)
+			m_sourceFile = sourceFiles[m_sourceFileIndex].filename;
+	}
+
 protected:
 	void coutMeasurement(std::ostream &os) const;
 
@@ -474,6 +482,7 @@ protected:
 
 	std::string	m_epsgCode;
 	std::string	m_sourceFile;
+	UINT32		m_sourceFileIndex;
 
 	std::string	m_epoch;
 	

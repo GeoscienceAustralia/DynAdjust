@@ -101,9 +101,14 @@ void DynadjustFile::WriteFileMetadata(std::ofstream& file_stream, binary_file_me
 		file_stream.write(reinterpret_cast<char *>(file_meta.inputFileMeta[i].filename), FILE_NAME_WIDTH); 
 		file_stream.write(reinterpret_cast<char *>(file_meta.inputFileMeta[i].epsgCode), STN_EPSG_WIDTH);
 		file_stream.write(reinterpret_cast<char *>(file_meta.inputFileMeta[i].epoch), STN_EPOCH_WIDTH);
-		file_stream.write(reinterpret_cast<char *>(&file_meta.inputFileMeta[i].filetype), sizeof(UINT16)); 
-		file_stream.write(reinterpret_cast<char *>(&file_meta.inputFileMeta[i].datatype), sizeof(UINT16)); 
+		file_stream.write(reinterpret_cast<char *>(&file_meta.inputFileMeta[i].filetype), sizeof(UINT16));
+		file_stream.write(reinterpret_cast<char *>(&file_meta.inputFileMeta[i].datatype), sizeof(UINT16));
 	}
+
+	// Write source file count and source file meta (v1.1+)
+	file_stream.write(reinterpret_cast<char *>(&file_meta.sourceFileCount), sizeof(std::uint64_t));
+	for (std::uint64_t i(0); i<file_meta.sourceFileCount; ++i)
+		file_stream.write(reinterpret_cast<char *>(file_meta.sourceFileMeta[i].filename), FILE_NAME_WIDTH);
 }
 	
 
@@ -133,11 +138,36 @@ void DynadjustFile::ReadFileMetadata(std::ifstream& file_stream, binary_file_met
 		file_stream.read(reinterpret_cast<char *>(file_meta.inputFileMeta[i].filename), FILE_NAME_WIDTH); 
 		file_stream.read(reinterpret_cast<char *>(file_meta.inputFileMeta[i].epsgCode), STN_EPSG_WIDTH);
 		file_stream.read(reinterpret_cast<char *>(file_meta.inputFileMeta[i].epoch), STN_EPOCH_WIDTH);
-		file_stream.read(reinterpret_cast<char *>(&file_meta.inputFileMeta[i].filetype), sizeof(UINT16)); 
-		file_stream.read(reinterpret_cast<char *>(&file_meta.inputFileMeta[i].datatype), sizeof(UINT16)); 
+		file_stream.read(reinterpret_cast<char *>(&file_meta.inputFileMeta[i].filetype), sizeof(UINT16));
+		file_stream.read(reinterpret_cast<char *>(&file_meta.inputFileMeta[i].datatype), sizeof(UINT16));
+	}
+
+	// Read source file meta (v1.1+)
+	if (versionAtLeast(1, 1))
+	{
+		file_stream.read(reinterpret_cast<char *>(&file_meta.sourceFileCount), sizeof(std::uint64_t));
+		if (file_meta.sourceFileMeta != nullptr)
+			delete []file_meta.sourceFileMeta;
+
+		file_meta.sourceFileMeta = new source_file_meta_t[file_meta.sourceFileCount];
+
+		for (std::uint64_t i(0); i<file_meta.sourceFileCount; ++i)
+			file_stream.read(reinterpret_cast<char *>(file_meta.sourceFileMeta[i].filename), FILE_NAME_WIDTH);
+	}
+	else
+	{
+		file_meta.sourceFileCount = 0;
+		file_meta.sourceFileMeta = nullptr;
 	}
 }
-	
+
+
+bool DynadjustFile::versionAtLeast(int major, int minor) const
+{
+	int vmajor = 0, vminor = 0;
+	sscanf(version_.c_str(), "%d.%d", &vmajor, &vminor);
+	return (vmajor > major) || (vmajor == major && vminor >= minor);
+}
 
 void DynadjustFile::WriteVersion(std::ofstream& file_stream)
 {

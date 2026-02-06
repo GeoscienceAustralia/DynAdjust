@@ -37,7 +37,7 @@
 #include <include/config/dnatypes-fwd.hpp>
 #include <include/config/dnatypes-structs.hpp>
 
-#define __FILE_VERSION__ "1.0"
+#define __FILE_VERSION__ "1.1"
 
 namespace dynadjust {
 namespace iostreams {
@@ -79,6 +79,8 @@ public:
 	void ReadFileMetadata(std::ifstream& file_stream, binary_file_meta_t& file_meta);
 
 protected:
+
+	bool versionAtLeast(int major, int minor) const;
 
 	void WriteVersion(std::ofstream& file_stream);
 	void ReadVersion(std::ifstream& file_stream);

@@ -100,6 +100,8 @@ void create_test_binary_meta(binary_file_meta_t& meta, std::uint64_t binCount) {
     snprintf(meta.epoch, sizeof(meta.epoch), "01.01.2020");
     meta.inputFileCount = 0;
     meta.inputFileMeta = nullptr;
+    meta.sourceFileCount = 0;
+    meta.sourceFileMeta = nullptr;
 }
 
 void create_test_input_file_meta(vifm_t& input_files) {
@@ -460,6 +462,78 @@ TEST_CASE("Handle various measurement types", "[BmsFileLoader][types]") {
         REQUIRE(loaded_measurements[i].station1 == i);
         REQUIRE(loaded_measurements[i].term1 == 1000.0 + static_cast<double>(i));
     }
+
+    cleanup_temp_files();
+}
+
+TEST_CASE("Source file index round-trip", "[BmsFileLoader][roundtrip][source]") {
+    BmsFileLoader bms_loader;
+    vmsr_t measurements;
+    binary_file_meta_t meta;
+
+    cleanup_temp_files();
+
+    // Create measurements with different source file indices
+    measurement_t msr1 = {};
+    msr1.measType = 'S';
+    msr1.measurementStations = 2;
+    snprintf(msr1.epsgCode, sizeof(msr1.epsgCode), "7843");
+    snprintf(msr1.epoch, sizeof(msr1.epoch), "01.01.2020");
+    msr1.station1 = 0;
+    msr1.station2 = 1;
+    msr1.fileOrder = 0;
+    msr1.term1 = 100.0;
+    msr1.sourceFileIndex = 0;
+
+    measurement_t msr2 = {};
+    msr2.measType = 'L';
+    msr2.measurementStations = 2;
+    snprintf(msr2.epsgCode, sizeof(msr2.epsgCode), "7843");
+    snprintf(msr2.epoch, sizeof(msr2.epoch), "01.01.2020");
+    msr2.station1 = 1;
+    msr2.station2 = 2;
+    msr2.fileOrder = 1;
+    msr2.term1 = 5.0;
+    msr2.sourceFileIndex = 1;
+
+    measurement_t msr3 = {};
+    msr3.measType = 'H';
+    msr3.measurementStations = 2;
+    snprintf(msr3.epsgCode, sizeof(msr3.epsgCode), "7843");
+    snprintf(msr3.epoch, sizeof(msr3.epoch), "01.01.2020");
+    msr3.station1 = 2;
+    msr3.station2 = 0;
+    msr3.fileOrder = 2;
+    msr3.term1 = 50.0;
+    msr3.sourceFileIndex = 0;
+
+    measurements.push_back(msr1);
+    measurements.push_back(msr2);
+    measurements.push_back(msr3);
+
+    create_test_binary_meta(meta, measurements.size());
+
+    meta.sourceFileCount = 2;
+    meta.sourceFileMeta = new source_file_meta_t[2]();
+    snprintf(meta.sourceFileMeta[0].filename, sizeof(meta.sourceFileMeta[0].filename), "network_a.xml");
+    snprintf(meta.sourceFileMeta[1].filename, sizeof(meta.sourceFileMeta[1].filename), "network_b.xml");
+
+    bms_loader.WriteFile(TEMP_BMS_FILE, &measurements, meta);
+    REQUIRE(std::filesystem::exists(TEMP_BMS_FILE));
+
+    vmsr_t loaded_measurements;
+    binary_file_meta_t loaded_meta;
+    std::uint64_t count = bms_loader.LoadFile(TEMP_BMS_FILE, &loaded_measurements, loaded_meta);
+
+    REQUIRE(count == 3);
+    REQUIRE(loaded_measurements[0].sourceFileIndex == 0);
+    REQUIRE(loaded_measurements[1].sourceFileIndex == 1);
+    REQUIRE(loaded_measurements[2].sourceFileIndex == 0);
+
+    REQUIRE(loaded_meta.sourceFileCount == 2);
+    REQUIRE(loaded_meta.sourceFileMeta != nullptr);
+    REQUIRE(std::string(loaded_meta.sourceFileMeta[0].filename) == "network_a.xml");
+    REQUIRE(std::string(loaded_meta.sourceFileMeta[1].filename) == "network_b.xml");
 
     cleanup_temp_files();
 }

@@ -383,6 +383,7 @@ UINT32 CDnaGpsBaseline::SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t& it
 	m_dX = it_msr->term1;
 	m_dSigmaXX = it_msr->term2;
 	m_lRecordedTotal = it_msr->vectorCount1;
+	m_sourceFileIndex = it_msr->sourceFileIndex;
 
 	it_msr++;
 	
@@ -427,6 +428,7 @@ void CDnaGpsBaseline::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIn
 
 	measRecord.clusterID = m_lclusterID;
 	measRecord.measurementStations = m_MSmeasurementStations;
+	measRecord.sourceFileIndex = m_sourceFileIndex;
 
 	measRecord.scale1 = m_dPscale;
 	measRecord.scale2 = m_dLscale;
@@ -890,6 +892,7 @@ UINT32 CDnaGpsBaselineCluster::SetMeasurementRec(const vstn_t& binaryStn, it_vms
 	m_referenceFrame = datumFromEpsgString<std::string>(it_msr->epsgCode);
 	m_epoch = it_msr->epoch;
 	m_epsgCode = it_msr->epsgCode;
+	m_sourceFileIndex = it_msr->sourceFileIndex;
 
 	m_dPscale = it_msr->scale1;
 	m_dLscale = it_msr->scale2;

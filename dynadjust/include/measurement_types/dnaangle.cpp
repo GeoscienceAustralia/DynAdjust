@@ -250,6 +250,7 @@ UINT32 CDnaAngle::SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t& it_msr, 
 	m_dStdDev = sqrt(it_msr->term2);
 	
 	m_epoch = it_msr->epoch;
+	m_sourceFileIndex = it_msr->sourceFileIndex;
 
 	CDnaMeasurement::SetDatabaseMap(*dbidmap);
 
@@ -273,6 +274,7 @@ void CDnaAngle::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex) c
 	measRecord.term1 = m_drValue;
 	measRecord.term2 = m_dStdDev * m_dStdDev;	// convert to variance
 	measRecord.measurementStations = m_MSmeasurementStations;
+	measRecord.sourceFileIndex = m_sourceFileIndex;
 	measRecord.fileOrder = ((*msrIndex)++);
 
 	snprintf(measRecord.epoch, sizeof(measRecord.epoch), "%s", m_epoch.substr(0, STN_EPOCH_WIDTH).c_str());
