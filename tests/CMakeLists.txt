@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 project(DynAdjustTests LANGUAGES CXX)
 
 # Set C++ standard
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Set output directory for binaries
@@ -12,8 +12,8 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 include_directories(../dynadjust)
 include_directories(../dynadjust/include)
 
-# Find required packages
-find_package(Boost REQUIRED COMPONENTS filesystem system timer date_time)
+# Find optional packages (not all tests need Boost)
+find_package(Boost COMPONENTS filesystem system timer date_time chrono)
 
 # Platform-specific libraries
 if(APPLE)
@@ -33,6 +33,13 @@ set(IO_COMMON_SOURCES
     ../dynadjust/include/measurement_types/dnastation.cpp
 )
 
+# Enable testing
+enable_testing()
+
+# ============================================================
+# Tests that do not require Boost
+# ============================================================
+
 # Test 1: Matrix test
 add_executable(test_matrix
     test_matrix.cpp
@@ -48,6 +55,32 @@ target_compile_definitions(test_matrix PRIVATE
     __BINARY_NAME__="test_matrix"
     __BINARY_DESC__="Unit tests for matrix operations"
 )
+
+add_test(NAME MatrixTest COMMAND test_matrix)
+
+# Test 9: GNSS N-stat sort test
+add_executable(test_gnss_nstat_sort
+    test_gnss_nstat_sort.cpp
+    ../dynadjust/include/math/dnamatrix_contiguous.cpp
+    ../dynadjust/include/ide/trace.cpp
+)
+
+target_link_libraries(test_gnss_nstat_sort
+    ${PLATFORM_LIBS}
+)
+
+target_compile_definitions(test_gnss_nstat_sort PRIVATE
+    __BINARY_NAME__="test_gnss_nstat_sort"
+    __BINARY_DESC__="Unit tests for GNSS n-stat sort in alternate units"
+)
+
+add_test(NAME GNSSNstatSortTest COMMAND test_gnss_nstat_sort)
+
+# ============================================================
+# Tests that require Boost
+# ============================================================
+
+if(Boost_FOUND)
 
 # Test 2: BST File Loader test
 add_executable(test_bst_file
@@ -185,11 +218,6 @@ target_compile_definitions(test_dnaadjust_printer PRIVATE
     __BINARY_DESC__="Unit tests for DynAdjustPrinter class"
 )
 
-# Enable testing
-enable_testing()
-
-# Add tests
-add_test(NAME MatrixTest COMMAND test_matrix)
 add_test(NAME BstFileTest COMMAND test_bst_file)
 add_test(NAME AslFileTest COMMAND test_asl_file)
 add_test(NAME AmlFileLoaderTest COMMAND test_aml_file_loader)
@@ -198,15 +226,6 @@ add_test(NAME NetworkDataLoaderTest COMMAND test_network_data_loader)
 add_test(NAME MeasurementProcessorTest COMMAND test_measurement_processor)
 add_test(NAME DynAdjustPrinterTest COMMAND test_dnaadjust_printer)
 
-# Custom target to run all tests
-add_custom_target(run_tests
-    COMMAND ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS test_matrix test_bst_file_loader test_asl_file_loader test_aml_file_loader test_bms_file_loader test_network_data_loader test_measurement_processor test_dnaadjust_printer
-    COMMENT "Running all tests"
-)
-
-# Custom target equivalent to 'make all'
-add_custom_target(tests_all
-    DEPENDS test_matrix test_bst_file_loader test_asl_file_loader test_aml_file_loader test_bms_file_loader test_network_data_loader test_measurement_processor test_dnaadjust_printer
-    COMMENT "Building all tests"
-)
+else()
+    message(STATUS "Boost not found - skipping Boost-dependent tests")
+endif()

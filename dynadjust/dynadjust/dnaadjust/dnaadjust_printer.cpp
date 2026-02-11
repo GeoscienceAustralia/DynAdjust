@@ -1683,7 +1683,13 @@ void DynAdjustPrinter::PrintAdjMeasurements(v_uint32_u32u32_pair msr_block, bool
     // Print header using printer module method
     PrintAdjMeasurementsHeader(printHeader, table_heading,
         adjustedMsrs, msr_block.at(0).second.first + 1, true);
-    
+
+    // When sorting by n-stat and displaying GNSS in non-cartesian units,
+    // update GNSS n-stat values to match the displayed frame before sorting
+    if (adjust_.projectSettings_.o._adj_gnss_units != XYZ_adj_gnss_ui &&
+        adjust_.projectSettings_.o._sort_adj_msr == n_st_adj_msr_sort_ui)
+        UpdateGNSSNstatsForAlternateUnits(msr_block);
+
     // Sort measurements according to project settings
     try {
         switch (adjust_.projectSettings_.o._sort_adj_msr) {
@@ -4461,6 +4467,194 @@ void DynAdjustPrinter::PrintPosUncertainties(std::ostream& os, const UINT32& blo
     // return sort order to alpha-numeric
     if (adjust_.projectSettings_.o._sort_stn_file_order)
         adjust_.SortStationsbyID(v_blockStations);
+}
+
+void DynAdjustPrinter::UpdateGNSSNstatsForAlternateUnits(const v_uint32_u32u32_pair& msr_block) {
+
+    matrix_2d gnss_cart(3, 1), gnss_local(3, 1);
+    matrix_2d gnss_adj_cart(3, 1), gnss_adj_local(3, 1);
+    matrix_2d var_cart(3, 3), var_local(3, 3), var_polar(3, 3);
+    matrix_2d var_adj_local(3, 3), var_adj_polar(3, 3);
+    matrix_2d rotations;
+
+    for (auto _it_block_msr = msr_block.begin(); _it_block_msr != msr_block.end(); ++_it_block_msr)
+    {
+        it_vmsr_t _it_msr = adjust_.bmsBinaryRecords_.begin() + _it_block_msr->first;
+
+        if (_it_msr->measStart != xMeas)
+            continue;
+
+        if (_it_msr->measType != 'G' && _it_msr->measType != 'X')
+            continue;
+
+        UINT32 cluster_count(_it_msr->vectorCount1);
+        UINT32 covariance_count;
+        const uint32_uint32_pair& b_pam = _it_block_msr->second;
+
+        for (UINT32 cluster_msr = 0; cluster_msr < cluster_count; ++cluster_msr)
+        {
+            covariance_count = _it_msr->vectorCount2;
+
+            // Load precision of adjusted measurements for staged adjustments
+            if (adjust_.projectSettings_.a.stage)
+                adjust_.DeserialiseBlockFromMappedFile(b_pam.first, 1, sf_prec_adj_msrs);
+
+            double lower_mtx_buffer[6];
+            memcpy(lower_mtx_buffer,
+                adjust_.v_precAdjMsrsFull_.at(b_pam.first).getbuffer(b_pam.second, 0),
+                sizeof(lower_mtx_buffer));
+            matrix_2d var_adj_cart(3, 3, lower_mtx_buffer, 6, mtx_lower);
+            var_adj_cart.fillupper();
+
+            if (adjust_.projectSettings_.a.stage)
+                adjust_.UnloadBlock(b_pam.first, 1, sf_prec_adj_msrs);
+
+            // Get X component
+            gnss_cart.put(0, 0, _it_msr->term1);
+            gnss_adj_cart.put(0, 0, _it_msr->measAdj);
+            var_cart.put(0, 0, _it_msr->term2);
+
+            it_vmsr_t _it_x = _it_msr;
+
+            // Get Y component
+            _it_msr++;
+            gnss_cart.put(1, 0, _it_msr->term1);
+            gnss_adj_cart.put(1, 0, _it_msr->measAdj);
+            var_cart.put(0, 1, _it_msr->term2);
+            var_cart.put(1, 1, _it_msr->term3);
+
+            it_vmsr_t _it_y = _it_msr;
+
+            // Get Z component
+            _it_msr++;
+            gnss_cart.put(2, 0, _it_msr->term1);
+            gnss_adj_cart.put(2, 0, _it_msr->measAdj);
+            var_cart.put(0, 2, _it_msr->term2);
+            var_cart.put(1, 2, _it_msr->term3);
+            var_cart.put(2, 2, _it_msr->term4);
+
+            it_vmsr_t _it_z = _it_msr;
+
+            var_cart.filllower();
+
+            double mid_lat(average(
+                adjust_.bstBinaryRecords_.at(_it_msr->station1).currentLatitude,
+                adjust_.bstBinaryRecords_.at(_it_msr->station2).currentLatitude));
+            double mid_long(average(
+                adjust_.bstBinaryRecords_.at(_it_msr->station1).currentLongitude,
+                adjust_.bstBinaryRecords_.at(_it_msr->station2).currentLongitude));
+
+            Rotate_CartLocal<double>(gnss_cart, &gnss_local,
+                adjust_.bstBinaryRecords_.at(_it_msr->station1).currentLatitude,
+                adjust_.bstBinaryRecords_.at(_it_msr->station1).currentLongitude);
+            Rotate_CartLocal<double>(gnss_adj_cart, &gnss_adj_local,
+                adjust_.bstBinaryRecords_.at(_it_msr->station1).currentLatitude,
+                adjust_.bstBinaryRecords_.at(_it_msr->station1).currentLongitude);
+
+            switch (adjust_.projectSettings_.o._adj_gnss_units)
+            {
+            case ENU_adj_gnss_ui:
+            {
+                PropagateVariances_CartLocal_Diagonal<double>(var_cart, var_local,
+                    mid_lat, mid_long, rotations, true);
+                PropagateVariances_CartLocal_Diagonal<double>(var_adj_cart, var_adj_local,
+                    mid_lat, mid_long, rotations, false);
+
+                // E
+                _it_x->measCorr = gnss_adj_local.get(0, 0) - gnss_local.get(0, 0);
+                _it_x->residualPrec = var_local.get(0, 0) - var_adj_local.get(0, 0);
+                adjust_.UpdateMsrRecordStats(_it_x, var_local.get(0, 0));
+
+                // N
+                _it_y->measCorr = gnss_adj_local.get(1, 0) - gnss_local.get(1, 0);
+                _it_y->residualPrec = var_local.get(1, 1) - var_adj_local.get(1, 1);
+                adjust_.UpdateMsrRecordStats(_it_y, var_local.get(1, 1));
+
+                // U
+                _it_z->measCorr = gnss_adj_local.get(2, 0) - gnss_local.get(2, 0);
+                _it_z->residualPrec = var_local.get(2, 2) - var_adj_local.get(2, 2);
+                adjust_.UpdateMsrRecordStats(_it_z, var_local.get(2, 2));
+                break;
+            }
+            case AED_adj_gnss_ui:
+            {
+                double azimuth = Direction(gnss_local.get(0, 0), gnss_local.get(1, 0));
+                double elevation = VerticalAngle(gnss_local.get(0, 0), gnss_local.get(1, 0), gnss_local.get(2, 0));
+                double distance = magnitude(gnss_local.get(0, 0), gnss_local.get(1, 0), gnss_local.get(2, 0));
+
+                double azimuthAdj = Direction(gnss_adj_local.get(0, 0), gnss_adj_local.get(1, 0));
+                double elevationAdj = VerticalAngle(gnss_adj_local.get(0, 0), gnss_adj_local.get(1, 0), gnss_adj_local.get(2, 0));
+                double distanceAdj = magnitude(gnss_adj_local.get(0, 0), gnss_adj_local.get(1, 0), gnss_adj_local.get(2, 0));
+
+                PropagateVariances_LocalCart<double>(var_cart, var_local,
+                    mid_lat, mid_long, false, rotations, true);
+                PropagateVariances_LocalCart<double>(var_adj_cart, var_adj_local,
+                    mid_lat, mid_long, false, rotations, false);
+
+                PropagateVariances_LocalPolar_Diagonal<double>(var_local, var_polar,
+                    azimuth, elevation, distance, rotations, true);
+                PropagateVariances_LocalPolar_Diagonal<double>(var_adj_local, var_adj_polar,
+                    azimuth, elevation, distance, rotations, false);
+
+                // Azimuth
+                _it_x->measCorr = azimuthAdj - azimuth;
+                _it_x->residualPrec = var_polar.get(0, 0) - var_adj_polar.get(0, 0);
+                adjust_.UpdateMsrRecordStats(_it_x, var_polar.get(0, 0));
+
+                // Elevation
+                _it_y->measCorr = elevationAdj - elevation;
+                _it_y->residualPrec = var_polar.get(1, 1) - var_adj_polar.get(1, 1);
+                adjust_.UpdateMsrRecordStats(_it_y, var_polar.get(1, 1));
+
+                // Distance
+                _it_z->measCorr = distanceAdj - distance;
+                _it_z->residualPrec = var_polar.get(2, 2) - var_adj_polar.get(2, 2);
+                adjust_.UpdateMsrRecordStats(_it_z, var_polar.get(2, 2));
+                break;
+            }
+            case ADU_adj_gnss_ui:
+            {
+                double azimuth = Direction(gnss_local.get(0, 0), gnss_local.get(1, 0));
+                double elevation = VerticalAngle(gnss_local.get(0, 0), gnss_local.get(1, 0), gnss_local.get(2, 0));
+                double distance = magnitude(gnss_local.get(0, 0), gnss_local.get(1, 0), gnss_local.get(2, 0));
+
+                double azimuthAdj = Direction(gnss_adj_local.get(0, 0), gnss_adj_local.get(1, 0));
+                double distanceAdj = magnitude(gnss_adj_local.get(0, 0), gnss_adj_local.get(1, 0), gnss_adj_local.get(2, 0));
+
+                PropagateVariances_LocalCart<double>(var_cart, var_local,
+                    mid_lat, mid_long, false, rotations, true);
+                PropagateVariances_LocalCart<double>(var_adj_cart, var_adj_local,
+                    mid_lat, mid_long, false, rotations, false);
+
+                PropagateVariances_LocalPolar_Diagonal<double>(var_local, var_polar,
+                    azimuth, elevation, distance, rotations, true);
+                PropagateVariances_LocalPolar_Diagonal<double>(var_adj_local, var_adj_polar,
+                    azimuth, elevation, distance, rotations, false);
+
+                // Azimuth
+                _it_x->measCorr = azimuthAdj - azimuth;
+                _it_x->residualPrec = var_polar.get(0, 0) - var_adj_polar.get(0, 0);
+                adjust_.UpdateMsrRecordStats(_it_x, var_polar.get(0, 0));
+
+                // Slope distance
+                _it_y->measCorr = distanceAdj - distance;
+                _it_y->residualPrec = var_polar.get(2, 2) - var_adj_polar.get(2, 2);
+                adjust_.UpdateMsrRecordStats(_it_y, var_polar.get(2, 2));
+
+                // Up
+                _it_z->measCorr = gnss_adj_local.get(2, 0) - gnss_local.get(2, 0);
+                _it_z->residualPrec = var_local.get(2, 2) - var_adj_local.get(2, 2);
+                adjust_.UpdateMsrRecordStats(_it_z, var_local.get(2, 2));
+                break;
+            }
+            }
+
+            // Skip covariances until next baseline
+            _it_msr += covariance_count * 3;
+            if (covariance_count > 0)
+                _it_msr++;
+        }
+    }
 }
 
 void DynAdjustPrinter::PrintAdjGNSSAlternateUnits(it_vmsr_t& _it_msr, const uint32_uint32_pair& b_pam) {
