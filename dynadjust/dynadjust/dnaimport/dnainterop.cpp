@@ -4948,9 +4948,7 @@ void dna_import::PrintMeasurementsToStations(std::string& m2s_file, MsrTally* pa
 		break;
 	}
 	case orig_stn_sort_ui:
-	default:
 	{
-		// sort summary according to original station file order
 		CompareStnFileOrder<station_t, UINT32> stnorderCompareFunc(&bstBinaryRecords);
 		std::sort(vStationList.begin(), vStationList.end(), stnorderCompareFunc);
 		break;

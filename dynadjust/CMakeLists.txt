@@ -1354,8 +1354,19 @@ if (BUILD_TESTING)
     add_test (NAME imp-discont-04 COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n discont -r itrf2005 TEST_ITRF05.SNX --export-xml)
     add_test (NAME imp-discont-05 COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n discont -r itrf2000 --override-input-ref-frame ./discontstn.xml ./discontmsr.xml --discontinuity-file disconts20201205.snx)
 
-    # 11. measurements to stations sorting
-    add_test (NAME imp-m2s-sort-01 COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n gnss gnss-network.stn gnss-network.msr --output-msr-to-stn --sort-msr-to-stn-field 1 -r GDA94) 
+    # 11. measurements to stations sorting (issue #305)
+    add_test (NAME imp-m2s-sort-alpha COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n gnss gnss-network.stn gnss-network.msr --output-msr-to-stn --sort-msr-to-stn-field 0 -r GDA94)
+    add_test (NAME imp-m2s-sort-count COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n gnss gnss-network.stn gnss-network.msr --output-msr-to-stn --sort-msr-to-stn-field 1 -r GDA94)
+    add_test (NAME imp-m2s-sort-fileorder COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n gnss gnss-network.stn gnss-network.msr --output-msr-to-stn --sort-msr-to-stn-field 2 -r GDA94)
+    add_test (NAME imp-m2s-sort-count-dec COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n gnss gnss-network.stn gnss-network.msr --output-msr-to-stn --sort-msr-to-stn-field 3 -r GDA94)
+    add_test (NAME imp-m2s-sort-default COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n gnss gnss-network.stn gnss-network.msr --output-msr-to-stn -r GDA94)
+
+    # adjust module: m2s sort options
+    add_test (NAME adj-m2s-sort-alpha COMMAND $<TARGET_FILE:${DNAADJUST_TARGET}> gnss --output-msr-to-stn --sort-msr-to-stn-field 0)
+    add_test (NAME adj-m2s-sort-count COMMAND $<TARGET_FILE:${DNAADJUST_TARGET}> gnss --output-msr-to-stn --sort-msr-to-stn-field 1)
+    add_test (NAME adj-m2s-sort-fileorder COMMAND $<TARGET_FILE:${DNAADJUST_TARGET}> gnss --output-msr-to-stn --sort-msr-to-stn-field 2)
+    add_test (NAME adj-m2s-sort-count-dec COMMAND $<TARGET_FILE:${DNAADJUST_TARGET}> gnss --output-msr-to-stn --sort-msr-to-stn-field 3)
+    add_test (NAME adj-m2s-sort-default COMMAND $<TARGET_FILE:${DNAADJUST_TARGET}> gnss --output-msr-to-stn)
 
     # 12. help modules and version
     add_test (NAME imp-help-00 COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -h)

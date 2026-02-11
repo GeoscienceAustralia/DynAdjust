@@ -52,6 +52,22 @@ target_compile_definitions(test_matrix PRIVATE
     __BINARY_DESC__="Unit tests for matrix operations"
 )
 
+# Test 10: Measurement-to-station sort test (issue #305)
+add_executable(test_msr_to_stn_sort
+    test_msr_to_stn_sort.cpp
+    ../dynadjust/include/measurement_types/dnastation.cpp
+    ../dynadjust/include/io/dynadjust_file.cpp
+)
+
+target_link_libraries(test_msr_to_stn_sort
+    ${PLATFORM_LIBS}
+)
+
+target_compile_definitions(test_msr_to_stn_sort PRIVATE
+    __BINARY_NAME__="test_msr_to_stn_sort"
+    "__BINARY_DESC__=Unit tests for measurement-to-station sort options"
+)
+
 # Test 2: BST File Loader test
 add_executable(test_bst_file
     test_bst_file.cpp
@@ -200,6 +216,7 @@ enable_testing()
 
 # Add tests
 add_test(NAME MatrixTest COMMAND test_matrix)
+add_test(NAME MsrToStnSortTest COMMAND test_msr_to_stn_sort)
 add_test(NAME BstFileTest COMMAND test_bst_file)
 add_test(NAME AslFileTest COMMAND test_asl_file)
 add_test(NAME AmlFileLoaderTest COMMAND test_aml_file_loader)
@@ -212,12 +229,12 @@ add_test(NAME GNSSNstatSortTest COMMAND test_gnss_nstat_sort)
 # Custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS test_matrix test_bst_file_loader test_asl_file_loader test_aml_file_loader test_bms_file_loader test_network_data_loader test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort
+    DEPENDS test_matrix test_msr_to_stn_sort test_bst_file test_asl_file test_aml_file_loader test_bms_file test_network_data_loader test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort
     COMMENT "Running all tests"
 )
 
 # Custom target equivalent to 'make all'
 add_custom_target(tests_all
-    DEPENDS test_matrix test_bst_file_loader test_asl_file_loader test_aml_file_loader test_bms_file_loader test_network_data_loader test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort
+    DEPENDS test_matrix test_msr_to_stn_sort test_bst_file test_asl_file test_aml_file_loader test_bms_file test_network_data_loader test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort
     COMMENT "Building all tests"
 )
