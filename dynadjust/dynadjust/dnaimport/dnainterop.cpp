@@ -4951,8 +4951,8 @@ void dna_import::PrintMeasurementsToStations(std::string& m2s_file, MsrTally* pa
 	{
 		CompareStnFileOrder<station_t, UINT32> stnorderCompareFunc(&bstBinaryRecords);
 		std::sort(vStationList.begin(), vStationList.end(), stnorderCompareFunc);
-		break;
 	}
+	break;
 	}
 
 	std::ofstream m2s_stream;
