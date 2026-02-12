@@ -323,7 +323,7 @@ public:
 	
 	inline void SetEpsg(const std::string& e) { m_epsgCode = trimstr(e); }
 	inline void SetSource(const std::string& source) { m_sourceFile = source; }
-	inline void SetSourceFileIndex(const UINT32& idx) { m_sourceFileIndex = idx; }
+	virtual void SetSourceFileIndex(const UINT32& idx) { m_sourceFileIndex = idx; }
 
 	inline void SetInsufficient(const bool bval) { m_bInsufficient = bval; }
 

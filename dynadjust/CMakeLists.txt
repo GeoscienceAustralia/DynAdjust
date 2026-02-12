@@ -865,7 +865,15 @@ if (BUILD_TESTING)
     add_test (NAME test-urban-phased-network COMMAND $<TARGET_FILE:${DNADIFF_TARGET}> urban.phased.adj urban.phased.adj.expected --skip-headers 62 -t 0.001)
     add_test (NAME test-urban-thread-network COMMAND $<TARGET_FILE:${DNADIFF_TARGET}> urban_mt.phased-mt.adj urban_mt.phased-mt.adj.expected -t 0.01 -v)
 
-    # 8. gnss reference frame transformations
+    # 8. Source tag preservation in --export-xml (issue #317)
+    # Import XML data with <Source> tags and verify they are preserved in export
+    add_test (NAME import-source-test COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n srctest source-test-stn.xml source-test-msr.xml --export-xml -r GDA2020)
+    add_test (NAME check-source-import COMMAND bash check_source_tags.sh srctestmsr.xml CAMPAIGN_2023A CAMPAIGN_2023B EMPTY)
+    # Transform to a different frame and verify <Source> tags survive reftran
+    add_test (NAME reftran-source-test COMMAND $<TARGET_FILE:${DNAREFTRAN_TARGET}> srctest -r itrf2014 -e 01.01.2020 --export-xml)
+    add_test (NAME check-source-reftran COMMAND bash check_source_tags.sh srctest.ITRF2014.01.01.2020msr.xml CAMPAIGN_2023A CAMPAIGN_2023B EMPTY)
+
+    # 9. gnss reference frame transformations
     add_test (NAME ref-gnss01-network COMMAND $<TARGET_FILE:${DNAREFTRAN_TARGET}> gnss -r itrf2014 -e 01.01.2020)
     add_test (NAME ref-gnss02-network COMMAND $<TARGET_FILE:${DNAREFTRAN_TARGET}> gnss -r itrf1988 -e 03.12.1995)
     add_test (NAME ref-gnss03-network COMMAND $<TARGET_FILE:${DNAREFTRAN_TARGET}> gnss -r itrf1989)
@@ -1698,6 +1706,10 @@ if (BUILD_TESTING)
 
     set_tests_properties(ref-itrf-pmm-06 PROPERTIES DEPENDS ref-itrf-pmm-05)
     #set_tests_properties(ref-itrf-pmm-07 PROPERTIES DEPENDS ref-itrf-pmm-06)
+
+    set_tests_properties(check-source-import PROPERTIES DEPENDS import-source-test)
+    set_tests_properties(reftran-source-test PROPERTIES DEPENDS check-source-import)
+    set_tests_properties(check-source-reftran PROPERTIES DEPENDS reftran-source-test)
 
     # Force all tests to run serially (prevent parallel execution)
     get_property(all_tests DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY TESTS)

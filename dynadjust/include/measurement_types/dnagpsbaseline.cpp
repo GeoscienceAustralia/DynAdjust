@@ -920,6 +920,14 @@ UINT32 CDnaGpsBaselineCluster::SetMeasurementRec(const vstn_t& binaryStn, it_vms
 }
 
 
+void CDnaGpsBaselineCluster::SetSourceFileIndex(const UINT32& idx)
+{
+	CDnaMeasurement::SetSourceFileIndex(idx);
+	for (auto& bsl : m_vGpsBaselines)
+		bsl.SetSourceFileIndex(idx);
+}
+
+
 void CDnaGpsBaselineCluster::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex) const
 {
 	std::vector<CDnaGpsBaseline>::const_iterator _it_bsl;

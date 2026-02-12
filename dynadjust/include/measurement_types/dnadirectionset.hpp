@@ -95,6 +95,8 @@ public:
 	void ClearDirections();
 	//bool IsRepeatedDirection(string);
 
+	virtual void SetSourceFileIndex(const UINT32& idx) override;
+
 	virtual UINT32 CalcBinaryRecordCount() const;
 	virtual void WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex) const;
 	virtual UINT32 SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t& it_msr, it_vdbid_t& dbidmap);

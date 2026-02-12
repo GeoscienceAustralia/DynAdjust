@@ -418,6 +418,14 @@ UINT32 CDnaDirectionSet::SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t& i
 }
 	
 
+void CDnaDirectionSet::SetSourceFileIndex(const UINT32& idx)
+{
+	CDnaMeasurement::SetSourceFileIndex(idx);
+	for (auto& dir : m_vTargetDirections)
+		dir.SetSourceFileIndex(idx);
+}
+
+
 void CDnaDirectionSet::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex) const
 {
 	measurement_t measRecord;

@@ -102,8 +102,8 @@ void BmsFileLoader::LoadFileMeta(const std::string& bms_filename,
      << bms_filename << "." << std::endl;
 
   try {
-    readFileInfo(bms_file);
-    readFileMetadata(bms_file, bms_meta);
+    ReadFileInfo(bms_file);
+    ReadFileMetadata(bms_file, bms_meta);
   } catch (const std::ios_base::failure& f) {
     ss << f.what();
     throw std::runtime_error(ss.str());
@@ -143,8 +143,8 @@ std::uint64_t BmsFileLoader::LoadFile(const std::string& bms_filename,
      << bms_filename << "." << std::endl;
 
   try {
-    readFileInfo(bms_file);
-    readFileMetadata(bms_file, bms_meta);
+    ReadFileInfo(bms_file);
+    ReadFileMetadata(bms_file, bms_meta);
 
     vbinary_msr->reserve(bms_meta.binCount);
     for (msr = 0; msr < bms_meta.binCount; msr++) {
@@ -199,8 +199,8 @@ void BmsFileLoader::WriteFile(const std::string& bms_filename,
      << "." << std::endl;
 
   try {
-    writeFileInfo(bms_file);
-    writeFileMetadata(bms_file, bms_meta);
+    WriteFileInfo(bms_file);
+    WriteFileMetadata(bms_file, bms_meta);
 
     measurements::it_vmsr_t it_msr(vbinary_msr->begin());
     for (it_msr = vbinary_msr->begin(); it_msr != vbinary_msr->end(); ++it_msr) {
@@ -269,8 +269,8 @@ void BmsFileLoader::WriteFile(const std::string& bms_filename,
         "%s", sourceFileList[i].c_str());
     }
 
-    writeFileInfo(bms_file);
-    writeFileMetadata(bms_file, bms_meta);
+    WriteFileInfo(bms_file);
+    WriteFileMetadata(bms_file, bms_meta);
 
     for (it_msr = vMeasurements->begin(); it_msr != vMeasurements->end();
          ++it_msr) {

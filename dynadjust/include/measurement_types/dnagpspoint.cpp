@@ -1044,6 +1044,14 @@ UINT32 CDnaGpsPointCluster::SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t
 }
 	
 
+void CDnaGpsPointCluster::SetSourceFileIndex(const UINT32& idx)
+{
+	CDnaMeasurement::SetSourceFileIndex(idx);
+	for (auto& pnt : m_vGpsPoints)
+		pnt.SetSourceFileIndex(idx);
+}
+
+
 void CDnaGpsPointCluster::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex) const
 {
 	std::vector< CDnaGpsPoint >::const_iterator _it_pnt;
