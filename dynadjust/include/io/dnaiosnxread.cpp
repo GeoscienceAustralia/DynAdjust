@@ -899,7 +899,7 @@ void DnaIoSnx::ParseSinexStn(std::ifstream** snx_file, const char* sinexRec, vdn
 	dnaStnPtr stn_ptr;	
 	UINT32 yy, doy, file_rec(0);
 
-	fileOrder = 0;
+	//fileOrder = 0;
 	uniqueStationCount_ = 0;
 
 	while (sBuf.at(0) != '-')

@@ -1354,9 +1354,11 @@ int main(int argc, char* argv[]) {
 
         output_options.add_options()(OUTPUT_MSR_TO_STN, "Output summary of measurements connected to each station.")(
             OUTPUT_MSR_TO_STN_SORTBY, boost::program_options::value<UINT16>(&p.o._sort_msr_to_stn),
-            std::string("Sort order for measurement to stations summary.\n  " + StringFromT(orig_stn_sort_ui) +
-                        ": Original station order (default)\n  " + StringFromT(meas_stn_sort_ui) +
-                        ": Measurement count")
+            std::string("Sort order for measurement to stations summary.\n  " + 
+                StringFromT(orig_stn_sort_ui) + ": Original station order (default)\n  " + 
+                StringFromT(name_stn_sort_ui) + ": Station name\n  " + 
+                StringFromT(meas_stn_sort_ui) + ": Measurement count (ascending)\n  " +
+                StringFromT(saem_stn_sort_ui) + ": Measurement count (descending)")
                 .c_str());
 
         export_options.add_options()(EXPORT_XML_FILES,

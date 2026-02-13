@@ -507,7 +507,23 @@ private:
 };
 
 
-template<typename A, typename U>
+template <typename A, typename U>
+class CompareMeasCount2Desc {
+   public:
+    CompareMeasCount2Desc(const std::vector<A>* a): _a(a) {}
+
+    bool operator()(const U& lhs, const U& rhs) {
+        if (_a->at(lhs).get()->GetAssocMsrCount() == _a->at(rhs).get()->GetAssocMsrCount())
+            return _a->at(lhs).get()->GetAMLStnIndex() > _a->at(rhs).get()->GetAMLStnIndex();
+        return _a->at(lhs).get()->GetAssocMsrCount() > _a->at(rhs).get()->GetAssocMsrCount();
+    }
+
+   private:
+    const std::vector<A>* _a;
+};
+
+
+template <typename A, typename U>
 class CompareValidity
 {
 public:
@@ -623,6 +639,21 @@ private:
 	std::vector<S>*	_s;
 };
 
+
+// S = station_t, U = UINT32
+template <typename S, typename U>
+class CompareStnNameOrder
+{
+public:
+    CompareStnNameOrder(std::vector<S>* s)
+		: _s(s) {}
+    bool operator()(const U& lhs, const U& rhs) {
+		//return std::string(_s->at(lhs).stationName) < std::string(_s->at(rhs).stationName);
+		return _s->at(lhs).nameOrder < _s->at(rhs).nameOrder; 
+	}
+private:
+    std::vector<S>* _s;
+};
 
 // S = CDnaStation
 template<typename S, typename T>

@@ -59,7 +59,9 @@ typedef enum ADJ_MSR_SORT_UI
 typedef enum MSR_TO_STN_SORT_UI
 {
 	orig_stn_sort_ui = 0,		// original station order
-	meas_stn_sort_ui = 1		// measurement count
+    name_stn_sort_ui = 1,		// station name
+	meas_stn_sort_ui = 2,		// measurement count (ascending)
+    saem_stn_sort_ui = 3		// measurement count (descending)
 } _MSR_TO_STN_SORT_UI_;
 
 
