@@ -4927,27 +4927,26 @@ void dna_import::PrintMeasurementsToStations(std::string& m2s_file, MsrTally* pa
 	// Print measurement to station summary, sort stations as required
 	switch (projectSettings_.o._sort_msr_to_stn)
 	{
+	case name_stn_sort_ui:
+	{
+		CompareStnNameOrder<station_t, UINT32> stnnameCompareFunc(&bstBinaryRecords);
+		std::sort(vStationList.begin(), vStationList.end(), stnnameCompareFunc);
+		break;
+	}
 	case meas_stn_sort_ui:
-	{	// sort summary according to measurement to station count (ascending)
-        // Note: this is the default sort order
+	{
 		CompareMeasCount2<ASLPtr, UINT32> msrcountCompareFunc(vAssocStnList);
 		std::sort(vStationList.begin(), vStationList.end(), msrcountCompareFunc);
 		break;
 	}
-    case saem_stn_sort_ui: {
-		// sort summary according to measurement to station count (descending)
-        CompareMeasCount2Desc<ASLPtr, UINT32> msrcountCompareFunc(vAssocStnList);
-        std::sort(vStationList.begin(), vStationList.end(), msrcountCompareFunc);
-        break;
-    }
-    case name_stn_sort_ui:
+	case saem_stn_sort_ui:
 	{
-		// sort summary according to station name
-        CompareStnNameOrder<station_t, UINT32> stnnameCompareFunc(&bstBinaryRecords);
-		std::sort(vStationList.begin(), vStationList.end(), stnnameCompareFunc);
+		CompareMeasCount2Desc<ASLPtr, UINT32> msrcountCompareFunc(vAssocStnList);
+		std::sort(vStationList.begin(), vStationList.end(), msrcountCompareFunc);
 		break;
 	}
 	case orig_stn_sort_ui:
+	default:
 	{
 		CompareStnFileOrder<station_t, UINT32> stnorderCompareFunc(&bstBinaryRecords);
 		std::sort(vStationList.begin(), vStationList.end(), stnorderCompareFunc);

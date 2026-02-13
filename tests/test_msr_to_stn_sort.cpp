@@ -34,10 +34,10 @@ TEST_CASE("MSR_TO_STN_SORT_UI enum values match issue #305 specification", "[m2s
     //   1 = measurement count (increasing)
     //   2 = original station order
     //   3 = measurement count (decreasing)
-    REQUIRE(alpha_stn_sort_ui == 0);
-    REQUIRE(meas_stn_sort_ui == 1);
-    REQUIRE(orig_stn_sort_ui == 2);
-    REQUIRE(meas_dec_stn_sort_ui == 3);
+    REQUIRE(orig_stn_sort_ui == 0);
+    REQUIRE(name_stn_sort_ui == 1);
+    REQUIRE(meas_stn_sort_ui == 2);
+    REQUIRE(saem_stn_sort_ui == 3);
 }
 
 TEST_CASE("CompareStnNameOrder sorts stations alphabetically", "[m2s][sort][alpha]") {
@@ -142,11 +142,11 @@ TEST_CASE("Decreasing measurement count is reverse of increasing", "[m2s][sort][
         REQUIRE(increasing[i] == decreasing[increasing.size() - 1 - i]);
 }
 
-TEST_CASE("Default sort (alpha_stn_sort_ui=0) is the default value", "[m2s][default]") {
-    // alpha_stn_sort_ui == 0 means it is the default when _sort_msr_to_stn is
-    // initialised to 0 (the zero-initialised value)
+TEST_CASE("Default sort (orig_stn_sort_ui=0) is the default value", "[m2s][default]") {
+    // orig_stn_sort_ui == 0 means it is the default when _sort_msr_to_stn is
+    // zero-initialised, preserving backwards compatibility
     UINT16 default_sort = 0;
-    REQUIRE(default_sort == alpha_stn_sort_ui);
+    REQUIRE(default_sort == orig_stn_sort_ui);
 }
 
 TEST_CASE("CompareStnNameOrder handles duplicate station names", "[m2s][sort][duplicates]") {
@@ -212,10 +212,10 @@ TEST_CASE("Switch statement covers all enum values", "[m2s][enum][coverage]") {
     for (int i = 0; i <= 3; ++i) {
         bool handled = false;
         switch (i) {
-        case alpha_stn_sort_ui:  handled = true; break;
+        case orig_stn_sort_ui: handled = true; break;
+        case name_stn_sort_ui: handled = true; break;
         case meas_stn_sort_ui:   handled = true; break;
-        case orig_stn_sort_ui:   handled = true; break;
-        case meas_dec_stn_sort_ui: handled = true; break;
+        case saem_stn_sort_ui: handled = true; break;
         }
         REQUIRE(handled);
     }

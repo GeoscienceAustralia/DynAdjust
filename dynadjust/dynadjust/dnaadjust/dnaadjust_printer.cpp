@@ -743,13 +743,26 @@ void DynAdjustPrinter::PrintMeasurementsToStation() {
     // Print measurement to station summary, sort stations as required
     switch (adjust_.projectSettings_.o._sort_msr_to_stn)
     {
+    case name_stn_sort_ui:
+    {
+        CompareStnNameOrder<station_t, UINT32> stnnameCompareFunc(&adjust_.bstBinaryRecords_);
+        std::sort(vStationList.begin(), vStationList.end(), stnnameCompareFunc);
+    }
+    break;
     case meas_stn_sort_ui:
     {
         CompareMeasCount<CAStationList, UINT32> msrcountCompareFunc(&adjust_.vAssocStnList_);
         std::sort(vStationList.begin(), vStationList.end(), msrcountCompareFunc);
     }
     break;
+    case saem_stn_sort_ui:
+    {
+        CompareMeasCountDesc<CAStationList, UINT32> msrcountCompareFunc(&adjust_.vAssocStnList_);
+        std::sort(vStationList.begin(), vStationList.end(), msrcountCompareFunc);
+    }
+    break;
     case orig_stn_sort_ui:
+    default:
     {
         CompareStnFileOrder<station_t, UINT32> stnorderCompareFunc(&adjust_.bstBinaryRecords_);
         std::sort(vStationList.begin(), vStationList.end(), stnorderCompareFunc);

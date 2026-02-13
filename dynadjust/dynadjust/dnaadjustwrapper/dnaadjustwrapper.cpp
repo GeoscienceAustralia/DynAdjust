@@ -874,10 +874,10 @@ int main(int argc, char* argv[])
 				"Output summary of measurements connected to each station.")
 			(OUTPUT_MSR_TO_STN_SORTBY, boost::program_options::value<UINT16>(&p.o._sort_msr_to_stn),
 				std::string("Sort order for measurement to stations summary.\n  " +
-					StringFromT(alpha_stn_sort_ui) + ": Alphanumeric station name order (default)\n  " +
+					StringFromT(orig_stn_sort_ui) + ": Original station order (default)\n  " +
+					StringFromT(name_stn_sort_ui) + ": Alphanumeric station name order\n  " +
 					StringFromT(meas_stn_sort_ui) + ": Measurement count (increasing)\n  " +
-					StringFromT(orig_stn_sort_ui) + ": Original station order\n  " +
-					StringFromT(meas_dec_stn_sort_ui) + ": Measurement count (decreasing)").c_str())
+					StringFromT(saem_stn_sort_ui) + ": Measurement count (decreasing)").c_str())
 			(OUTPUT_ADJ_STN_ITER,
 				"Output adjusted station coordinates on each iteration.")
 			(OUTPUT_ADJ_STAT_ITER,
