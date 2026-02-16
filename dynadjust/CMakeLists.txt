@@ -471,6 +471,8 @@ else()
                     ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include/openblas
                     C:/vcpkg/installed/x64-windows/include
                     C:/vcpkg/installed/x64-windows/include/openblas
+                    C:/data/vcpkg/installed/x64-windows/include
+                    C:/data/vcpkg/installed/x64-windows/include/openblas
                 )
             else()
                 list(APPEND BLAS_INCLUDE_SEARCH_PATHS
