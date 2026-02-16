@@ -14,10 +14,10 @@ build_gcc/
 build/
 bin/
 doc/
-*/vcpkg/
-*/vcpkg_installed/
-*/Release/
-*/Debug/
+vcpkg/
+vcpkg_installed/
+Release/
+Debug/
 
 *.sln
 *.vcxproj
