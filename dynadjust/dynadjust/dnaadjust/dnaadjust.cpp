@@ -568,6 +568,7 @@ void dna_adjust::UpdateAdjustment(bool iterate)
 		ss << "UpdateAdjustment(): Process terminated while allocating memory for the " << std::endl << "  adjustment matrices. " <<
 			"Details: " << std::endl << "  " << e.what() << std::endl;
 		adj_file << "- Error:" << std::endl << "  " << ss.str();
+		adj_file.flush();
 		SignalExceptionAdjustment(ss.str(), block);
 	}
 	catch (const std::runtime_error& e) {
@@ -575,8 +576,24 @@ void dna_adjust::UpdateAdjustment(bool iterate)
 		ss << "UpdateAdjustment(): Process terminated while updating the " << std::endl << "  adjustment matrices. " <<
 			"Details: " << std::endl << "  " << e.what() << std::endl;
 		adj_file << "- Error:" << std::endl << "  " << ss.str();
+		adj_file.flush();
 		SignalExceptionAdjustment(ss.str(), block);
 	}		
+	catch (const std::exception& e) {
+		std::stringstream ss;
+		ss << "UpdateAdjustment(): Unexpected exception at block " << block + 1 << "." << std::endl
+			<< "  Details: " << e.what() << std::endl;
+		adj_file << "- Error:" << std::endl << "  " << ss.str();
+		adj_file.flush();
+		SignalExceptionAdjustment(ss.str(), block);
+	}
+	catch (...) {
+		std::stringstream ss;
+		ss << "UpdateAdjustment(): Unknown exception at block " << block + 1 << "." << std::endl;
+		adj_file << "- Error:" << std::endl << "  " << ss.str();
+		adj_file.flush();
+		SignalExceptionAdjustment(ss.str(), block);
+	}
 	
 	isPreparing_ = false;
 }
@@ -2446,7 +2463,10 @@ void dna_adjust::AdjustSimultaneous()
 				false, !v_msrTally_.at(0).ContainsNonGPS(), !v_msrTally_.at(0).ContainsNonGPS(), true, false);
 
 		// Update normals and measured-computed matrices for the next iteration.
-		UpdateAdjustment(iterate);
+		// On the last iteration, pass false to preserve the inverted normals
+		// needed for computing statistics (precision of adjusted measurements).
+		bool lastIteration = (i + 1 >= projectSettings_.a.max_iterations);
+		UpdateAdjustment(!lastIteration);
 	}
 
 	ValidateandFinaliseAdjustment(tot_time);
@@ -5268,7 +5288,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_G(pit_vmsr_t _it_msr, UINT32& de
 		AtVinv->replace(stn1, design_row_begin, var_cart * -1);
 		AtVinv->replace(stn2, design_row_begin, var_cart);
 
-		if (!projectSettings_.a.stage)
+		if (buildnewMatrices && !projectSettings_.a.stage)
 			// Add weighted measurement contributions to normal matrix
 			UpdateNormals_G(stn1, stn2, design_row_begin, normals, AtVinv);
 	}
@@ -6044,7 +6064,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_X(pit_vmsr_t _it_msr, UINT32& de
 			_it_msr_temp += 3;
 	}
 
-	if (projectSettings_.a.stage)
+	if (projectSettings_.a.stage || !buildnewMatrices)
 		return;
 	
 	_it_msr_temp = _it_msr_first;
@@ -6400,7 +6420,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_Y(pit_vmsr_t _it_msr, UINT32& de
 		design_row_begin += 3;
 	}
 
-	if (projectSettings_.a.stage)
+	if (projectSettings_.a.stage || !buildnewMatrices)
 		return;
 	
 	_it_msr_temp = _it_msr_first;

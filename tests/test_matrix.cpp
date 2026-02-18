@@ -21,6 +21,9 @@
 
 #define TESTING_MAIN
 
+#include <cmath>
+#include <stdexcept>
+
 #include "math/dnamatrix_contiguous.hpp"
 #include "testing.hpp"
 
@@ -113,7 +116,8 @@ TEST_CASE("Rectanglar matrix multiplication", "[matrix_2d]") {
     mat2.put(2, 0, 11.0);
     mat2.put(2, 1, 12.0);
 
-    matrix_2d result = mat1.multiply("N", mat2, "N");
+    matrix_2d result(2, 2);
+    result.multiply(mat1, "N", mat2, "N");
 
     REQUIRE(result.rows() == 2);
     REQUIRE(result.columns() == 2);
@@ -380,4 +384,206 @@ TEST_CASE("Compute maximum value", "[matrix_2d]") {
     }
 
     REQUIRE(mat.compute_maximum_value() == 8.0);
+}
+
+// ============================================================================
+// Bug fix: operator= used || instead of && when checking if rhs fits
+// ============================================================================
+
+TEST_CASE("Assignment operator with smaller rhs reuses buffer", "[matrix_2d]") {
+    matrix_2d big(4, 4);
+    for (UINT32 i = 0; i < 4; ++i)
+        for (UINT32 j = 0; j < 4; ++j)
+            big.put(i, j, static_cast<double>(i * 4 + j));
+
+    matrix_2d small(2, 2);
+    small.put(0, 0, 10.0);
+    small.put(0, 1, 20.0);
+    small.put(1, 0, 30.0);
+    small.put(1, 1, 40.0);
+
+    big = small;
+
+    REQUIRE(big.rows() == 2);
+    REQUIRE(big.columns() == 2);
+    REQUIRE(big.get(0, 0) == 10.0);
+    REQUIRE(big.get(0, 1) == 20.0);
+    REQUIRE(big.get(1, 0) == 30.0);
+    REQUIRE(big.get(1, 1) == 40.0);
+    // mem dimensions should be preserved (buffer reused)
+    REQUIRE(big.memRows() == 4);
+    REQUIRE(big.memColumns() == 4);
+}
+
+TEST_CASE("Assignment operator with larger rhs reallocates", "[matrix_2d]") {
+    matrix_2d small(2, 2);
+    small.put(0, 0, 1.0);
+    small.put(0, 1, 2.0);
+    small.put(1, 0, 3.0);
+    small.put(1, 1, 4.0);
+
+    matrix_2d big(4, 4);
+    for (UINT32 i = 0; i < 4; ++i)
+        for (UINT32 j = 0; j < 4; ++j)
+            big.put(i, j, static_cast<double>(i * 4 + j));
+
+    small = big;
+
+    REQUIRE(small.rows() == 4);
+    REQUIRE(small.columns() == 4);
+    for (UINT32 i = 0; i < 4; ++i)
+        for (UINT32 j = 0; j < 4; ++j)
+            REQUIRE(small.get(i, j) == static_cast<double>(i * 4 + j));
+}
+
+TEST_CASE("Assignment operator with mismatched dimensions reallocates", "[matrix_2d]") {
+    // The old bug: 2x4 assigned from 3x3 — old code used || so the
+    // 2 >= 3 check (false) || 4 >= 3 check (true) would take the
+    // reuse path even though rows didn't fit. With && it correctly
+    // reallocates.
+    matrix_2d lhs(2, 4);
+    lhs.put(0, 0, 99.0);
+
+    matrix_2d rhs(3, 3);
+    for (UINT32 i = 0; i < 3; ++i)
+        for (UINT32 j = 0; j < 3; ++j)
+            rhs.put(i, j, static_cast<double>(i * 3 + j + 1));
+
+    lhs = rhs;
+
+    REQUIRE(lhs.rows() == 3);
+    REQUIRE(lhs.columns() == 3);
+    for (UINT32 i = 0; i < 3; ++i)
+        for (UINT32 j = 0; j < 3; ++j)
+            REQUIRE(lhs.get(i, j) == static_cast<double>(i * 3 + j + 1));
+}
+
+// ============================================================================
+// Bug fix: copybuffer fast-path now checks oldmat dimensions too
+// ============================================================================
+
+TEST_CASE("copybuffer with different mem dimensions uses per-column copy", "[matrix_2d]") {
+    // Create a 4x4 matrix, shrink to 2x2 (mem stays 4x4), then assign
+    // from a native 2x2 (mem is 2x2). The copybuffer fast-path must not
+    // memcpy the full 4x4 buffer from a 2x2 source.
+    matrix_2d big(4, 4);
+    for (UINT32 i = 0; i < 4; ++i)
+        for (UINT32 j = 0; j < 4; ++j)
+            big.put(i, j, 1.0);
+
+    big.shrink(2, 2);  // now rows=2, cols=2, but mem_rows=4, mem_cols=4
+
+    matrix_2d small(2, 2);
+    small.put(0, 0, 10.0);
+    small.put(0, 1, 20.0);
+    small.put(1, 0, 30.0);
+    small.put(1, 1, 40.0);
+
+    big = small;
+
+    REQUIRE(big.rows() == 2);
+    REQUIRE(big.columns() == 2);
+    REQUIRE(big.get(0, 0) == 10.0);
+    REQUIRE(big.get(0, 1) == 20.0);
+    REQUIRE(big.get(1, 0) == 30.0);
+    REQUIRE(big.get(1, 1) == 40.0);
+}
+
+// ============================================================================
+// Bug fix: LAPACK LDA must be _mem_rows, not _rows
+// ============================================================================
+
+TEST_CASE("Cholesky inverse with mem_rows != rows", "[matrix_2d]") {
+    // Allocate a 4x4 matrix, shrink logical size to 3x3, then do
+    // cholesky_inverse. This exercises the LDA fix (lda=4, n=3).
+    matrix_2d mat(4, 4);
+
+    // Fill the 3x3 leading block with a symmetric positive definite matrix
+    mat.put(0, 0, 4.0);
+    mat.put(0, 1, -1.0);
+    mat.put(0, 2, -1.0);
+    mat.put(1, 0, -1.0);
+    mat.put(1, 1, 3.0);
+    mat.put(1, 2, -1.0);
+    mat.put(2, 0, -1.0);
+    mat.put(2, 1, -1.0);
+    mat.put(2, 2, 2.0);
+
+    mat.shrink(1, 1);  // logical 3x3, mem 4x4
+
+    REQUIRE(mat.rows() == 3);
+    REQUIRE(mat.columns() == 3);
+    REQUIRE(mat.memRows() == 4);
+    REQUIRE(mat.memColumns() == 4);
+
+    matrix_2d inverse = mat.cholesky_inverse();
+
+    REQUIRE(inverse.rows() == 3);
+    REQUIRE(inverse.columns() == 3);
+    REQUIRE(abs(inverse.get(0, 0) - 0.384615) < 0.0001);
+    REQUIRE(abs(inverse.get(0, 1) - 0.230769) < 0.0001);
+    REQUIRE(abs(inverse.get(0, 2) - 0.307692) < 0.0001);
+    REQUIRE(abs(inverse.get(1, 0) - 0.230769) < 0.0001);
+    REQUIRE(abs(inverse.get(1, 1) - 0.538462) < 0.0001);
+    REQUIRE(abs(inverse.get(1, 2) - 0.384615) < 0.0001);
+    REQUIRE(abs(inverse.get(2, 0) - 0.307692) < 0.0001);
+    REQUIRE(abs(inverse.get(2, 1) - 0.384615) < 0.0001);
+    REQUIRE(abs(inverse.get(2, 2) - 0.846154) < 0.0001);
+}
+
+TEST_CASE("Cholesky throws MatrixInversionFailure for indefinite matrix", "[matrix_2d]") {
+    // Symmetric indefinite matrix — Cholesky must throw MatrixInversionFailure.
+    // A = [[2, 1], [1, -1]]  — eigenvalues ~2.41 and ~-1.41
+    matrix_2d mat(2, 2);
+    mat.put(0, 0, 2.0);
+    mat.put(0, 1, 1.0);
+    mat.put(1, 0, 1.0);
+    mat.put(1, 1, -1.0);
+
+    bool caught = false;
+    try {
+        mat.cholesky_inverse();
+    } catch (const MatrixInversionFailure&) {
+        caught = true;
+    }
+    REQUIRE(caught);
+}
+
+TEST_CASE("Cholesky throws MatrixInversionFailure on singular matrix", "[matrix_2d]") {
+    // Singular positive semi-definite matrix — dpotrf detects it as not positive definite
+    matrix_2d mat(2, 2);
+    mat.put(0, 0, 1.0);
+    mat.put(0, 1, 2.0);
+    mat.put(1, 0, 2.0);
+    mat.put(1, 1, 4.0);
+
+    bool caught = false;
+    try {
+        mat.cholesky_inverse();
+    } catch (const MatrixInversionFailure&) {
+        caught = true;
+    }
+    REQUIRE(caught);
+}
+
+TEST_CASE("Cholesky inverse with LOWER_IS_CLEARED", "[matrix_2d]") {
+    // Upper triangle filled, lower cleared
+    matrix_2d mat(3, 3);
+    mat.put(0, 0, 4.0);
+    mat.put(0, 1, -1.0);
+    mat.put(0, 2, -1.0);
+    mat.put(1, 1, 3.0);
+    mat.put(1, 2, -1.0);
+    mat.put(2, 2, 2.0);
+    // lower triangle stays zero
+
+    matrix_2d inverse = mat.cholesky_inverse(true);
+
+    REQUIRE(abs(inverse.get(0, 0) - 0.384615) < 0.0001);
+    REQUIRE(abs(inverse.get(1, 1) - 0.538462) < 0.0001);
+    REQUIRE(abs(inverse.get(2, 2) - 0.846154) < 0.0001);
+    // Result should be symmetric
+    REQUIRE(abs(inverse.get(0, 1) - inverse.get(1, 0)) < 1e-10);
+    REQUIRE(abs(inverse.get(0, 2) - inverse.get(2, 0)) < 1e-10);
+    REQUIRE(abs(inverse.get(1, 2) - inverse.get(2, 1)) < 1e-10);
 }
