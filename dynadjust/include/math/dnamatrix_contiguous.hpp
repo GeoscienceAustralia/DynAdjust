@@ -165,12 +165,10 @@ static_assert(sizeof(lapack_int) == 4, "LP64 interface requires 32-bit integers"
 extern "C" {
 void LAPACK_FUNC(dpotrf)(const char* uplo, const lapack_int* n, double* a, const lapack_int* lda, lapack_int* info);
 void LAPACK_FUNC(dpotri)(const char* uplo, const lapack_int* n, double* a, const lapack_int* lda, lapack_int* info);
-void LAPACK_FUNC(dsyevr)(const char* jobz, const char* range, const char* uplo, const lapack_int* n, 
-                        double* a, const lapack_int* lda, const double* vl, const double* vu,
-                        const lapack_int* il, const lapack_int* iu, const double* abstol,
-                        lapack_int* m, double* w, double* z, const lapack_int* ldz,
-                        lapack_int* isuppz, double* work, const lapack_int* lwork,
-                        lapack_int* iwork, const lapack_int* liwork, lapack_int* info);
+void LAPACK_FUNC(dsytrf)(const char* uplo, const lapack_int* n, double* a, const lapack_int* lda,
+                         lapack_int* ipiv, double* work, const lapack_int* lwork, lapack_int* info);
+void LAPACK_FUNC(dsytri)(const char* uplo, const lapack_int* n, double* a, const lapack_int* lda,
+                         const lapack_int* ipiv, double* work, lapack_int* info);
 void BLAS_FUNC(dgemm)(const enum CBLAS_ORDER ORDER, const enum CBLAS_TRANSPOSE TRANSA,
                       const enum CBLAS_TRANSPOSE TRANSB, const lapack_int M, const lapack_int N, const lapack_int K,
                       const double ALPHA, const double* A, const lapack_int LDA, const double* B, const lapack_int LDB,
@@ -184,11 +182,10 @@ using namespace dynadjust::exception;
 namespace dynadjust {
 namespace math {
 
-// Debug flags
-#ifndef DEBUG_MATRIX_2D
-#define DEBUG_MATRIX_2D 0
-#endif
-
+class MatrixInversionFailure : public std::runtime_error {
+public:
+    using std::runtime_error::runtime_error;
+};
 
 class matrix_2d;
 typedef std::vector<matrix_2d> v_mat_2d, *pv_mat_2d;
@@ -341,7 +338,7 @@ class matrix_2d : public new_handler_support<matrix_2d> {
         return true;
     }
 
-    matrix_2d operator=(const matrix_2d& rhs);
+    matrix_2d& operator=(const matrix_2d& rhs);
     matrix_2d operator*(const double& rhs) const;
     //
     // Initialisation / manipulation

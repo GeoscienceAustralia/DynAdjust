@@ -20,16 +20,15 @@
 //============================================================================
 
 #include <cmath>
+#include <vector>
 #include <include/ide/trace.hpp>
 #include <include/math/dnamatrix_contiguous.hpp>
 #include <iomanip>
-#include <limits>
 #include <sstream>
 
 namespace dynadjust {
 namespace math {
 
-#define DEBUG_MATRIX_2D 0
 
 std::ostream& operator<<(std::ostream& os, const matrix_2d& rhs) {
     if (os.iword(0) == binary) {
@@ -611,7 +610,8 @@ void matrix_2d::replace(const UINT32& rowstart, const UINT32& columnstart, const
 }
 
 void matrix_2d::copybuffer(const UINT32& rows, const UINT32& columns, const matrix_2d& oldmat) {
-    if (rows == _mem_rows && columns == _mem_cols) {
+    if (rows == _mem_rows && columns == _mem_cols &&
+        oldmat.memRows() == _mem_rows && oldmat.memColumns() == _mem_cols) {
         memcpy(_buffer, oldmat.getbuffer(), buffersize());
         return;
     }
@@ -707,468 +707,26 @@ matrix_2d matrix_2d::sweepinverse() {
 
 matrix_2d matrix_2d::cholesky_inverse(bool LOWER_IS_CLEARED /*=false*/) {
     if (_rows < 1) return *this;
-
     if (_rows != _cols) throw std::runtime_error("cholesky_inverse(): Matrix is not square.");
 
-#ifdef DEBUG_MATRIX_2D
-    // Validate that the triangular structure matches the LOWER_IS_CLEARED parameter
-    const double tolerance = 1e-6;
-    const int max_violations_to_check = 10;
-
-    // First check if the matrix is symmetric
-    bool is_symmetric = true;
-    int asymmetry_count = 0;
-    double max_asymmetry = 0.0;
-    UINT32 max_asym_row = 0, max_asym_col = 0;
-
-    for (UINT32 row = 0; row < _rows && is_symmetric; ++row) {
-        for (UINT32 col = row + 1; col < _cols; ++col) {
-            double diff = std::abs(get(row, col) - get(col, row));
-            if (diff > tolerance) {
-                asymmetry_count++;
-                if (diff > max_asymmetry) {
-                    max_asymmetry = diff;
-                    max_asym_row = row;
-                    max_asym_col = col;
-                }
-                if (asymmetry_count >= max_violations_to_check) {
-                    is_symmetric = false;
-                    break;
-                }
-            }
-        }
-    }
-
-    if (!is_symmetric) {
-        // Matrix is not symmetric, so validate the triangular structure
-        int violations_found = 0;
-        std::stringstream validation_errors;
-
-        if (LOWER_IS_CLEARED) {
-            // Lower triangle should be cleared (all zeros), data is in upper triangle
-            for (UINT32 row = 1; row < _rows && violations_found < max_violations_to_check; ++row) {
-                for (UINT32 col = 0; col < row && violations_found < max_violations_to_check; ++col) {
-                    double val = get(row, col);
-                    if (std::abs(val) > tolerance) {
-                        if (violations_found == 0) {
-                            validation_errors << "cholesky_inverse(): Triangle validation failed!\n";
-                            validation_errors << "  Expected: Lower triangle cleared (LOWER_IS_CLEARED = true)\n";
-                            validation_errors << "  Found non-zero elements in lower triangle:\n";
-                        }
-                        validation_errors << "    [" << row << "," << col << "] = " << val << "\n";
-                        violations_found++;
-                    }
-                }
-            }
-        } else {
-            // Upper triangle should be cleared (all zeros), data is in lower triangle
-            for (UINT32 row = 0; row < _rows && violations_found < max_violations_to_check; ++row) {
-                for (UINT32 col = row + 1; col < _cols && violations_found < max_violations_to_check; ++col) {
-                    double val = get(row, col);
-                    if (std::abs(val) > tolerance) {
-                        if (violations_found == 0) {
-                            validation_errors << "cholesky_inverse(): Triangle validation failed!\n";
-                            validation_errors << "  Expected: Upper triangle cleared (LOWER_IS_CLEARED = false)\n";
-                            validation_errors << "  Found non-zero elements in upper triangle:\n";
-                        }
-                        validation_errors << "    [" << row << "," << col << "] = " << val << "\n";
-                        violations_found++;
-                    }
-                }
-            }
-        }
-
-        if (violations_found > 0) {
-            if (violations_found >= max_violations_to_check) {
-                validation_errors << "  ... (more violations exist, stopped checking after " << max_violations_to_check
-                                  << ")\n";
-            }
-
-            // Add information about symmetry check
-            validation_errors << "\nSymmetry check:\n";
-            if (asymmetry_count > 0) {
-                validation_errors << "  Matrix appears to be nearly symmetric with " << asymmetry_count
-                                  << " asymmetric elements\n";
-                validation_errors << "  Max asymmetry: " << max_asymmetry << " at [" << max_asym_row << ","
-                                  << max_asym_col << "]\n";
-                validation_errors << "[" << max_asym_row << "," << max_asym_col
-                                  << "] = " << get(max_asym_row, max_asym_col) << ", [" << max_asym_col << ","
-                                  << max_asym_row << "] = " << get(max_asym_col, max_asym_row) << "\n";
-                validation_errors << "  This might be a symmetric matrix with numerical errors\n";
-            }
-
-            validation_errors << "\nThis error typically occurs when:\n";
-            validation_errors << "  - The matrix data is stored in the wrong triangle\n";
-            validation_errors << "  - The LOWER_IS_CLEARED parameter is incorrect\n";
-            validation_errors << "  - The matrix hasn't been properly initialised\n";
-            validation_errors << "  - A symmetric matrix has numerical precision issues\n";
-            throw std::runtime_error(validation_errors.str());
-        }
-    }
-#endif
-
     char uplo(LOWER_TRIANGLE);
-
-    // Which triangle is filled - upper or lower?
     if (LOWER_IS_CLEARED) uplo = UPPER_TRIANGLE;
 
     lapack_int info, n = _rows;
-
-#ifdef DEBUG_MATRIX_2D
-    double max_diag = 0.0;
-    double min_diag = std::numeric_limits<double>::max();
-    double scale_factor = 1.0;
-    bool apply_scaling = false;
-    const double condition_threshold = 1e12;  // Threshold for poor conditioning
-  
-    // Create a backup of the matrix for diagnostics if dpotrf fails
-    // dpotrf modifies the matrix in-place, so we need the original for accurate diagnostics
-    std::size_t buffer_size = buffersize();
-    double* backup_buffer = new double[buffer_size / sizeof(double)];
-    std::memcpy(backup_buffer, _buffer, buffer_size);
-
-    // Compute scaling factor based on diagonal elements to improve conditioning
-    for (UINT32 i = 0; i < _rows; ++i) {
-        double diag_val = std::abs(get(i, i));
-        if (diag_val > max_diag) max_diag = diag_val;
-        if (diag_val > 0 && diag_val < min_diag) min_diag = diag_val;
-    }
-    
-    // Apply scaling if the condition number estimate is poor
-    if (max_diag > 0 && min_diag > 0) {
-        double condition_estimate = max_diag / min_diag;
-        if (condition_estimate > condition_threshold) {
-            // Use geometric mean of max and min diagonal for scaling
-            scale_factor = std::sqrt(max_diag * min_diag);
-            apply_scaling = true;
-            
-            // Scale the matrix: A_scaled = A / scale_factor
-            for (UINT32 i = 0; i < _rows; ++i) {
-                for (UINT32 j = 0; j < _cols; ++j) {
-                    *getelementref(i, j) /= scale_factor;
-                }
-            }
-        }
-    }
-#endif
+    lapack_int lda = _mem_rows;
 
     // Perform Cholesky factorisation
-    LAPACK_FUNC(dpotrf)(&uplo, &n, _buffer, &n, &info);
+    LAPACK_FUNC(dpotrf)(&uplo, &n, _buffer, &lda, &info);
 
-    if (info != 0) {
-        std::stringstream error_msg;
-        error_msg << "cholesky_inverse(): Cholesky factorisation failed.\n";
-        error_msg << "\nSystem Information:\n";
-        error_msg << "  sizeof(lapack_int): " << sizeof(lapack_int) << " bytes\n";
-#ifdef USE_MKL
-        error_msg << "  sizeof(MKL_INT): " << sizeof(MKL_INT) << " bytes\n";
-        error_msg << "  BLAS/LAPACK: Intel MKL\n";
-
-        // MKL version and configuration info
-        MKLVersion v;
-        mkl_get_version(&v);
-        error_msg << "  MKL Version: " << v.MajorVersion << "." << v.MinorVersion << " Update " << v.UpdateVersion
-                  << "\n";
-        error_msg << "  MKL Build: " << v.Build << "\n";
-#elif defined(__APPLE__)
-        error_msg << "  BLAS/LAPACK: Apple Accelerate\n";
-#else
-        error_msg << "  BLAS/LAPACK: OpenBLAS or system default\n";
-#endif
-#ifdef USE_ILP64
-        error_msg << "  Interface: ILP64 (64-bit integers)\n";
-#else
-        error_msg << "  Interface: LP64 (32-bit integers)\n";
-#endif
-        error_msg << "  Matrix dimensions: " << _rows << " x " << _cols << "\n";
-        error_msg << "  Triangle processed: uplo='" << uplo
-                  << "' (LOWER_IS_CLEARED=" << (LOWER_IS_CLEARED ? "true" : "false") << ")\n";
-        
-#ifdef DEBUG_MATRIX_2D
-        error_msg << "  Diagonal range: [" << min_diag << ", " << max_diag << "]\n";
-        error_msg << "  Condition estimate: " << (max_diag/min_diag) << "\n";
-
-        if (apply_scaling) {
-            error_msg << "\nScaling Information:\n";
-            error_msg << "  Matrix was scaled to improve conditioning\n";
-            error_msg << "   Scale factor applied: " << scale_factor << "\n";
-        }
-#endif  
-
-        error_msg << "\nError Details:\n";
-        error_msg << "  dpotrf info = " << info << "\n";
-        if (info < 0) {
-            error_msg << "  Meaning: Argument " << -info << " had an illegal value\n";
-        } else {
-            error_msg << "  Meaning: The leading minor of order " << info << " is not positive definite\n";
-        }
-
-#ifdef DEBUG_MATRIX_2D
-        error_msg << "\nMatrix Diagnostics (Original Matrix):\n";
-
-        // If the matrix is triangular (not symmetric), fill in the empty triangle
-        // to make it symmetric for proper Gershgorin analysis
-        if (uplo == UPPER_TRIANGLE) {
-            // Data is in upper triangle, copy to lower
-            for (UINT32 i = 1; i < _rows; ++i) {
-                for (UINT32 j = 0; j < i; ++j) {
-                    backup_buffer[DNAMATRIX_INDEX(_mem_rows, _mem_cols, i, j)] = 
-                        backup_buffer[DNAMATRIX_INDEX(_mem_rows, _mem_cols, j, i)];
-                }
-            }
-        } else {
-            // Data is in lower triangle, copy to upper
-            for (UINT32 i = 0; i < _rows; ++i) {
-                for (UINT32 j = i + 1; j < _cols; ++j) {
-                    backup_buffer[DNAMATRIX_INDEX(_mem_rows, _mem_cols, i, j)] = 
-                        backup_buffer[DNAMATRIX_INDEX(_mem_rows, _mem_cols, j, i)];
-                }
-            }
-        }
-
-        error_msg << "  Note: Matrix was triangular (uplo='" << uplo << "'), filled to symmetric for analysis\n";
-
-        // Helper to access backup matrix elements
-        auto get_backup = [&](UINT32 row, UINT32 col) -> double {
-            return backup_buffer[DNAMATRIX_INDEX(_mem_rows, _mem_cols, row, col)];
-        };
-
-        // Check diagonal elements
-        double trace = 0.0;
-        double min_diag = std::numeric_limits<double>::max();
-        double max_diag = std::numeric_limits<double>::lowest();
-        int negative_diag_count = 0;
-        int nan_count = 0;
-        int inf_count = 0;
-
-        for (UINT32 i = 0; i < _rows; ++i) {
-            double diag_val = get_backup(i, i);
-            trace += diag_val;
-
-            if (std::isnan(diag_val)) nan_count++;
-            if (std::isinf(diag_val)) inf_count++;
-            if (diag_val < 0) negative_diag_count++;
-
-            if (!std::isnan(diag_val) && !std::isinf(diag_val)) {
-                min_diag = std::min(min_diag, diag_val);
-                max_diag = std::max(max_diag, diag_val);
-            }
-        }
-
-        error_msg << "  Trace: " << trace << "\n";
-        error_msg << "  Min diagonal: " << min_diag << "\n";
-        error_msg << "  Max diagonal: " << max_diag << "\n";
-        error_msg << "  Negative diagonal elements: " << negative_diag_count << "\n";
-        error_msg << "  NaN count: " << nan_count << "\n";
-        error_msg << "  Inf count: " << inf_count << "\n";
-
-        // Show first few diagonal elements
-        error_msg << "  First diagonal elements: ";
-        UINT32 diag_show = std::min(_rows, (UINT32)10);
-        for (UINT32 i = 0; i < diag_show; ++i) {
-            error_msg << get_backup(i, i);
-            if (i < diag_show - 1) error_msg << ", ";
-        }
-        if (_rows > 10) error_msg << ", ...";
-        error_msg << "\n";
-
-        // If dpotrf reported a specific leading minor failure, analyze it
-        if (info > 0) {
-            int k = info;  // The order of the failed leading minor
-            error_msg << "\nLeading Minor Analysis (k=" << k << "):\n";
-
-            // Dump the leading k×k block
-            error_msg << "  Leading " << k << "×" << k << " block:\n";
-            int show_size = std::min(k, 10);  // Limit display to 10×10
-            for (int i = 0; i < show_size; ++i) {
-                error_msg << "    ";
-                for (int j = 0; j < show_size; ++j) {
-                    error_msg << std::scientific << std::setprecision(3) << std::setw(11) << get_backup(i, j);
-                }
-                if (show_size < k) error_msg << " ...";
-                error_msg << "\n";
-            }
-            if (show_size < k) { error_msg << "    ... (" << (k - show_size) << " more rows)\n"; }
-
-            // Gershgorin circle theorem check
-            double gmin = std::numeric_limits<double>::infinity();
-            int gmin_row = -1;
-            for (int i = 0; i < k; ++i) {
-                double aii = get_backup(i, i);
-                double r = 0.0;
-                for (int j = 0; j < k; ++j) {
-                    if (j != i) r += std::abs(get_backup(i, j));
-                }
-                double gi = aii - r;
-                if (gi < gmin) {
-                    gmin = gi;
-                    gmin_row = i;
-                }
-            }
-            error_msg << "\n  Gershgorin Analysis:\n";
-            error_msg << "    Lower bound for eigenvalues: " << std::scientific << std::setprecision(6) << gmin << "\n";
-            error_msg << "    Critical row: " << gmin_row << "\n";
-            if (gmin <= 0) {
-                error_msg << "    => Matrix is NOT positive definite (Gershgorin bound <= 0)\n";
-            } else {
-                error_msg << "    => Gershgorin bound > 0, but dpotrf still failed\n";
-                error_msg << "       This suggests numerical issues or interface problems\n";
-            }
-
-            // Compute smallest eigenvalues using LAPACK dsyevr
-            error_msg << "\n  Eigenvalue Analysis (smallest 10 eigenvalues):\n";
-            try {
-                // Create a copy of the leading minor for eigenvalue computation
-                int eig_n = k;  // Size of the leading minor that failed
-                int num_eigs = std::min(10, eig_n);  // Request up to 10 eigenvalues
-                
-                // Allocate workspace for dsyevr
-                double* eig_matrix = new double[eig_n * eig_n];
-                double* eigenvalues = new double[num_eigs];
-                double* eigenvectors = new double[eig_n * num_eigs];
-                int* isuppz = new int[2 * num_eigs];
-                
-                // Copy the leading minor (now symmetric after our filling)
-                for (int i = 0; i < eig_n; ++i) {
-                    for (int j = 0; j < eig_n; ++j) {
-                        eig_matrix[i * eig_n + j] = get_backup(i, j);
-                    }
-                }
-                
-                // LAPACK dsyevr parameters
-                char jobz = 'N';  // Only eigenvalues, no eigenvectors
-                char range = 'I'; // Compute eigenvalues by index range
-                char uplo_eig = 'L';  // Use lower triangle
-                double vl = 0.0, vu = 0.0;  // Not used with range='I'
-                int il = 1, iu = num_eigs;  // Compute first num_eigs eigenvalues
-                double abstol = 0.0;  // Use default tolerance
-                int m;  // Number of eigenvalues found
-                
-                // Workspace query
-                double work_query;
-                int lwork = -1;
-                int iwork_query;
-                int liwork = -1;
-                lapack_int info_eig;
-                
-                LAPACK_FUNC(dsyevr)(&jobz, &range, &uplo_eig, &eig_n, eig_matrix, &eig_n,
-                                   &vl, &vu, &il, &iu, &abstol, &m, eigenvalues, eigenvectors, &eig_n,
-                                   isuppz, &work_query, &lwork, &iwork_query, &liwork, &info_eig);
-                
-                lwork = (int)work_query;
-                liwork = iwork_query;
-                double* work = new double[lwork];
-                int* iwork = new int[liwork];
-                
-                // Actual computation
-                LAPACK_FUNC(dsyevr)(&jobz, &range, &uplo_eig, &eig_n, eig_matrix, &eig_n,
-                                   &vl, &vu, &il, &iu, &abstol, &m, eigenvalues, eigenvectors, &eig_n,
-                                   isuppz, work, &lwork, iwork, &liwork, &info_eig);
-                
-                if (info_eig == 0) {
-                    error_msg << "    Successfully computed " << m << " smallest eigenvalues:\n";
-                    for (int i = 0; i < m; ++i) {
-                        error_msg << "      λ[" << i+1 << "] = " << std::scientific << std::setprecision(3) 
-                                 << eigenvalues[i];
-                        if (eigenvalues[i] <= 0) {
-                            error_msg << " (NOT positive)";
-                        }
-                        error_msg << "\n";
-                    }
-                    
-                    // Count negative eigenvalues
-                    int neg_count = 0;
-                    for (int i = 0; i < m; ++i) {
-                        if (eigenvalues[i] <= 0) neg_count++;
-                    }
-                    if (neg_count > 0) {
-                        error_msg << "    => Found " << neg_count << " non-positive eigenvalue(s)\n";
-                        error_msg << "    => Matrix is NOT positive definite\n";
-                    } else {
-                        error_msg << "    => All computed eigenvalues are positive\n";
-                        if (m < eig_n) {
-                            error_msg << "    Note: Only computed first " << m << " of " << eig_n << " eigenvalues\n";
-                        }
-                    }
-                } else {
-                    error_msg << "    Failed to compute eigenvalues (dsyevr info = " << info_eig << ")\n";
-                }
-                
-                // Clean up
-                delete[] eig_matrix;
-                delete[] eigenvalues;
-                delete[] eigenvectors;
-                delete[] isuppz;
-                delete[] work;
-                delete[] iwork;
-                
-            } catch (const std::exception& e) {
-                error_msg << "    Eigenvalue computation failed: " << e.what() << "\n";
-            } catch (...) {
-                error_msg << "    Eigenvalue computation failed: unknown error\n";
-            }
-
-            // Triangle comparison for the leading minor
-            error_msg << "\n  Triangle Comparison (first 3×3 of leading " << k << "×" << k << "):\n";
-            int cmp_size = std::min(k, 3);
-            error_msg << "    Upper triangle:\n";
-            for (int i = 0; i < cmp_size; ++i) {
-                error_msg << "      ";
-                for (int j = i; j < cmp_size; ++j) {
-                    error_msg << std::scientific << std::setprecision(6) << std::setw(14) << get_backup(i, j);
-                }
-                error_msg << "\n";
-            }
-            error_msg << "    Lower triangle:\n";
-            for (int i = 0; i < cmp_size; ++i) {
-                error_msg << "      ";
-                for (int j = 0; j <= i; ++j) {
-                    error_msg << std::scientific << std::setprecision(6) << std::setw(14) << get_backup(i, j);
-                }
-                error_msg << "\n";
-            }
-        }
-
-        // Clean up backup buffer before throwing
-        delete[] backup_buffer;
-#endif
-
-        throw std::runtime_error(error_msg.str());
-    }
+    if (info != 0)
+        throw MatrixInversionFailure("Matrix inversion failed, the matrix is singular.");
 
     // Perform Cholesky inverse
-    LAPACK_FUNC(dpotri)(&uplo, &n, _buffer, &n, &info);
+    LAPACK_FUNC(dpotri)(&uplo, &n, _buffer, &lda, &info);
 
-    if (info != 0) {
-        std::stringstream error_msg;
-        error_msg << "cholesky_inverse(): Cholesky inversion failed.\n";
-        error_msg << "  dpotri info = " << info << "\n";
-        if (info < 0) {
-            error_msg << "  Meaning: Argument " << -info << " had an illegal value\n";
-        } else {
-            error_msg << "  Meaning: The (" << info << "," << info << ") element of the factor U or L is zero\n";
-        }
-#ifdef DEBUG_MATRIX_2D
-        // Clean up backup buffer before throwing
-        delete[] backup_buffer;
-#endif
-        throw std::runtime_error(error_msg.str());
-    }
+    if (info != 0)
+        throw MatrixInversionFailure("Matrix inversion failed, the matrix is singular.");
 
-#ifdef DEBUG_MATRIX_2D
-    // Clean up backup buffer after successful operations
-    delete[] backup_buffer;
-    // Since we scaled A -> A/s, the inverse is: inv(A) = inv(A/s) * s = s * inv(A_scaled)
-    if (apply_scaling) {
-        for (UINT32 i = 0; i < _rows; ++i) {
-            for (UINT32 j = 0; j < _cols; ++j) {
-                *getelementref(i, j) *= scale_factor;
-            }
-        }
-    }
-#endif 
-
-    // Copy empty triangle part
     if (LOWER_IS_CLEARED)
         filllower();
     else
@@ -1257,13 +815,13 @@ void matrix_2d::zero(const UINT32& row_begin, const UINT32& col_begin, const UIN
 }
 
 
-matrix_2d matrix_2d::operator=(const matrix_2d& rhs) {
+matrix_2d& matrix_2d::operator=(const matrix_2d& rhs) {
     // Overloaded assignment operator
     if (this == &rhs) return *this;
 
     // If rhs data can fit within limits of this matrix, copy
     // and return. Otherwise, allocate new memory
-    if (_mem_rows >= rhs.rows() || _mem_cols >= rhs.columns()) {
+    if (_mem_rows >= rhs.rows() && _mem_cols >= rhs.columns()) {
         // don't change _mem_rows or _mem_cols.  Simply update
         // visible dimensions and copy buffer
         _rows = rhs.rows();

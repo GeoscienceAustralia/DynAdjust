@@ -303,7 +303,7 @@ void dna_adjust::SolveMT(bool COMPUTE_INVERSE, const UINT32& block)
 	{
 		// Compute inverse of normals (aposteriori variance matrix)
 		// (AT * V-1 * A)-1
-		FormInverseVarianceMatrix(&(v_normalsR_.at(block)));
+		FormInverseVarianceMatrix(&(v_normalsR_.at(block)), false);
 	}
 
 	// compute weighted "measured minus computed"
