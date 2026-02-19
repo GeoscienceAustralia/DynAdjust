@@ -248,7 +248,7 @@ void dna_adjust::AdjustPhasedMultiThread()
 	// Print status
 	printer_->PrintAdjustmentStatus();
 	// Compute and print time taken to run adjustment
-	printer_->PrintAdjustmentTime(tot_time, total_time);
+	PrintAdjustmentTime(tot_time, total_time);
 }
 
 
