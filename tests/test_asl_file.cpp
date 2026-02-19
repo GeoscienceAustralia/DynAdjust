@@ -20,17 +20,14 @@
 //============================================================================
 
 #define TESTING_MAIN
-#define __BINARY_NAME__ "test_AslFile"
-#define __BINARY_DESC__ "Unit tests for AslFile class"
-
-#include "testing.hpp"
-
 #ifndef __BINARY_NAME__
 #define __BINARY_NAME__ "test_AslFile"
 #endif
 #ifndef __BINARY_DESC__
 #define __BINARY_DESC__ "Unit tests for AslFile class"
 #endif
+
+#include "testing.hpp"
 
 #include "../dynadjust/include/io/asl_file.hpp"
 #include "../dynadjust/include/measurement_types/dnastation.hpp"

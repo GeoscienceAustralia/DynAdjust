@@ -173,54 +173,54 @@ public:
 
 	//inline UINT32 GetNumBaselinens() { return m_vGpsBaselines.size(); }
 	inline std::vector<CDnaGpsBaseline>& GetBaselines() { return m_vGpsBaselines; }
-	inline std::vector<CDnaGpsBaseline>* GetBaselines_ptr() { return &m_vGpsBaselines; }
+	inline std::vector<CDnaGpsBaseline>* GetBaselines_ptr() override { return &m_vGpsBaselines; }
 
-	inline UINT32 GetClusterID() const { return m_lclusterID; }
-	inline std::string GetTarget() const { return m_strTarget; }
-	inline UINT32 GetTotal() const { return m_lRecordedTotal; }
-	inline double GetPscale() const { return m_dPscale; }
-	inline double GetLscale() const { return m_dLscale; }
-	inline double GetHscale() const { return m_dHscale; }
-	inline double GetVscale() const { return m_dVscale; }
+	inline UINT32 GetClusterID() const override { return m_lclusterID; }
+	inline std::string GetTarget() const override { return m_strTarget; }
+	inline UINT32 GetTotal() const override { return m_lRecordedTotal; }
+	inline double GetPscale() const override { return m_dPscale; }
+	inline double GetLscale() const override { return m_dLscale; }
+	inline double GetHscale() const override { return m_dHscale; }
+	inline double GetVscale() const override { return m_dVscale; }
 
-	void SetReferenceFrame(const std::string& refFrame);
+	void SetReferenceFrame(const std::string& refFrame) override;
 	//void SetEpoch(const std::string& epoch);
-	void SetEpsg(const std::string& epsg);	
-	inline std::string GetReferenceFrame() const { return m_referenceFrame; }
-	//inline std::string GetEpoch() const { return m_epoch; } 
-		
-	inline void SetTarget(const std::string& str) { m_strTarget = trimstr(str); }
-	inline void SetTotal(const UINT32& l) { m_lRecordedTotal = l; }
+	void SetEpsg(const std::string& epsg);
+	inline std::string GetReferenceFrame() const override { return m_referenceFrame; }
+	//inline std::string GetEpoch() const { return m_epoch; }
 
-	void SetTotal(const std::string& str);
-	void SetPscale(const std::string& str);
-	void SetLscale(const std::string& str);
-	void SetHscale(const std::string& str);
-	void SetVscale(const std::string& str);
-	
-	inline void SetPscale(const double& dbl) { m_dPscale = dbl; }
-	inline void SetLscale(const double& dbl) { m_dLscale = dbl; }
-	inline void SetHscale(const double& dbl) { m_dHscale = dbl; }
-	inline void SetVscale(const double& dbl) { m_dVscale = dbl; }
+	inline void SetTarget(const std::string& str) override { m_strTarget = trimstr(str); }
+	inline void SetTotal(const UINT32& l) override { m_lRecordedTotal = l; }
 
-	void AddGpsBaseline(const CDnaMeasurement* pGpsBaseline);
+	void SetTotal(const std::string& str) override;
+	void SetPscale(const std::string& str) override;
+	void SetLscale(const std::string& str) override;
+	void SetHscale(const std::string& str) override;
+	void SetVscale(const std::string& str) override;
+
+	inline void SetPscale(const double& dbl) override { m_dPscale = dbl; }
+	inline void SetLscale(const double& dbl) override { m_dLscale = dbl; }
+	inline void SetHscale(const double& dbl) override { m_dHscale = dbl; }
+	inline void SetVscale(const double& dbl) override { m_dVscale = dbl; }
+
+	void AddGpsBaseline(const CDnaMeasurement* pGpsBaseline) override;
 
 	void ClearBaselines();
 
-	void ReserveGpsBaselinesCount(const UINT32& size);
+	void ReserveGpsBaselinesCount(const UINT32& size) override;
 
-	virtual void SetSourceFileIndex(const UINT32& idx) override;
+	void SetSourceFileIndex(const UINT32& idx) override;
 
-	virtual UINT32 CalcBinaryRecordCount() const;
-	virtual void WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex) const;
-	virtual UINT32 SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t& it_msr, it_vdbid_t& dbidmap);
-	virtual void WriteDynaMLMsr(std::ofstream* dynaml_stream, const std::string& comment, bool) const;
-	virtual void WriteDNAMsr(std::ofstream* dna_stream, const dna_msr_fields& dmw, const dna_msr_fields& dml, bool) const;
-	virtual void SimulateMsr(vdnaStnPtr* vStations, const CDnaEllipsoid* ellipsoid);
+	UINT32 CalcBinaryRecordCount() const override;
+	void WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex) const override;
+	UINT32 SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t& it_msr, it_vdbid_t& dbidmap) override;
+	void WriteDynaMLMsr(std::ofstream* dynaml_stream, const std::string& comment, bool) const override;
+	void WriteDNAMsr(std::ofstream* dna_stream, const dna_msr_fields& dmw, const dna_msr_fields& dml, bool) const override;
+	void SimulateMsr(vdnaStnPtr* vStations, const CDnaEllipsoid* ellipsoid) override;
 
-	virtual void SerialiseDatabaseMap(std::ofstream* os);
+	void SerialiseDatabaseMap(std::ofstream* os) override;
 
-	void SetDatabaseMaps(it_vdbid_t& dbidmap);
+	void SetDatabaseMaps(it_vdbid_t& dbidmap) override;
 
 protected:
 

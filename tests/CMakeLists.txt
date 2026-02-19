@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
+if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 OLD)
+endif()
 project(DynAdjustTests LANGUAGES CXX)
 
 # Set C++ standard
@@ -147,6 +150,8 @@ add_executable(test_network_data_loader
     ../dynadjust/include/io/bst_file.cpp
     ../dynadjust/include/io/bms_file.cpp
     ../dynadjust/include/io/map_file.cpp
+    ../dynadjust/include/math/dnamatrix_contiguous.cpp
+    ../dynadjust/include/ide/trace.cpp
     ${IO_COMMON_SOURCES}
 )
 

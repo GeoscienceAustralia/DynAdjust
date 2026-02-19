@@ -1,6 +1,10 @@
 #define TESTING_MAIN
+#ifndef __BINARY_NAME__
 #define __BINARY_NAME__ "test_dnaadjust_printer"
+#endif
+#ifndef __BINARY_DESC__
 #define __BINARY_DESC__ "Unit tests for DynAdjustPrinter class"
+#endif
 
 #include "testing.hpp"
 

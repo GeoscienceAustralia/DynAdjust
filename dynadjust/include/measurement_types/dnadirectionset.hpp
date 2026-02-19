@@ -73,40 +73,40 @@ public:
 
 	void LoadDirectionSet(const char* const, const int&, const std::string&, const std::string&, bool, const int&);
 
-	inline UINT32 GetClusterID() const { return m_lsetID; }
-	inline std::string GetTarget() const { return m_strTarget; }
-	inline UINT32 GetTotal() const { return m_lRecordedTotal; }
-	inline double GetValue() const { return m_drValue; }
-	inline double GetStdDev() const { return m_dStdDev; }
-	
+	inline UINT32 GetClusterID() const override { return m_lsetID; }
+	inline std::string GetTarget() const override { return m_strTarget; }
+	inline UINT32 GetTotal() const override { return m_lRecordedTotal; }
+	inline double GetValue() const override { return m_drValue; }
+	inline double GetStdDev() const override { return m_dStdDev; }
+
 	inline size_t GetNumDirections() const { return m_vTargetDirections.size(); }
-	inline std::vector<CDnaDirection>* GetDirections_ptr() { return &m_vTargetDirections; }
+	inline std::vector<CDnaDirection>* GetDirections_ptr() override { return &m_vTargetDirections; }
 
-	inline void SetClusterID(const UINT32& id) { m_lsetID = id; }
-	inline void SetTarget(const std::string& str) { m_strTarget = trimstr(str); }
-	inline void SetTotal(const UINT32& l) { m_lRecordedTotal = l; }
-	inline void SetNonIgnoredDirns(const UINT32& n) { m_lNonIgnoredDirns = n; }
+	inline void SetClusterID(const UINT32& id) override { m_lsetID = id; }
+	inline void SetTarget(const std::string& str) override { m_strTarget = trimstr(str); }
+	inline void SetTotal(const UINT32& l) override { m_lRecordedTotal = l; }
+	inline void SetNonIgnoredDirns(const UINT32& n) override { m_lNonIgnoredDirns = n; }
 
-	void SetTotal(const std::string& str);
-	void SetValue(const std::string& str);
-	void SetStdDev(const std::string& str);
-	
-	void AddDirection(const CDnaMeasurement* pDirection);
+	void SetTotal(const std::string& str) override;
+	void SetValue(const std::string& str) override;
+	void SetStdDev(const std::string& str) override;
+
+	void AddDirection(const CDnaMeasurement* pDirection) override;
 	void ClearDirections();
 	//bool IsRepeatedDirection(string);
 
 	virtual void SetSourceFileIndex(const UINT32& idx) override;
 
-	virtual UINT32 CalcBinaryRecordCount() const;
-	virtual void WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex) const;
-	virtual UINT32 SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t& it_msr, it_vdbid_t& dbidmap);
-	virtual void WriteDynaMLMsr(std::ofstream* dynaml_stream, const std::string& comment, bool) const;
-	virtual void WriteDNAMsr(std::ofstream* dna_stream, const dna_msr_fields& dmw, const dna_msr_fields& dml, bool) const;
-	virtual void SimulateMsr(vdnaStnPtr* vStations, const CDnaEllipsoid* ellipsoid);
+	UINT32 CalcBinaryRecordCount() const override;
+	void WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex) const override;
+	UINT32 SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t& it_msr, it_vdbid_t& dbidmap) override;
+	void WriteDynaMLMsr(std::ofstream* dynaml_stream, const std::string& comment, bool) const override;
+	void WriteDNAMsr(std::ofstream* dna_stream, const dna_msr_fields& dmw, const dna_msr_fields& dml, bool) const override;
+	void SimulateMsr(vdnaStnPtr* vStations, const CDnaEllipsoid* ellipsoid) override;
 
-	virtual void SerialiseDatabaseMap(std::ofstream* os);
+	void SerialiseDatabaseMap(std::ofstream* os) override;
 
-	void SetDatabaseMaps(it_vdbid_t& dbidmap);
+	void SetDatabaseMaps(it_vdbid_t& dbidmap) override;
 
 	std::string m_strTarget;
 

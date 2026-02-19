@@ -767,14 +767,6 @@ void DynAdjustPrinter::PrintMeasurementsToStation() {
         std::sort(vStationList.begin(), vStationList.end(), stnorderCompareFunc);
     }
     break;
-    case meas_dec_stn_sort_ui:
-    {
-        CompareMeasCount<CAStationList, UINT32> msrcountCompareFunc(&adjust_.vAssocStnList_);
-        std::sort(vStationList.begin(), vStationList.end(), msrcountCompareFunc);
-        std::reverse(vStationList.begin(), vStationList.end());
-    }
-    break;
-    case alpha_stn_sort_ui:
     default:
     {
         CompareStnNameOrder<station_t, UINT32> stnnameCompareFunc(&adjust_.bstBinaryRecords_);

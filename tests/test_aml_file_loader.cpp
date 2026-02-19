@@ -20,17 +20,14 @@
 //============================================================================
 
 #define TESTING_MAIN
-#define __BINARY_NAME__ "test_AmlFile"
-#define __BINARY_DESC__ "Unit tests for AmlFile class"
-
-#include "testing.hpp"
-
 #ifndef __BINARY_NAME__
 #define __BINARY_NAME__ "test_AmlFile"
 #endif
 #ifndef __BINARY_DESC__
 #define __BINARY_DESC__ "Unit tests for AmlFile class"
 #endif
+
+#include "testing.hpp"
 
 #include "../dynadjust/include/io/aml_file.hpp"
 #include "../dynadjust/include/measurement_types/dnastation.hpp"

@@ -20,17 +20,14 @@
 //============================================================================
 
 #define TESTING_MAIN
-#define __BINARY_NAME__ "test_BmsFile"
-#define __BINARY_DESC__ "Unit tests for BmsFile class"
-
-#include "testing.hpp"
-
 #ifndef __BINARY_NAME__
 #define __BINARY_NAME__ "test_BmsFile"
 #endif
 #ifndef __BINARY_DESC__
 #define __BINARY_DESC__ "Unit tests for BmsFile class"
 #endif
+
+#include "testing.hpp"
 
 #include "../dynadjust/include/io/bms_file.hpp"
 #include "../dynadjust/include/measurement_types/dnameasurement.hpp"
