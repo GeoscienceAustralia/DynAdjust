@@ -2421,8 +2421,8 @@ void dna_adjust::AdjustSimultaneous()
 		SolveTry(CurrentIteration() < 2 || v_msrTally_.at(0).ContainsNonGPS());
 
 		// calculate and print total time
-		printer_->PrintAdjustmentTime(it_time, iteration_time);
-		
+		PrintAdjustmentTime(it_time, iteration_time);
+
 		// Add corrections to estimates
 		v_estimatedStations_.at(0).add(v_corrections_.at(0));
 		
@@ -2506,7 +2506,7 @@ void dna_adjust::ValidateandFinaliseAdjustment(cpu_timer& tot_time)
 	// Print status
 	printer_->PrintAdjustmentStatus();
 	// Compute and print time taken to run adjustment
-	printer_->PrintAdjustmentTime(tot_time, total_time);
+	PrintAdjustmentTime(tot_time, total_time);
 }
 	
 void dna_adjust::PrintAdjustmentTime(cpu_timer& time, _TIMER_TYPE_ timerType)
@@ -2563,8 +2563,8 @@ void dna_adjust::AdjustPhased()
 			break;
 
 		// calculate and print total time
-		printer_->PrintAdjustmentTime(it_time, iteration_time);
-		
+		PrintAdjustmentTime(it_time, iteration_time);
+
 		// Calculate and print largest adjustment correction and station ID
 		OutputLargestCorrection(corr_msg);
 		
@@ -2637,7 +2637,7 @@ void dna_adjust::AdjustPhasedBlock1()
 	largestCorr_ = v_corrections_.at(0).maxvalue();
 
 	// calculate and print total time
-	printer_->PrintAdjustmentTime(it_time, iteration_time);	
+	PrintAdjustmentTime(it_time, iteration_time);
 	
 	// Compute and print largest correction for block 1 only
 	maxCorr_ = v_corrections_.at(0).compute_maximum_value();
