@@ -394,6 +394,7 @@ UINT32 CDnaDirectionSet::SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t& i
 	m_lsetID = it_msr->clusterID;
 
 	m_epoch = it_msr->epoch;
+	m_sourceFileIndex = it_msr->sourceFileIndex;
 
 	m_vTargetDirections.clear();
 	m_vTargetDirections.resize(m_lRecordedTotal);
@@ -416,6 +417,14 @@ UINT32 CDnaDirectionSet::SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t& i
 	return it_msrCount;
 }
 	
+
+void CDnaDirectionSet::SetSourceFileIndex(const UINT32& idx)
+{
+	CDnaMeasurement::SetSourceFileIndex(idx);
+	for (auto& dir : m_vTargetDirections)
+		dir.SetSourceFileIndex(idx);
+}
+
 
 void CDnaDirectionSet::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex) const
 {
@@ -442,6 +451,7 @@ void CDnaDirectionSet::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrI
 
 	measRecord.clusterID = m_lsetID;
 	measRecord.measurementStations = m_MSmeasurementStations;
+	measRecord.sourceFileIndex = m_sourceFileIndex;
 	measRecord.fileOrder = ((*msrIndex)++);
 
 	snprintf(measRecord.epoch, sizeof(measRecord.epoch), "%s", m_epoch.substr(0, STN_EPOCH_WIDTH).c_str());

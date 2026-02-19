@@ -490,8 +490,9 @@ UINT32 CDnaGpsPoint::SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t& it_ms
 	m_dX = it_msr->term1;
 	m_dSigmaXX = it_msr->term2;
 	m_lRecordedTotal = it_msr->vectorCount1;
+	m_sourceFileIndex = it_msr->sourceFileIndex;
 	SetCoordType(it_msr->coordType);
-	
+
 	// get data relating to Y, sigmaYY, sigmaXY
 	it_msr++;
 	
@@ -538,7 +539,8 @@ void CDnaGpsPoint::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex
 
 	measRecord.clusterID = m_lclusterID;
 	measRecord.measurementStations = m_MSmeasurementStations;
-	
+	measRecord.sourceFileIndex = m_sourceFileIndex;
+
 	measRecord.scale1 = m_dPscale;
 	measRecord.scale2 = m_dLscale;
 	measRecord.scale3 = m_dHscale;
@@ -1013,6 +1015,7 @@ UINT32 CDnaGpsPointCluster::SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t
 	m_referenceFrame = datumFromEpsgCode<std::string, UINT32>(LongFromString<UINT32>(it_msr->epsgCode));
 	m_epoch = it_msr->epoch;
 	m_epsgCode = it_msr->epsgCode;
+	m_sourceFileIndex = it_msr->sourceFileIndex;
 
 	m_dPscale = it_msr->scale1;
 	m_dLscale = it_msr->scale2;
@@ -1040,6 +1043,14 @@ UINT32 CDnaGpsPointCluster::SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t
 	return measrecordCount - 1;	
 }
 	
+
+void CDnaGpsPointCluster::SetSourceFileIndex(const UINT32& idx)
+{
+	CDnaMeasurement::SetSourceFileIndex(idx);
+	for (auto& pnt : m_vGpsPoints)
+		pnt.SetSourceFileIndex(idx);
+}
+
 
 void CDnaGpsPointCluster::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex) const
 {

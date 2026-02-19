@@ -3949,6 +3949,7 @@ void dna_import::ImportStnsMsrsFromNetwork(vdnaStnPtr* vStations, vdnaMsrPtr* vM
 			}
 
 			msrPtr->SetMeasurementRec(binaryStn, it_msr, it_dbid);
+			msrPtr->ResolveSourceFile(bms_meta_.sourceFileMeta, bms_meta_.sourceFileCount);
 			vMeasurements->push_back(msrPtr);
 		}
 
@@ -4107,8 +4108,9 @@ void dna_import::ImportStnsMsrsFromBlock(vdnaStnPtr* vStations, vdnaMsrPtr* vMea
 		}
 
 		msrPtr->SetMeasurementRec(binaryStn, it_msr, it_dbid);
+		msrPtr->ResolveSourceFile(bms_meta_.sourceFileMeta, bms_meta_.sourceFileCount);
 		vMeasurements->push_back(msrPtr);
-	}	
+	}
 }
 
 

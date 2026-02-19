@@ -335,17 +335,67 @@ typedef struct input_file_meta {
 	UINT16	datatype;						// Input data type (station, measurement, both)
 } input_file_meta_t;
 
+// Source file metadata for measurement provenance
+typedef struct source_file_meta {
+	char	filename[FILE_NAME_WIDTH+1];
+} source_file_meta_t;
+
 // Binary file metadata
 typedef struct binary_file_meta {
 	binary_file_meta ()
-		: binCount(0), reduced(false), reftran(false), geoid(false), inputFileCount(0), inputFileMeta(NULL) {}
+		: binCount(0), reduced(false), reftran(false), geoid(false)
+		, inputFileCount(0), inputFileMeta(NULL)
+		, sourceFileCount(0), sourceFileMeta(nullptr) {}
 	binary_file_meta (const std::string& app_name)
-		: binCount(0), reduced(false), reftran(false), geoid(false), inputFileCount(0), inputFileMeta(NULL) {
+		: binCount(0), reduced(false), reftran(false), geoid(false)
+		, inputFileCount(0), inputFileMeta(NULL)
+		, sourceFileCount(0), sourceFileMeta(nullptr) {
             snprintf(modifiedBy, sizeof(modifiedBy), "%s", app_name.c_str());
 	}
 	~binary_file_meta() {
 		if (inputFileMeta != NULL)
 			delete []inputFileMeta;
+		if (sourceFileMeta != nullptr)
+			delete []sourceFileMeta;
+	}
+
+	binary_file_meta(const binary_file_meta&) = delete;
+	binary_file_meta& operator=(const binary_file_meta&) = delete;
+
+	binary_file_meta(binary_file_meta&& rhs) noexcept
+		: binCount(rhs.binCount), reduced(rhs.reduced)
+		, reftran(rhs.reftran), geoid(rhs.geoid)
+		, inputFileCount(rhs.inputFileCount), inputFileMeta(rhs.inputFileMeta)
+		, sourceFileCount(rhs.sourceFileCount), sourceFileMeta(rhs.sourceFileMeta)
+	{
+		memcpy(modifiedBy, rhs.modifiedBy, sizeof(modifiedBy));
+		memcpy(epsgCode, rhs.epsgCode, sizeof(epsgCode));
+		memcpy(epoch, rhs.epoch, sizeof(epoch));
+		rhs.inputFileMeta = nullptr;
+		rhs.sourceFileMeta = nullptr;
+	}
+
+	binary_file_meta& operator=(binary_file_meta&& rhs) noexcept
+	{
+		if (this != &rhs)
+		{
+			delete []inputFileMeta;
+			delete []sourceFileMeta;
+			binCount = rhs.binCount;
+			reduced = rhs.reduced;
+			reftran = rhs.reftran;
+			geoid = rhs.geoid;
+			memcpy(modifiedBy, rhs.modifiedBy, sizeof(modifiedBy));
+			memcpy(epsgCode, rhs.epsgCode, sizeof(epsgCode));
+			memcpy(epoch, rhs.epoch, sizeof(epoch));
+			inputFileCount = rhs.inputFileCount;
+			inputFileMeta = rhs.inputFileMeta;
+			sourceFileCount = rhs.sourceFileCount;
+			sourceFileMeta = rhs.sourceFileMeta;
+			rhs.inputFileMeta = nullptr;
+			rhs.sourceFileMeta = nullptr;
+		}
+		return *this;
 	}
     std::uint64_t		binCount;						// number of records in the binary file
 	bool				reduced;						// indicates whether the data is reduced(true) or raw(false)
@@ -356,10 +406,13 @@ typedef struct binary_file_meta {
 	bool				geoid;							// geoid separation values have been obtained
     std::uint64_t		inputFileCount;					// Number of source file metadata elements
 	input_file_meta_t*	inputFileMeta;					// Source file metadata
+	std::uint64_t		sourceFileCount;				// Number of unique source files for measurements
+	source_file_meta_t*	sourceFileMeta;					// Source file metadata for measurement provenance
 } binary_file_meta_t;
 
 typedef std::vector<input_file_meta_t> vifm_t;
 typedef vifm_t::iterator it_vifm_t;
+typedef std::vector<source_file_meta_t> vsfm_t;
 typedef std::vector<binary_file_meta_t> vbfm_t;
 typedef vbfm_t::iterator it_vbfm_t;
 

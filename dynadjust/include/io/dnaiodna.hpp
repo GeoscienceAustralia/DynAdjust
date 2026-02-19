@@ -103,10 +103,14 @@ public:
 	inline const dna_msr_fields	dna_msr_widths() { return dmw_; }
 
 	void set_dbid_ptr(pv_msr_database_id_map pv_msr_db_map);
+	void set_source_file_meta_ptr(const source_file_meta_t* sfm, std::uint64_t count) {
+		sourceFileMeta_ = sfm;
+		sourceFileCount_ = count;
+	}
 
 	inline bool filespecifiedReferenceFrame() { return m_filespecifiedReferenceFrame_; }
 	inline bool filespecifiedEpoch() { return m_filespecifiedEpoch_; }
-	
+
 protected:
 
 private:
@@ -143,6 +147,9 @@ private:
 	bool					m_databaseIDsSet_;
 	bool                    m_filespecifiedReferenceFrame_;
 	bool					m_filespecifiedEpoch_;
+
+	const source_file_meta_t*	sourceFileMeta_ = nullptr;
+	std::uint64_t				sourceFileCount_ = 0;
 };
 
 }	// namespace iostreams

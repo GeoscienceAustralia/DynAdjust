@@ -590,6 +590,7 @@ void dna_io_dna::write_msr_file(const vstn_t& vbinary_stn, pvmsr_t vbinary_msr, 
 			}
 
 			msrPtr->SetMeasurementRec(vbinary_stn, _it_msr, _it_dbid);
+			msrPtr->ResolveSourceFile(sourceFileMeta_, sourceFileCount_);
 			msrPtr->WriteDNAMsr(&dna_msr_file, dmw_, dml_);
 		}
 

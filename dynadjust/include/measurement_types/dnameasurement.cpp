@@ -358,6 +358,7 @@ CDnaMeasurement::CDnaMeasurement()
 	, m_residualPrec(0)
 	, m_preAdjCorr(0)
 	, m_epsgCode(DEFAULT_EPSG_S)
+	, m_sourceFileIndex(0)
 	, m_epoch("")
 	, m_bInsufficient(false)
 {
@@ -388,6 +389,7 @@ CDnaMeasurement::CDnaMeasurement(CDnaMeasurement&& m)
 
 	m_epoch = m.m_epoch;
 	m_epsgCode = m.m_epsgCode;
+	m_sourceFileIndex = m.m_sourceFileIndex;
 
 	m_msr_db_map = m.m_msr_db_map;
 
@@ -418,6 +420,7 @@ CDnaMeasurement& CDnaMeasurement::operator= (CDnaMeasurement&& rhs)
 
 	m_epoch = rhs.m_epoch;
 	m_epsgCode = rhs.m_epsgCode;
+	m_sourceFileIndex = rhs.m_sourceFileIndex;
 
 	m_msr_db_map = rhs.m_msr_db_map;
 

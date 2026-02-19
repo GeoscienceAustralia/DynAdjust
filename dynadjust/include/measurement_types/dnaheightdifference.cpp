@@ -220,12 +220,13 @@ UINT32 CDnaHeightDifference::SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_
 	m_dStdDev = sqrt(it_msr->term2);
 
 	m_epoch = it_msr->epoch;
+	m_sourceFileIndex = it_msr->sourceFileIndex;
 
 	CDnaMeasurement::SetDatabaseMap(*dbidmap);
 
 	return 0;
 }
-	
+
 
 void CDnaHeightDifference::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex) const
 {
@@ -243,6 +244,7 @@ void CDnaHeightDifference::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 
 	measRecord.term1 = m_dValue;
 	measRecord.term2 = m_dStdDev * m_dStdDev;	// convert to variance
 	measRecord.measurementStations = m_MSmeasurementStations;
+	measRecord.sourceFileIndex = m_sourceFileIndex;
 	measRecord.fileOrder = ((*msrIndex)++);
 
 	snprintf(measRecord.epoch, sizeof(measRecord.epoch), "%s", m_epoch.substr(0, STN_EPOCH_WIDTH).c_str());

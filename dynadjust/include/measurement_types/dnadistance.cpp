@@ -283,12 +283,13 @@ UINT32 CDnaDistance::SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t& it_ms
 	m_dStdDev = sqrt(it_msr->term2);
 
 	m_epoch = it_msr->epoch;
+	m_sourceFileIndex = it_msr->sourceFileIndex;
 
 	CDnaMeasurement::SetDatabaseMap(*dbidmap);
 
 	return 0;
 }
-	
+
 
 void CDnaDistance::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex) const
 {
@@ -308,6 +309,7 @@ void CDnaDistance::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex
 	measRecord.term3 = m_fInstHeight;
 	measRecord.term4 = m_fTargHeight;
 	measRecord.measurementStations = m_MSmeasurementStations;
+	measRecord.sourceFileIndex = m_sourceFileIndex;
 	measRecord.fileOrder = ((*msrIndex)++);
 
 	snprintf(measRecord.epoch, sizeof(measRecord.epoch), "%s", m_epoch.substr(0, STN_EPOCH_WIDTH).c_str());

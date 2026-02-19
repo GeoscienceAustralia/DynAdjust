@@ -24,6 +24,7 @@
 #include <fstream>
 #include <ios>
 #include <iostream>
+#include <map>
 #include <sstream>
 
 #include <include/functions/dnaiostreamfuncs.hpp>
@@ -101,8 +102,8 @@ void BmsFileLoader::LoadFileMeta(const std::string& bms_filename,
      << bms_filename << "." << std::endl;
 
   try {
-    readFileInfo(bms_file);
-    readFileMetadata(bms_file, bms_meta);
+    ReadFileInfo(bms_file);
+    ReadFileMetadata(bms_file, bms_meta);
   } catch (const std::ios_base::failure& f) {
     ss << f.what();
     throw std::runtime_error(ss.str());
@@ -142,8 +143,8 @@ std::uint64_t BmsFileLoader::LoadFile(const std::string& bms_filename,
      << bms_filename << "." << std::endl;
 
   try {
-    readFileInfo(bms_file);
-    readFileMetadata(bms_file, bms_meta);
+    ReadFileInfo(bms_file);
+    ReadFileMetadata(bms_file, bms_meta);
 
     vbinary_msr->reserve(bms_meta.binCount);
     for (msr = 0; msr < bms_meta.binCount; msr++) {
@@ -198,8 +199,8 @@ void BmsFileLoader::WriteFile(const std::string& bms_filename,
      << "." << std::endl;
 
   try {
-    writeFileInfo(bms_file);
-    writeFileMetadata(bms_file, bms_meta);
+    WriteFileInfo(bms_file);
+    WriteFileMetadata(bms_file, bms_meta);
 
     measurements::it_vmsr_t it_msr(vbinary_msr->begin());
     for (it_msr = vbinary_msr->begin(); it_msr != vbinary_msr->end(); ++it_msr) {
@@ -245,8 +246,31 @@ void BmsFileLoader::WriteFile(const std::string& bms_filename,
   UINT32 msrIndex(0);
 
   try {
-    writeFileInfo(bms_file);
-    writeFileMetadata(bms_file, bms_meta);
+    // Build unique source file index map
+    std::map<std::string, UINT32> sourceFileMap;
+    std::vector<std::string> sourceFileList;
+    for (it_msr = vMeasurements->begin(); it_msr != vMeasurements->end(); ++it_msr) {
+      std::string src = it_msr->get()->GetSource();
+      if (sourceFileMap.find(src) == sourceFileMap.end()) {
+        sourceFileMap[src] = static_cast<UINT32>(sourceFileList.size());
+        sourceFileList.push_back(src);
+      }
+      it_msr->get()->SetSourceFileIndex(sourceFileMap[src]);
+    }
+
+    // Populate source file metadata
+    bms_meta.sourceFileCount = sourceFileList.size();
+    if (bms_meta.sourceFileMeta != nullptr)
+      delete[] bms_meta.sourceFileMeta;
+    bms_meta.sourceFileMeta = new source_file_meta_t[bms_meta.sourceFileCount];
+    for (std::uint64_t i(0); i < bms_meta.sourceFileCount; ++i) {
+      memset(bms_meta.sourceFileMeta[i].filename, '\0', sizeof(bms_meta.sourceFileMeta[i].filename));
+      snprintf(bms_meta.sourceFileMeta[i].filename, sizeof(bms_meta.sourceFileMeta[i].filename),
+        "%s", sourceFileList[i].c_str());
+    }
+
+    WriteFileInfo(bms_file);
+    WriteFileMetadata(bms_file, bms_meta);
 
     for (it_msr = vMeasurements->begin(); it_msr != vMeasurements->end();
          ++it_msr) {
