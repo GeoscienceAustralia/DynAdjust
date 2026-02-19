@@ -157,6 +157,7 @@ TEST_CASE("CompareStnNameOrder handles duplicate nameOrder", "[m2s][sort][duplic
     CompareStnNameOrder<station_t, UINT32> cmp(&stations);
     std::sort(indices.begin(), indices.end(), cmp);
 
+    // Both ALICs have nameOrder=0, so they come before BEEC (nameOrder=1)
     std::string name0(stations[indices[0]].stationName);
     std::string name1(stations[indices[1]].stationName);
     std::string name2(stations[indices[2]].stationName);
@@ -178,6 +179,7 @@ TEST_CASE("CompareStnNameOrder with single station", "[m2s][sort][single]") {
 }
 
 TEST_CASE("All four sort modes produce valid orderings", "[m2s][sort][all-modes]") {
+    // Stations with distinct fileOrder and nameOrder values
     std::vector<station_t> stations;
     stations.push_back(makeStation("PERT", 3, 2));   // idx 0
     stations.push_back(makeStation("ALIC", 1, 0));   // idx 1
