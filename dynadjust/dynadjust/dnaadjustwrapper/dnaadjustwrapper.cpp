@@ -630,7 +630,6 @@ int ParseCommandLineOptions(const int& argc, char* argv[], const boost::program_
 		p.o._apply_type_b_global = 1;
 	if (vm.count(TYPE_B_FILE))
 		p.o._apply_type_b_file = 1;
-
 	p.s.asl_file = formPath<std::string>(p.g.output_folder, p.g.network_name, "asl");	// associated stations list
 	p.s.aml_file = formPath<std::string>(p.g.output_folder, p.g.network_name, "aml");	// associated measurements list
 	p.a.map_file = formPath<std::string>(p.g.output_folder, p.g.network_name, "map");	// station names map
@@ -860,6 +859,8 @@ int main(int argc, char* argv[])
 				"Type b uncertainties to be added to each computed uncertainty. arg is a comma delimited string that provides 1D, 2D or 3D uncertainties in the local reference frame (e.g. \"up\" or \"e,n\" or \"e,n,up\").")
 			(TYPE_B_FILE, boost::program_options::value<std::string>(&p.a.type_b_file),
 				"Type b uncertainties file name. Full path to a file containing Type b uncertainties to be added to the computed uncertainty for specific sites.")
+			(RELAXATION, boost::program_options::value<double>(&p.a.relaxation),
+				"Initial relaxation factor (0 < alpha <= 1). Adaptive oscillation-aware damping: automatically reduced when sign-alternating oscillation is detected, slowly recovered during monotonic convergence. Default is 1.0 (start with full Newton steps).")
 			;
 
 		staged_adj_options.add_options()
@@ -1165,6 +1166,9 @@ int main(int argc, char* argv[])
 
 		if (p.a.scale_normals_to_unity)
 			std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Scale normals to unity: " << "yes" << std::endl;
+		if (p.a.relaxation < 1.0)
+			std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Initial relaxation: "
+				<< std::fixed << std::setprecision(3) << p.a.relaxation << std::endl;
 		if (!p.a.station_constraints.empty())
 		{
 			std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Station constraints: " << p.a.station_constraints << std::endl;

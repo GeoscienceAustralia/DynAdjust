@@ -208,6 +208,7 @@ void dna_adjust::AdjustPhasedMultiThread()
 		// adj file at this stage is via single thread
 		adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Elapsed time" << ss.str() << std::endl;
 		OutputLargestCorrection(corr_msg);
+		UpdateAdaptiveRelaxation();
 		///////////////////////////////////
 
 		if (projectSettings_.g.verbose)
@@ -228,21 +229,23 @@ void dna_adjust::AdjustPhasedMultiThread()
 		if (!iterate)
 			break;
 	}
-	
+
 	isAdjusting_ = false;
 
 	if (adjustStatus_ > ADJUST_TEST_FAILED)
 		return;
 
 	// This is similar to the check in ValidateandFinaliseAdjustment API for
-	// phased single-thread mode. 
+	// phased single-thread mode.
 	if (IsCancelled())
 	{
 		adjustStatus_ = ADJUST_CANCELLED;
 		return;
 	}
 
-	if (CurrentIteration() == projectSettings_.a.max_iterations)
+	if (blowupDetected_)
+		adjustStatus_ = ADJUST_MAX_ITERATIONS_EXCEEDED;
+	else if (CurrentIteration() == projectSettings_.a.max_iterations)
 		adjustStatus_ = ADJUST_MAX_ITERATIONS_EXCEEDED;
 
 	// Print status

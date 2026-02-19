@@ -127,6 +127,8 @@ const char* const OUTPUT_MSR_TO_STN = "output-msr-to-stn";
 const char* const TYPE_B_GLOBAL = "type-b-sd-global";
 const char* const TYPE_B_FILE = "type-b-sd-file";
 
+const char* const RELAXATION = "relaxation";
+
 const char* const OUTPUT_ADJ_MSR_SORTBY = "sort-adj-msr-field";
 const char* const OUTPUT_MSR_TO_STN_SORTBY = "sort-msr-to-stn-field";
 

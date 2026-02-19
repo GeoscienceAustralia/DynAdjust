@@ -108,12 +108,12 @@ bool dna_adjust_thread::prepareAdjustment()
 }
 
 bool dna_adjust_thread::processAdjustment()
-{		
+{
 	try {
 		*_adjustStatus = _dnaAdj->AdjustNetwork();
 		*_adjustStatus = ADJUST_SUCCESS;
 		return true;
-	} 
+	}
 	catch (const NetAdjustException& e) {
 		handleProcessAdjustError(e.what());
 		_dnaAdj->SetExceptionRaised();

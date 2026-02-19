@@ -430,7 +430,8 @@ public:
 		, iteration_threshold((float)0.0005), free_std_dev(10.0), fixed_std_dev(PRECISION_1E6), station_constraints("")
 		, map_file(""), bst_file(""), bms_file(""), seg_file(""), comments("") 
 		, command_line_arguments("")
-		, type_b_global (""), type_b_file ("") {}
+		, type_b_global (""), type_b_file ("")
+		, relaxation(1.0) {}
 
 private:
 	// Disallow use of compiler generated equality operator.
@@ -483,6 +484,7 @@ public:
 	std::string		command_line_arguments;
 	std::string      type_b_global;          // Comma delimited string containing Type b uncertainties to be applied to all uncertainties computed from an adjustment
 	std::string      type_b_file;            // File path to Type b uncertainties to be applied to specific site uncertainties computed from an adjustment
+	double		relaxation;				// Global relaxation factor for corrections (0 < alpha <= 1)
 };
 
 // datum and geoid settings

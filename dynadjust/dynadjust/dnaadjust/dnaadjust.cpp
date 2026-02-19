@@ -66,6 +66,11 @@ dna_adjust::dna_adjust()
 	, allStationsFixed_(false)
 	, databaseIDsLoaded_(false)
 	, isCancelled_(false)
+	, blowupDetected_(false)
+	, currentRelaxation_(1.0)
+	, prevMaxCorr_(0.0)
+	, oscillationCount_(0)
+	, monotonicDecreaseCount_(0)
 {
 	statusMessages_.clear();
 	bstBinaryRecords_.clear();
@@ -197,7 +202,13 @@ void dna_adjust::InitialiseAdjustment()
 	statusMessages_.clear();
 	currentBlock_ = 0;
 	initialiseIteration();
-	
+
+	currentRelaxation_ = projectSettings_.a.relaxation;
+	prevMaxCorr_ = 0.0;
+	oscillationCount_ = 0;
+	monotonicDecreaseCount_ = 0;
+	blowupDetected_ = false;
+
 	bstBinaryRecords_.clear();
 	bmsBinaryRecords_.clear();
 
@@ -1229,7 +1240,7 @@ void dna_adjust::UpdateAtVinv(pit_vmsr_t _it_msr, const UINT32& stn1, const UINT
 
 	if (buildnewMatrices)
 		if (projectSettings_.g.verbose > 5)
-			debug_file << "V" << (*_it_msr)->measType << " " << 
+			debug_file << "V" << (*_it_msr)->measType << " " <<
 				std::fixed << std::setprecision(16) << std::setw(26) << variance << std::endl;
 
 	// Build  At * V-1
@@ -2423,18 +2434,21 @@ void dna_adjust::AdjustSimultaneous()
 		// calculate and print total time
 		PrintAdjustmentTime(it_time, iteration_time);
 
-		// Add corrections to estimates
-		v_estimatedStations_.at(0).add(v_corrections_.at(0));
-		
-		// Compute and print largest correction
+		// Compute and print largest correction (on full, unscaled corrections)
 		maxCorr_ = v_corrections_.at(0).compute_maximum_value();
 		OutputLargestCorrection(corr_msg);
+
+		// Apply adaptive relaxation and add corrections to estimates
+		UpdateAdaptiveRelaxation();
+		if (currentRelaxation_ < 1.0)
+			v_corrections_.at(0).scale(currentRelaxation_);
+		v_estimatedStations_.at(0).add(v_corrections_.at(0));
 
 		// update data for messages
 		iterationCorrections_.add_message(corr_msg);
 		iterationQueue_.push_and_notify(CurrentIteration());	// currentIteration begins at 1, so not zero-indexed
 		isIterationComplete_ = true;
-		
+
 		// continue iterating?
 		iterate = !IsCancelled() && fabs(maxCorr_) > projectSettings_.a.iteration_threshold;
 		if (!iterate)
@@ -2462,7 +2476,7 @@ void dna_adjust::AdjustSimultaneous()
 			printer_->PrintBlockStations(adj_file, 0, &v_estimatedStations_.at(0), &v_normals_.at(0), 
 				false, !v_msrTally_.at(0).ContainsNonGPS(), !v_msrTally_.at(0).ContainsNonGPS(), true, false);
 
-		// Update normals and measured-computed matrices for the next iteration.
+		// Update design and measured-minus-computed matrices for the next iteration.
 		// On the last iteration, pass false to preserve the inverted normals
 		// needed for computing statistics (precision of adjusted measurements).
 		bool lastIteration = (i + 1 >= projectSettings_.a.max_iterations);
@@ -2485,7 +2499,9 @@ void dna_adjust::ValidateandFinaliseAdjustment(cpu_timer& tot_time)
 		return;
 	}
 
-	if (CurrentIteration() == projectSettings_.a.max_iterations &&
+	if (blowupDetected_)
+		adjustStatus_ = ADJUST_MAX_ITERATIONS_EXCEEDED;
+	else if (CurrentIteration() == projectSettings_.a.max_iterations &&
 		fabs(maxCorr_) > projectSettings_.a.iteration_threshold)
 		adjustStatus_ = ADJUST_MAX_ITERATIONS_EXCEEDED;
 
@@ -2567,13 +2583,15 @@ void dna_adjust::AdjustPhased()
 
 		// Calculate and print largest adjustment correction and station ID
 		OutputLargestCorrection(corr_msg);
-		
+		UpdateAdaptiveRelaxation();
+
 		iterationCorrections_.add_message(corr_msg);
 		iterationQueue_.push_and_notify(CurrentIteration());	// currentIteration begins at 1, so not zero-indexed
 		isIterationComplete_ = true;
 
 		// Continue iterating?
-		iterate = !IsCancelled() && fabs(maxCorr_) > projectSettings_.a.iteration_threshold;
+		iterate = !IsCancelled() && !blowupDetected_ &&
+			fabs(maxCorr_) > projectSettings_.a.iteration_threshold;
 		if (!iterate)
 			break;
 
@@ -2581,7 +2599,7 @@ void dna_adjust::AdjustPhased()
 		// Similar to PrepareAdjustment, UpdateAdjustment prepares every block
 		// in the network so that forward and reverse adjustments can commence
 		// at the same time.
-		UpdateAdjustment(iterate);	
+		UpdateAdjustment(iterate);
 		if (IsCancelled())
 			break;
 
@@ -2590,7 +2608,7 @@ void dna_adjust::AdjustPhased()
 		{
 			// Compute network statistics
 			ComputeStatisticsOnIteration();
-			
+
 			// Print statistics summary to adj file
 			printer_->PrintStatistics(false);
 		}
@@ -2950,29 +2968,40 @@ void dna_adjust::ShrinkForwardMatrices(const UINT32 currentBlock)
 // - adjust_forward_thread::operator()()
 void dna_adjust::UpdateEstimatesForward(const UINT32 currentBlock)
 {
-	// update station coordinates with lsq-estimated corrections
-	v_estimatedStations_.at(currentBlock).add(v_corrections_.at(currentBlock));
+	// Guard against numerical blow-up
+	if (fabs(v_corrections_.at(currentBlock).compute_maximum_value()) > 1.0e3)
+	{
+		blowupDetected_ = true;
+		v_corrections_.at(currentBlock).zero();
+		return;
+	}
 
-	// compute degrees of freedom (this is only performed once here during forward pass)
-	v_statSummary_.at(currentBlock)._degreesofFreedom = 
-		v_measurementParams_.at(currentBlock) + 
-		(v_pseudoMeasCountFwd_.at(currentBlock) * 3) - 
-		v_unknownParams_.at(currentBlock);
-
+	// Convergence reporting on full (unscaled) corrections before relaxation
 	if (v_blockMeta_.at(currentBlock)._blockLast || v_blockMeta_.at(currentBlock)._blockIsolated)
 	{
-		// update max correction
 		if (fabs(v_corrections_.at(currentBlock).compute_maximum_value()) > fabs(maxCorr_))
 			SetmaxCorr(v_corrections_.at(currentBlock).maxvalue());
-		
-		// update largest correction
+
 		if (fabs(v_corrections_.at(currentBlock).maxvalue()) > fabs(largestCorr_))
 		{
 			largestCorr_ = v_corrections_.at(currentBlock).maxvalue();
 			blockLargeCorr_ = currentBlock;
 		}
+	}
 
-		// Now copy 'estimated' coordinates to 'rigorous' for comparison on the next iteration
+	if (currentRelaxation_ < 1.0)
+		v_corrections_.at(currentBlock).scale(currentRelaxation_);
+	v_estimatedStations_.at(currentBlock).add(v_corrections_.at(currentBlock));
+
+	// compute degrees of freedom (this is only performed once here during forward pass)
+	v_statSummary_.at(currentBlock)._degreesofFreedom =
+		v_measurementParams_.at(currentBlock) +
+		(v_pseudoMeasCountFwd_.at(currentBlock) * 3) -
+		v_unknownParams_.at(currentBlock);
+
+	if (v_blockMeta_.at(currentBlock)._blockLast || v_blockMeta_.at(currentBlock)._blockIsolated)
+	{
+		// Copy 'estimated' coordinates to 'rigorous' for comparison on the next iteration
 		v_rigorousStations_.at(currentBlock) = v_estimatedStations_.at(currentBlock);
 		v_rigorousVariances_.at(currentBlock) = v_normals_.at(currentBlock);
 
@@ -3599,6 +3628,8 @@ void dna_adjust::UpdateEstimatesReverse(const UINT32 currentBlock, bool MT_Rever
 	}	
 
 	// update station coordinates with lsq-estimated corrections
+	if (currentRelaxation_ < 1.0)
+		corrections->scale(currentRelaxation_);
 	estimatedStations->add(*corrections);
 
 	// Print the estimated stations for this block
@@ -3640,10 +3671,11 @@ void dna_adjust::UpdateEstimatesCombine(const UINT32 currentBlock, UINT32 pseudo
 		measMinusComp = &v_measMinusCompR_.at(currentBlock);
 	}	
 
-	// copy estimated parameter station coordinates
+	if (currentRelaxation_ < 1.0)
+		corrections->scale(currentRelaxation_);
 	estimatedStations->add(*corrections);
 
-	// Now, combination adjustment is complete, so shrink to "exclude" JSLs from 
+	// Now, combination adjustment is complete, so shrink to "exclude" JSLs from
 	// the next reverse adjustment.
 	AtVinv->shrink(0, pseudomsrJSLCount);
 	measMinusComp->shrink(pseudomsrJSLCount, 0);
@@ -3687,12 +3719,19 @@ void dna_adjust::UpdateEstimatesFinal(const UINT32 currentBlock)
 		AtVinv->shrink(0, static_cast<UINT32>(v_JSL_.at(currentBlock).size() * 3));
 		measMinusComp->shrink(static_cast<UINT32>(v_JSL_.at(currentBlock).size() * 3), 0);
 	}
-	
+
+	// Guard against numerical blow-up in reverse/combine pass
+	if (fabs(corrections->compute_maximum_value()) > 1.0e3)
+	{
+		blowupDetected_ = true;
+		corrections->zero();
+	}
+
 	// update max correction
 	if (fabs(corrections->compute_maximum_value()) > fabs(maxCorr_))
 		SetmaxCorr(corrections->maxvalue());
 
-	// update largest correction
+	// update largest correction (unfiltered, for reporting)
 	if (fabs(corrections->maxvalue()) > fabs(largestCorr_))
 	{
 		largestCorr_ = corrections->maxvalue();
@@ -5283,7 +5322,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_G(pit_vmsr_t _it_msr, UINT32& de
 
 		if (buildnewMatrices && projectSettings_.a.stage)
 			return;
-	
+
 		// Build  At * V-1
 		AtVinv->replace(stn1, design_row_begin, var_cart * -1);
 		AtVinv->replace(stn2, design_row_begin, var_cart);
@@ -5292,7 +5331,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_G(pit_vmsr_t _it_msr, UINT32& de
 			// Add weighted measurement contributions to normal matrix
 			UpdateNormals_G(stn1, stn2, design_row_begin, normals, AtVinv);
 	}
-	
+
 	design_row++;
 }
 	
@@ -6002,7 +6041,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_X(pit_vmsr_t _it_msr, UINT32& de
 			return;
 	}
 
-	// If this method is called via PrepareAdjustment() and the adjustment 
+	// If this method is called via PrepareAdjustment() and the adjustment
 	// mode is staged, then don't update the AtVinv matrix.  This will be
 	// done during an adjustment via AdjustPhasedForward().
 	if (!buildnewMatrices && !projectSettings_.a.stage)
@@ -6364,17 +6403,17 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_Y(pit_vmsr_t _it_msr, UINT32& de
 	if (buildnewMatrices || projectSettings_.a.stage)
 	{
 		// Load apriori variance matrix, and assign to binary measurement
-		// If required, propagate to cartesian reference frame and apply 
+		// If required, propagate to cartesian reference frame and apply
 		// scalars
 		LoadVarianceMatrix_Y(_it_msr_first, &var_cart, coordType);
-	
+
 		// If preparing for a stage adjustment, return
 		// Normals will be built for each block as needed
 		if (buildnewMatrices && projectSettings_.a.stage)
 			return;
 	}
-	
-	// If this method is called via PrepareAdjustment() and the adjustment 
+
+	// If this method is called via PrepareAdjustment() and the adjustment
 	// mode is staged, then don't update the AtVinv matrix.  This will be
 	// done during an adjustment via AdjustPhasedForward().
 	if (!buildnewMatrices && !projectSettings_.a.stage)
@@ -7987,8 +8026,8 @@ void dna_adjust::ComputeGlobalPelzer_GXY(it_vmsr_t& _it_msr, UINT32& numMsr, dou
 
 void dna_adjust::ComputeChiSquare_ABCEHIJKLMPQRSVZ(const it_vmsr_t& _it_msr, UINT32& measurement_index, matrix_2d* measMinusComp)
 {
-	chiSquared_ +=  
-		measMinusComp->get(measurement_index, 0) * 
+	chiSquared_ +=
+		measMinusComp->get(measurement_index, 0) *
 		measMinusComp->get(measurement_index, 0) / _it_msr->term2;
 
 	measurement_index++;
@@ -8018,14 +8057,14 @@ void dna_adjust::ComputeChiSquare_D(it_vmsr_t& _it_msr, UINT32& measurement_inde
 		}
 
 		chiSquared_ +=
-			measMinusComp->get(measurement_index, 0) * 
+			measMinusComp->get(measurement_index, 0) *
 			measMinusComp->get(measurement_index, 0) / _it_msr->scale2;		//variance (angle)
 
 		measurement_index++;
 		_it_msr++;
 	}
 }
-	
+
 
 void dna_adjust::FormInverseVarianceMatrix(matrix_2d* vmat, bool LOWER_IS_CLEARED)
 {
@@ -8105,7 +8144,7 @@ void dna_adjust::ComputeChiSquare_G(const it_vmsr_t& _it_msr, UINT32& measuremen
 	chiSquared_ += cs;
 	measurement_index += 3;
 }
-	
+
 
 void dna_adjust::ComputeChiSquare_XY(const it_vmsr_t& _it_msr, UINT32& measurement_index, matrix_2d* measMinusComp)
 {
@@ -8134,7 +8173,47 @@ void dna_adjust::ComputeChiSquare_XY(const it_vmsr_t& _it_msr, UINT32& measureme
 	chiSquared_ += rt_Vinv_r.get(0, 0);
 	measurement_index += variance_dim;
 }
-	
+
+
+void dna_adjust::UpdateAdaptiveRelaxation()
+{
+	double absMaxCorr = fabs(maxCorr_);
+	double absPrevMaxCorr = fabs(prevMaxCorr_);
+
+	// Sign change detection (skip first iteration where prevMaxCorr_ == 0)
+	bool signChanged = (prevMaxCorr_ != 0.0) &&
+		((prevMaxCorr_ > 0.0) != (maxCorr_ > 0.0));
+
+	if (signChanged)
+	{
+		oscillationCount_++;
+		monotonicDecreaseCount_ = 0;
+	}
+	else
+	{
+		oscillationCount_ = 0;
+		if (absPrevMaxCorr > 0.0 && absMaxCorr < absPrevMaxCorr)
+			monotonicDecreaseCount_++;
+		else
+			monotonicDecreaseCount_ = 0;
+	}
+
+	// Ratchet down on sustained oscillation
+	if (oscillationCount_ >= 3)
+	{
+		currentRelaxation_ *= 0.5;
+		if (currentRelaxation_ < 0.001)
+			currentRelaxation_ = 0.001;
+	}
+	// Slowly recover during monotonic convergence
+	else if (monotonicDecreaseCount_ >= 3)
+	{
+		currentRelaxation_ = std::min(1.0, currentRelaxation_ * 1.2);
+	}
+
+	prevMaxCorr_ = maxCorr_;
+}
+
 
 void dna_adjust::OpenOutputFileStreams()
 {

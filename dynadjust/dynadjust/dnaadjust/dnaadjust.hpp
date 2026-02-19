@@ -1078,6 +1078,13 @@ class dna_adjust {
     vASL vAssocStnList_;
     v_aml_pair vAssocMsrList_;
 
+    bool blowupDetected_;
+    double currentRelaxation_;
+    double prevMaxCorr_;
+    UINT32 oscillationCount_;
+    UINT32 monotonicDecreaseCount_;
+    void UpdateAdaptiveRelaxation();
+
     UINT32 bmsr_count_;
     UINT32 bstn_count_;
     UINT32 asl_count_;
