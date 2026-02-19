@@ -158,6 +158,7 @@ class DNAADJUST_API DynAdjustPrinter {
     void PrintOutputFileHeaderInfo();
     void PrintCompMeasurements_GXY(const UINT32& block, it_vmsr_t& _it_msr, UINT32& design_row, printMeasurementsMode printMode);
     void PrintAdjGNSSAlternateUnits(it_vmsr_t& _it_msr, const uint32_uint32_pair& b_pam);
+    void UpdateGNSSNstatsForAlternateUnits(const v_uint32_u32u32_pair& msr_block);
     void PrintStationsUniqueList(std::ostream& os, const v_mat_2d* stationEstimates, v_mat_2d* stationVariances, 
                                  bool recomputeGeographicCoords, bool updateGeographicCoords, bool reapplyTypeBUncertainties);
     void PrintCompMeasurements_D(it_vmsr_t& _it_msr, UINT32& design_row, bool printIgnored);
