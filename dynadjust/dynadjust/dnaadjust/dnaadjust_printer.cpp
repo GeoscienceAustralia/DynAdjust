@@ -743,19 +743,42 @@ void DynAdjustPrinter::PrintMeasurementsToStation() {
     // Print measurement to station summary, sort stations as required
     switch (adjust_.projectSettings_.o._sort_msr_to_stn)
     {
+    case name_stn_sort_ui:
+    {
+        CompareStnNameOrder<station_t, UINT32> stnnameCompareFunc(&adjust_.bstBinaryRecords_);
+        std::sort(vStationList.begin(), vStationList.end(), stnnameCompareFunc);
+    }
+    break;
     case meas_stn_sort_ui:
     {
-        // sort summary according to measurement to station count
         CompareMeasCount<CAStationList, UINT32> msrcountCompareFunc(&adjust_.vAssocStnList_);
         std::sort(vStationList.begin(), vStationList.end(), msrcountCompareFunc);
     }
     break;
-    case orig_stn_sort_ui:
-    default:
+    case saem_stn_sort_ui:
     {
-        // sort summary according to original station file order
+        CompareMeasCountDesc<CAStationList, UINT32> msrcountCompareFunc(&adjust_.vAssocStnList_);
+        std::sort(vStationList.begin(), vStationList.end(), msrcountCompareFunc);
+    }
+    break;
+    case orig_stn_sort_ui:
+    {
         CompareStnFileOrder<station_t, UINT32> stnorderCompareFunc(&adjust_.bstBinaryRecords_);
         std::sort(vStationList.begin(), vStationList.end(), stnorderCompareFunc);
+    }
+    break;
+    case meas_dec_stn_sort_ui:
+    {
+        CompareMeasCount<CAStationList, UINT32> msrcountCompareFunc(&adjust_.vAssocStnList_);
+        std::sort(vStationList.begin(), vStationList.end(), msrcountCompareFunc);
+        std::reverse(vStationList.begin(), vStationList.end());
+    }
+    break;
+    case alpha_stn_sort_ui:
+    default:
+    {
+        CompareStnNameOrder<station_t, UINT32> stnnameCompareFunc(&adjust_.bstBinaryRecords_);
+        std::sort(vStationList.begin(), vStationList.end(), stnnameCompareFunc);
     }
     break;
     }

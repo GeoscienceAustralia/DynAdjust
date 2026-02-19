@@ -490,6 +490,23 @@ private:
 };
 
 
+template <typename A, typename U>
+class CompareMeasCountDesc
+{
+public:
+	CompareMeasCountDesc(const std::vector<A>* a) : _a(a) {}
+
+	bool operator()(const U& lhs, const U& rhs)
+	{
+		if (_a->at(lhs).GetAssocMsrCount() == _a->at(rhs).GetAssocMsrCount())
+			return _a->at(lhs).GetAMLStnIndex() < _a->at(rhs).GetAMLStnIndex();
+		return _a->at(lhs).GetAssocMsrCount() > _a->at(rhs).GetAssocMsrCount();
+	}
+private:
+	const std::vector<A>*	_a;
+};
+
+
 template<typename A, typename U>
 class CompareMeasCount2
 {
@@ -514,7 +531,7 @@ class CompareMeasCount2Desc {
 
     bool operator()(const U& lhs, const U& rhs) {
         if (_a->at(lhs).get()->GetAssocMsrCount() == _a->at(rhs).get()->GetAssocMsrCount())
-            return _a->at(lhs).get()->GetAMLStnIndex() > _a->at(rhs).get()->GetAMLStnIndex();
+            return _a->at(lhs).get()->GetAMLStnIndex() < _a->at(rhs).get()->GetAMLStnIndex();
         return _a->at(lhs).get()->GetAssocMsrCount() > _a->at(rhs).get()->GetAssocMsrCount();
     }
 
@@ -638,7 +655,6 @@ public:
 private:
 	std::vector<S>*	_s;
 };
-
 
 // S = station_t, U = UINT32
 template <typename S, typename U>

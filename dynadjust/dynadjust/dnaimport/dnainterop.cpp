@@ -4934,13 +4934,13 @@ void dna_import::PrintMeasurementsToStations(std::string& m2s_file, MsrTally* pa
 		std::sort(vStationList.begin(), vStationList.end(), msrcountCompareFunc);
 		break;
 	}
-    case saem_stn_sort_ui: {  
+    case saem_stn_sort_ui: {
 		// sort summary according to measurement to station count (descending)
         CompareMeasCount2Desc<ASLPtr, UINT32> msrcountCompareFunc(vAssocStnList);
         std::sort(vStationList.begin(), vStationList.end(), msrcountCompareFunc);
         break;
     }
-    case name_stn_sort_ui:	
+    case name_stn_sort_ui:
 	{
 		// sort summary according to station name
         CompareStnNameOrder<station_t, UINT32> stnnameCompareFunc(&bstBinaryRecords);
@@ -4948,9 +4948,7 @@ void dna_import::PrintMeasurementsToStations(std::string& m2s_file, MsrTally* pa
 		break;
 	}
 	case orig_stn_sort_ui:
-	default:
 	{
-		// sort summary according to original station file order
 		CompareStnFileOrder<station_t, UINT32> stnorderCompareFunc(&bstBinaryRecords);
 		std::sort(vStationList.begin(), vStationList.end(), stnorderCompareFunc);
 		break;
