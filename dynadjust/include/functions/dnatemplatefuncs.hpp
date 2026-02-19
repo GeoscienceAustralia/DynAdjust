@@ -657,21 +657,6 @@ private:
 };
 
 // S = station_t, U = UINT32
-template<typename S, typename U>
-class CompareStnNameOrder
-{
-public:
-	CompareStnNameOrder(std::vector<S>* s) : _s(s) {}
-	bool operator()(const U& lhs, const U& rhs) {
-		return std::string(_s->at(lhs).stationName) < std::string(_s->at(rhs).stationName);
-	}
-private:
-	std::vector<S>*	_s;
-};
-
-
-
-// S = station_t, U = UINT32
 template <typename S, typename U>
 class CompareStnNameOrder
 {
