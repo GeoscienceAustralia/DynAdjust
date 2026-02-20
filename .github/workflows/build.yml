@@ -169,7 +169,7 @@ jobs:
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       PKGS: >
-        xsdcxx libboost-program-options-dev libopenblas-dev liblapacke-dev
+        xsdcxx libboost-program-options-dev libopenblas-dev liblapacke-dev libicu-dev
       XERCES_VERSION: 3.2.4
 
     steps:
@@ -223,7 +223,7 @@ jobs:
             /usr/local/lib/libxerces-c*.a
             /usr/local/include/xercesc
             /usr/local/lib/pkgconfig/xerces-c.pc
-          key: xerces-static-${{ env.XERCES_VERSION }}-${{ runner.os }}
+          key: xerces-static-icu-${{ env.XERCES_VERSION }}-${{ runner.os }}
 
       - name: Build static xerces
         if: steps.cache-xerces.outputs.cache-hit != 'true'
@@ -235,7 +235,7 @@ jobs:
 
           cd xerces-c-${{ env.XERCES_VERSION }}
 
-          PKG_CONFIG="pkg-config --static" ./configure --without-curl --without-icu --enable-static --disable-shared
+          PKG_CONFIG="pkg-config --static" ./configure --without-curl --enable-static --disable-shared
           make -j2
           sudo make install 
 

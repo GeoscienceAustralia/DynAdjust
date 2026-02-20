@@ -178,6 +178,20 @@ else()
 endif()
 message(STATUS "Found XercesC (${XercesC_INCLUDE_DIRS} ${XercesC_LIBRARIES})")
 
+# Static builds need ICU for Xerces transcoding (glibc iconv can't dlopen gconv modules in static binaries)
+if(BUILD_STATIC AND UNIX AND NOT APPLE)
+    find_package(ICU COMPONENTS uc data)
+    if(ICU_FOUND)
+        message(STATUS "Found ICU ${ICU_VERSION} for static Xerces transcoding")
+        set(XERCES_ICU_LIBRARIES ${ICU_LIBRARIES})
+    else()
+        message(WARNING "ICU not found - static binary may fail with 'Could not load a transcoding service'")
+        set(XERCES_ICU_LIBRARIES "")
+    endif()
+else()
+    set(XERCES_ICU_LIBRARIES "")
+endif()
+
 # ----------------------------------------------------------------------------
 # XSD
 # ----------------------------------------------------------------------------
@@ -274,6 +288,7 @@ message(STATUS "Found Boost version: ${Boost_VERSION}")
 set(DNA_LIBRARIES
     ${Boost_LIBRARIES}
     ${XercesC_LIBRARIES}
+    ${XERCES_ICU_LIBRARIES}
 )
 
 # ----------------------------------------------------------------------------
