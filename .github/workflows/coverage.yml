@@ -1,0 +1,107 @@
+name: Code coverage
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+
+  coverage:
+    name: Build and collect code coverage
+    runs-on: ubuntu-latest
+    env:
+      BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+      PKGS: >
+        libxerces-c-dev xsdcxx libboost-program-options-dev libopenblas-dev liblapacke-dev gmt ghostscript lcov
+
+    steps:
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ env.PKGS }}
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH_NAME }}
+
+      - name: Build with CMake (coverage enabled)
+        run: |
+          cmake dynadjust -DBUILD_TESTING=ON -DBUILD_COVERAGE=ON
+          make -j2
+
+      - name: Run tests
+        run: |
+          ctest --timeout 20 --output-on-failure 2>&1 | tee ctest_output.log
+
+      - name: Capture coverage data
+        if: always()
+        run: |
+          lcov --directory . --capture --output-file lcov.info --ignore-errors mismatch
+          lcov --remove lcov.info '/usr/*' '*/boost/*' '*/xerces*/*' '*/xsd/*' '*/testing/*' --output-file lcov.info
+          lcov --list lcov.info
+
+      - name: Generate coverage summary
+        if: always()
+        id: coverage
+        run: |
+          # Extract total line coverage percentage
+          TOTAL=$(lcov --summary lcov.info 2>&1 | grep 'lines' | sed 's/.*: //' | sed 's/%.*//')
+          echo "total=${TOTAL}%" >> "$GITHUB_OUTPUT"
+
+          # Build per-directory summary table
+          {
+            echo "## Code Coverage Report"
+            echo ""
+            echo "**Overall line coverage: ${TOTAL}%**"
+            echo ""
+            echo "| Directory | Line Coverage | Lines |"
+            echo "|-----------|-------------|-------|"
+            lcov --list lcov.info 2>&1 | grep '/' | grep -v '^\[' | while IFS='|' read -r file lines_pct func_pct branches; do
+              dir=$(echo "$file" | xargs)
+              pct=$(echo "$lines_pct" | xargs)
+              echo "| \`${dir}\` | ${pct} |"
+            done
+            echo ""
+            echo "*Generated from \`lcov\` — excludes system, Boost, Xerces, XSD, and test code.*"
+          } > coverage_report.md
+
+      - name: Post coverage comment on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          path: coverage_report.md
+
+      - name: Upload test log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-coverage-log
+          path: Testing/Temporary/LastTest.log
+          if-no-files-found: ignore
+
+      - name: Parse test results and create annotations
+        if: always()
+        shell: bash
+        run: |
+          if [ -f ctest_output.log ]; then
+            SUMMARY_LINE=$(grep -n "tests passed" ctest_output.log | head -1 | cut -d: -f1)
+
+            if [ -n "$SUMMARY_LINE" ]; then
+              FIRST_LINE=$(tail -n +$SUMMARY_LINE ctest_output.log | head -1)
+              SUMMARY_CONTENT=$(tail -n +$SUMMARY_LINE ctest_output.log | grep -v "Errors while running" | tr '\n' '\a')
+              SUMMARY_CONTENT=$(echo "$SUMMARY_CONTENT" | tr '\a' '\n' | sed ':a;N;$!ba;s/\n/%0A/g')
+
+              if grep -q "tests failed" ctest_output.log; then
+                echo "::error title=Test results (coverage): $FIRST_LINE::$SUMMARY_CONTENT"
+              else
+                echo "::notice title=Test results (coverage): $FIRST_LINE::$SUMMARY_CONTENT"
+              fi
+            else
+              echo "::warning title=Test Warning::Could not find test summary in ctest output"
+            fi
+          else
+            echo "::warning title=Test Warning::Could not find ctest output file"
+          fi
