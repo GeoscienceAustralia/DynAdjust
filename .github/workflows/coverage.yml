@@ -39,7 +39,7 @@ jobs:
       - name: Capture coverage data
         if: always()
         run: |
-          lcov --directory . --capture --output-file lcov.info --ignore-errors mismatch
+          lcov --directory . --capture --output-file lcov.info --ignore-errors mismatch,negative
           lcov --remove lcov.info '/usr/*' '*/boost/*' '*/xerces*/*' '*/xsd/*' '*/testing/*' --output-file lcov.info --ignore-errors unused
           lcov --list lcov.info
 
