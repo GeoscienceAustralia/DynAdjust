@@ -38,7 +38,7 @@ AslFileLoader& AslFileLoader::operator=(
   if (this == &rhs) {
     return *this;
   }
-  dna_io_base::operator=(rhs);
+  DynadjustFile::operator=(rhs);
   return *this;
 }
 
@@ -67,7 +67,7 @@ std::uint64_t AslFileLoader::LoadFile(
   std::uint64_t stn_count;
 
   try {
-    readFileInfo(asl_file);
+    ReadFileInfo(asl_file);
 
     asl_file.read(reinterpret_cast<char*>(&stn_count), sizeof(std::uint64_t));
 
@@ -128,7 +128,7 @@ void AslFileLoader::WriteFile(
   std::uint64_t asl_count = static_cast<std::uint64_t>(binary_asl->size());
 
   try {
-    writeFileInfo(asl_file);
+    WriteFileInfo(asl_file);
 
     asl_file.write(reinterpret_cast<char*>(&asl_count), sizeof(std::uint64_t));
     for (const auto& asl_entry : *binary_asl) {

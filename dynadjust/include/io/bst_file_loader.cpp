@@ -60,7 +60,7 @@ namespace {
 
 BstFileLoader& BstFileLoader::operator=(const BstFileLoader& rhs) {
   if (this != &rhs) {
-    dna_io_base::operator=(rhs);
+    DynadjustFile::operator=(rhs);
   }
   return *this;
 }
@@ -108,8 +108,8 @@ void BstFileLoader::LoadFileMeta(const std::string& bst_filename,
     auto bst_file = OpenBstForRead(bst_filename);
 
     // May throw ios::failure
-    readFileInfo(bst_file);
-    readFileMetadata(bst_file, bst_meta);
+    ReadFileInfo(bst_file);
+    ReadFileMetadata(bst_file, bst_meta);
 
   } catch (const std::exception& e) {
     std::ostringstream os;
@@ -124,8 +124,8 @@ std::uint64_t BstFileLoader::LoadFile(const std::string& bst_filename,
   try {
     auto bst_file = OpenBstForRead(bst_filename);
 
-    readFileInfo(bst_file);
-    readFileMetadata(bst_file, bst_meta);
+    ReadFileInfo(bst_file);
+    ReadFileMetadata(bst_file, bst_meta);
 
     vbinary_stn->resize(bst_meta.binCount);
     static_assert(std::is_trivially_copyable_v<station_t>,
@@ -159,8 +159,8 @@ void BstFileLoader::WriteFile(const std::string& bst_filename,
   try {
     auto bst_file = OpenBstForWrite(bst_filename);
 
-    writeFileInfo(bst_file);
-    writeFileMetadata(bst_file, bst_meta);
+    WriteFileInfo(bst_file);
+    WriteFileMetadata(bst_file, bst_meta);
 
     static_assert(std::is_trivially_copyable_v<station_t>,
                   "station_t must be trivially copyable for bulk I/O");
@@ -182,8 +182,8 @@ bool BstFileLoader::WriteFile(const std::string& bst_filename,
   try {
     auto bst_file = OpenBstForWrite(bst_filename);
 
-    writeFileInfo(bst_file);
-    writeFileMetadata(bst_file, bst_meta);
+    WriteFileInfo(bst_file);
+    WriteFileMetadata(bst_file, bst_meta);
 
     if (flagUnused) {
       std::sort(vUnusedStns->begin(), vUnusedStns->end());

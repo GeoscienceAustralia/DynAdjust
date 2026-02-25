@@ -1,3 +1,6 @@
+# Standalone build for unit tests (for fast local iteration).
+# These tests are also integrated into the main build via
+# dynadjust/CMakeLists.txt when BUILD_TESTING=ON.
 cmake_minimum_required(VERSION 3.16)
 if(POLICY CMP0167)
     cmake_policy(SET CMP0167 OLD)

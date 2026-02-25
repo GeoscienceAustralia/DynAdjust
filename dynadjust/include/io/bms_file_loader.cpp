@@ -36,7 +36,7 @@ BmsFileLoader& BmsFileLoader::operator=(const BmsFileLoader& rhs) {
   if (this == &rhs) {
     return *this;
   }
-  dna_io_base::operator=(rhs);
+  DynadjustFile::operator=(rhs);
   return *this;
 }
 

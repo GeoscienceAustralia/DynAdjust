@@ -259,7 +259,7 @@ TEST_CASE("dateSINEXFormat with seconds calculation", "[sinex][date]") {
     // Should be in format YY:DOY:SSSSS where SSSSS is at least 5 characters
     REQUIRE(result.substr(0, 3) == "20:");
     REQUIRE(result.substr(3, 4) == "167:");  // June 15 is day 167 in leap year
-    REQUIRE(result.length() >= 13);  // YY:DOY:SSSSS (seconds field can be longer than 5 digits)
+    REQUIRE(result.length() >= 12);  // YY:DOY:SSSSS = 2+1+3+1+5 = 12
     
     // Verify the seconds field contains only digits or spaces
     std::string seconds_field = result.substr(7);
@@ -824,6 +824,7 @@ TEST_CASE("Date parsing from string", "[sinex][date][parsing]") {
 
 // Test special date calculations
 TEST_CASE("Special date calculations", "[sinex][date][calculations]") {
+    using namespace dynadjust;
     // Test year_doy_Average function
     {
         UINT32 start_year = 2020, end_year = 2020;
