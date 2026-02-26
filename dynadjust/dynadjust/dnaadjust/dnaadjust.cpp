@@ -6766,6 +6766,9 @@ void dna_adjust::GenerateStatistics()
 			printer_->PrintStatistics();
 			break;
 		}
+
+		if (passFail_ == test_stat_fail && degreesofFreedom_ > 0)
+			ComputeRobustStatistics(robustStats_);
 	}
 	catch (const std::out_of_range& e) {
 		std::cerr << "ERROR in GenerateStatistics: out_of_range exception - " << e.what() << std::endl;
@@ -6858,10 +6861,381 @@ void dna_adjust::ComputeTestStat(const double& dof, double& chiUpper, double& ch
 
 void dna_adjust::ComputeGlobalTestStat()
 {
-	ComputeTestStat(degreesofFreedom_, chiSquaredUpperLimit_, chiSquaredLowerLimit_, 
+	ComputeTestStat(degreesofFreedom_, chiSquaredUpperLimit_, chiSquaredLowerLimit_,
 		sigmaZero_, passFail_);
 }
-	
+
+
+void dna_adjust::ComputeRobustStatistics(robust_statistics_t& stats)
+{
+	ComputeMedianSigmaZero(stats);
+	ComputeOutlierBreakdown(stats);
+	ComputeTrimmedChiSquare(stats);
+}
+
+
+void dna_adjust::ComputeMedianSigmaZero(robust_statistics_t& stats)
+{
+	std::vector<double> absNStats;
+	absNStats.reserve(measurementParams_);
+
+	it_vUINT32 _it_block_msr;
+	it_vmsr_t _it_msr;
+
+	for (UINT32 block = 0; block < blockCount_; ++block)
+	{
+		for (_it_block_msr = v_CML_.at(block).begin();
+			_it_block_msr != v_CML_.at(block).end();
+			++_it_block_msr)
+		{
+			if (InitialiseandValidateMsrPointer(_it_block_msr, _it_msr))
+				continue;
+
+			switch (_it_msr->measType)
+			{
+			case 'D':
+				if (_it_msr->vectorCount1 < 1)
+					continue;
+				{
+					UINT32 angle_count(_it_msr->vectorCount2 - 1);
+					UINT32 skip(0), ignored(_it_msr->vectorCount1 - _it_msr->vectorCount2);
+					_it_msr++;
+					for (UINT32 a = 0; a < angle_count; ++a)
+					{
+						if (_it_msr->ignore)
+						{
+							while (skip < ignored)
+							{
+								skip++;
+								_it_msr++;
+								if (!_it_msr->ignore)
+									break;
+							}
+						}
+						absNStats.push_back(fabs(_it_msr->NStat));
+						_it_msr++;
+					}
+				}
+				continue;
+
+			case 'G':
+			case 'X':
+			case 'Y':
+				{
+					UINT32 cluster_count(_it_msr->vectorCount1);
+					for (UINT32 cluster_msr = 0; cluster_msr < cluster_count; ++cluster_msr)
+					{
+						UINT32 covariance_count = _it_msr->vectorCount2;
+						for (UINT32 i = 0; i < 3; ++i)
+						{
+							absNStats.push_back(fabs(_it_msr->NStat));
+							if (i < 2)
+								_it_msr++;
+						}
+						_it_msr += covariance_count * 3;
+						if (covariance_count > 0)
+							_it_msr++;
+					}
+				}
+				continue;
+
+			default:
+				absNStats.push_back(fabs(_it_msr->NStat));
+				break;
+			}
+		}
+	}
+
+	stats.medianSigmaZero = 0.;
+	if (!absNStats.empty())
+	{
+		size_t mid = absNStats.size() / 2;
+		std::nth_element(absNStats.begin(), absNStats.begin() + mid, absNStats.end());
+		double median = absNStats[mid];
+		if (absNStats.size() % 2 == 0)
+		{
+			double lower = *std::max_element(absNStats.begin(), absNStats.begin() + mid);
+			median = (median + lower) / 2.0;
+		}
+		stats.medianSigmaZero = median / 0.6745;
+	}
+}
+
+
+void dna_adjust::ComputeOutlierBreakdown(robust_statistics_t& stats)
+{
+	std::map<char, std::pair<UINT32, UINT32>> typeCounts;
+
+	it_vUINT32 _it_block_msr;
+	it_vmsr_t _it_msr;
+
+	for (UINT32 block = 0; block < blockCount_; ++block)
+	{
+		for (_it_block_msr = v_CML_.at(block).begin();
+			_it_block_msr != v_CML_.at(block).end();
+			++_it_block_msr)
+		{
+			if (InitialiseandValidateMsrPointer(_it_block_msr, _it_msr))
+				continue;
+
+			switch (_it_msr->measType)
+			{
+			case 'D':
+				if (_it_msr->vectorCount1 < 1)
+					continue;
+				{
+					char type = _it_msr->measType;
+					UINT32 angle_count(_it_msr->vectorCount2 - 1);
+					UINT32 skip(0), ignored(_it_msr->vectorCount1 - _it_msr->vectorCount2);
+					_it_msr++;
+					for (UINT32 a = 0; a < angle_count; ++a)
+					{
+						if (_it_msr->ignore)
+						{
+							while (skip < ignored)
+							{
+								skip++;
+								_it_msr++;
+								if (!_it_msr->ignore)
+									break;
+							}
+						}
+						typeCounts[type].first++;
+						if (fabs(_it_msr->NStat) > criticalValue_)
+							typeCounts[type].second++;
+						_it_msr++;
+					}
+				}
+				continue;
+
+			case 'G':
+			case 'X':
+			case 'Y':
+				{
+					char type = _it_msr->measType;
+					UINT32 cluster_count(_it_msr->vectorCount1);
+					for (UINT32 cluster_msr = 0; cluster_msr < cluster_count; ++cluster_msr)
+					{
+						UINT32 covariance_count = _it_msr->vectorCount2;
+						bool hasOutlier = false;
+						for (UINT32 i = 0; i < 3; ++i)
+						{
+							if (fabs(_it_msr->NStat) > criticalValue_)
+								hasOutlier = true;
+							if (i < 2)
+								_it_msr++;
+						}
+						typeCounts[type].first++;
+						if (hasOutlier)
+							typeCounts[type].second++;
+						_it_msr += covariance_count * 3;
+						if (covariance_count > 0)
+							_it_msr++;
+					}
+				}
+				continue;
+
+			default:
+				typeCounts[_it_msr->measType].first++;
+				if (fabs(_it_msr->NStat) > criticalValue_)
+					typeCounts[_it_msr->measType].second++;
+				break;
+			}
+		}
+	}
+
+	stats.outlierBreakdown.clear();
+	for (auto& kv : typeCounts)
+		stats.outlierBreakdown.push_back({kv.first, kv.second.first, kv.second.second});
+}
+
+
+void dna_adjust::ComputeTrimmedChiSquare(robust_statistics_t& stats)
+{
+	stats.trimmedChiSquared = 0.;
+	stats.trimmedMeasurementCount = 0;
+
+	it_vUINT32 _it_block_msr;
+	it_vmsr_t _it_msr;
+
+	for (UINT32 block = 0; block < blockCount_; ++block)
+	{
+		UINT32 measurement_index(0);
+
+		for (_it_block_msr = v_CML_.at(block).begin();
+			_it_block_msr != v_CML_.at(block).end();
+			++_it_block_msr)
+		{
+			if (InitialiseandValidateMsrPointer(_it_block_msr, _it_msr))
+				continue;
+
+			switch (_it_msr->measType)
+			{
+			case 'A':
+			case 'B':
+			case 'C':
+			case 'E':
+			case 'H':
+			case 'I':
+			case 'J':
+			case 'K':
+			case 'L':
+			case 'M':
+			case 'P':
+			case 'Q':
+			case 'R':
+			case 'S':
+			case 'V':
+			case 'Z':
+				if (fabs(_it_msr->NStat) <= criticalValue_)
+				{
+					stats.trimmedChiSquared +=
+						v_measMinusComp_.at(block).get(measurement_index, 0) *
+						v_measMinusComp_.at(block).get(measurement_index, 0) / _it_msr->term2;
+					stats.trimmedMeasurementCount++;
+				}
+				measurement_index++;
+				break;
+
+			case 'D':
+				if (_it_msr->vectorCount1 < 1)
+					continue;
+				{
+					UINT32 angle_count(_it_msr->vectorCount2 - 1);
+					UINT32 skip(0), ignored(_it_msr->vectorCount1 - _it_msr->vectorCount2);
+					_it_msr++;
+					for (UINT32 a = 0; a < angle_count; ++a)
+					{
+						if (_it_msr->ignore)
+						{
+							while (skip < ignored)
+							{
+								skip++;
+								_it_msr++;
+								if (!_it_msr->ignore)
+									break;
+							}
+						}
+						if (fabs(_it_msr->NStat) <= criticalValue_)
+						{
+							stats.trimmedChiSquared +=
+								v_measMinusComp_.at(block).get(measurement_index, 0) *
+								v_measMinusComp_.at(block).get(measurement_index, 0) / _it_msr->scale2;
+							stats.trimmedMeasurementCount++;
+						}
+						measurement_index++;
+						_it_msr++;
+					}
+				}
+				continue;
+
+			case 'G':
+				{
+					bool hasOutlier = false;
+					it_vmsr_t _it_check = _it_msr;
+					for (UINT32 i = 0; i < 3; ++i)
+					{
+						if (fabs(_it_check->NStat) > criticalValue_)
+							hasOutlier = true;
+						if (i < 2)
+							_it_check++;
+					}
+
+					if (!hasOutlier)
+					{
+						matrix_2d V(3, 3);
+						FormInverseGPSVarianceMatrix(_it_msr, &V);
+						double cs(0.);
+						for (UINT32 row = 0; row < 3; ++row)
+							for (UINT32 col = 0; col < 3; ++col)
+								cs += V.get(row, col) *
+									v_measMinusComp_.at(block).get(measurement_index + row, 0) *
+									v_measMinusComp_.at(block).get(measurement_index + col, 0);
+						stats.trimmedChiSquared += cs;
+						stats.trimmedMeasurementCount += 3;
+					}
+					measurement_index += 3;
+				}
+				break;
+
+			case 'X':
+			case 'Y':
+				{
+					UINT32 element_count(_it_msr->vectorCount1);
+					UINT32 variance_dim(element_count * 3);
+
+					bool hasOutlier = false;
+					it_vmsr_t _it_check = _it_msr;
+					for (UINT32 cluster_msr = 0; cluster_msr < element_count; ++cluster_msr)
+					{
+						UINT32 cov_count = _it_check->vectorCount2;
+						for (UINT32 i = 0; i < 3; ++i)
+						{
+							if (fabs(_it_check->NStat) > criticalValue_)
+								hasOutlier = true;
+							if (i < 2)
+								_it_check++;
+						}
+						_it_check += cov_count * 3;
+						if (cov_count > 0)
+							_it_check++;
+					}
+
+					if (!hasOutlier)
+					{
+						matrix_2d V(variance_dim, variance_dim);
+						FormInverseGPSVarianceMatrix(_it_msr, &V);
+						matrix_2d r(v_measMinusComp_.at(block).submatrix(measurement_index, 0, variance_dim, 1));
+						matrix_2d rt_Vinv(1, variance_dim);
+						matrix_2d rt_Vinv_r(1, 1);
+						rt_Vinv.multiply(r, "T", V, "N");
+						rt_Vinv_r.multiply(rt_Vinv, "N", r, "N");
+						stats.trimmedChiSquared += rt_Vinv_r.get(0, 0);
+						stats.trimmedMeasurementCount += variance_dim;
+					}
+					measurement_index += variance_dim;
+				}
+				break;
+			}
+		}
+	}
+
+	stats.trimmedDOF = static_cast<int>(stats.trimmedMeasurementCount) - static_cast<int>(unknownParams_);
+
+	if (stats.trimmedDOF > 0)
+	{
+		stats.trimmedSigmaZero = stats.trimmedChiSquared / stats.trimmedDOF;
+
+		double confidence = (100. - projectSettings_.a.confidence_interval) * 0.01;
+		double conf = confidence * 0.5;
+
+		try {
+			boost::math::chi_squared dist(stats.trimmedDOF);
+			stats.trimmedChiUpperLimit = boost::math::quantile(
+				boost::math::complement(dist, conf)) / stats.trimmedDOF;
+			stats.trimmedChiLowerLimit = boost::math::quantile(dist, conf) / stats.trimmedDOF;
+
+			if (stats.trimmedSigmaZero < stats.trimmedChiLowerLimit)
+				stats.trimmedPassFail = test_stat_warning;
+			else if (stats.trimmedSigmaZero > stats.trimmedChiUpperLimit)
+				stats.trimmedPassFail = test_stat_fail;
+			else
+				stats.trimmedPassFail = test_stat_pass;
+		}
+		catch (const std::exception&)
+		{
+			stats.trimmedPassFail = test_stat_fail;
+		}
+	}
+	else
+	{
+		stats.trimmedSigmaZero = 0.;
+		stats.trimmedChiUpperLimit = 0.;
+		stats.trimmedChiLowerLimit = 0.;
+		stats.trimmedPassFail = test_stat_fail;
+	}
+}
+
 
 void dna_adjust::ComputeBlockTestStat(const UINT32& block)
 {

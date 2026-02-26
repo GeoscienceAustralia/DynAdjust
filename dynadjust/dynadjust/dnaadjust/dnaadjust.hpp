@@ -203,6 +203,23 @@ class adjust_process_combine_thread {
     operator=(const adjust_process_combine_thread& rhs);
 };
 
+struct robust_statistics_t {
+    double medianSigmaZero;
+    struct outlier_type_count {
+        char measType;
+        UINT32 totalCount;
+        UINT32 outlierCount;
+    };
+    std::vector<outlier_type_count> outlierBreakdown;
+    double trimmedChiSquared;
+    UINT32 trimmedMeasurementCount;
+    int trimmedDOF;
+    double trimmedSigmaZero;
+    double trimmedChiUpperLimit;
+    double trimmedChiLowerLimit;
+    UINT32 trimmedPassFail;
+};
+
 // This class is exported from the dnaAdjust.dll
 #ifdef _MSC_VER
 class DNAADJUST_API dna_adjust {
@@ -330,6 +347,7 @@ class dna_adjust {
     }
     inline UINT32 GetTestResult() const { return passFail_; }
     inline bool GetAllFixed() const { return allStationsFixed_; }
+    inline const robust_statistics_t& GetRobustStats() const { return robustStats_; }
 
 
     void LoadSegmentationFileParameters(const std::string& seg_filename);
@@ -874,6 +892,11 @@ class dna_adjust {
     void ComputeGlobalTestStat();
     void ComputeGlobalNetStat();
 
+    void ComputeRobustStatistics(robust_statistics_t& stats);
+    void ComputeMedianSigmaZero(robust_statistics_t& stats);
+    void ComputeOutlierBreakdown(robust_statistics_t& stats);
+    void ComputeTrimmedChiSquare(robust_statistics_t& stats);
+
     void ComputePrecisionAdjMsrs(const UINT32& block = 0);
     void ComputePrecisionAdjMsrs_A(const UINT32& block, const UINT32& stn1,
                                    const UINT32& stn2, const UINT32& stn3,
@@ -1123,6 +1146,7 @@ class dna_adjust {
     double criticalValue_;
     UINT32 potentialOutlierCount_;
     bool allStationsFixed_;
+    robust_statistics_t robustStats_;
 
     message_bank<std::string> iterationCorrections_;
 

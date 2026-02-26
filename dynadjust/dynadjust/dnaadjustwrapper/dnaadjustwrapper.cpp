@@ -264,7 +264,87 @@ void GenerateStatistics(dna_adjust* netAdjust, const project_settings* p)
 				ss << " ***";
 			}
 
-			std::cout << std::setw(PASS_FAIL) << std::right << ss.str() << std::endl;	
+			std::cout << std::setw(PASS_FAIL) << std::right << ss.str() << std::endl;
+
+			if (netAdjust->GetTestResult() == test_stat_fail && netAdjust->GetDegreesOfFreedom() > 0)
+			{
+				const robust_statistics_t& rs = netAdjust->GetRobustStats();
+
+				std::cout << std::endl;
+				std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Robust Sigma Zero (MAD)" <<
+					std::fixed << std::setprecision(3) << rs.medianSigmaZero << std::endl;
+
+				std::cout << std::endl;
+				std::cout << "  Outlier breakdown by type:" << std::endl;
+				std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Type" <<
+					std::setw(10) << std::right << "Total" <<
+					std::setw(10) << std::right << "Outliers" <<
+					std::setw(10) << std::right << "Percent" << std::endl;
+				std::cout << "  " << std::string(PRINT_VAR_PAD + 28, '-') << std::endl;
+
+				for (const auto& entry : rs.outlierBreakdown)
+				{
+					std::stringstream typeLabel;
+					typeLabel << "  (" << entry.measType << ")";
+					std::cout << std::setw(PRINT_VAR_PAD) << std::left << typeLabel.str() <<
+						std::setw(10) << std::right << entry.totalCount <<
+						std::setw(10) << std::right << entry.outlierCount;
+					if (entry.outlierCount > 0)
+						std::cout << std::setw(9) << std::right << std::fixed << std::setprecision(1) <<
+							(100.0 * entry.outlierCount / entry.totalCount) << "%";
+					std::cout << std::endl;
+				}
+
+				std::cout << std::endl;
+				std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Trimmed measurements" <<
+					std::fixed << std::setprecision(0) << rs.trimmedMeasurementCount << std::endl;
+				std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Trimmed degrees of freedom" <<
+					std::fixed << std::setprecision(0) << rs.trimmedDOF << std::endl;
+				std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Trimmed chi squared" <<
+					std::fixed << std::setprecision(2) << rs.trimmedChiSquared << std::endl;
+				std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Trimmed Sigma Zero" <<
+					std::fixed << std::setprecision(3) << rs.trimmedSigmaZero << std::endl;
+
+				std::cout << std::endl;
+				ss.str("");
+				ss << std::left << "  Trimmed Chi-Square (" << std::setprecision(1) << std::fixed <<
+					p->a.confidence_interval << "%)";
+				std::cout << std::setw(PRINT_VAR_PAD) << std::left << ss.str();
+				ss.str("");
+
+				if (rs.trimmedDOF < 1)
+				{
+					ss << "NO REDUNDANCY";
+					std::cout << std::setw(CHISQRLIMITS) << std::left << ss.str();
+					ss.str("");
+					ss << "*** FAILED ***";
+				}
+				else
+				{
+					ss << std::fixed << std::setprecision(3) <<
+						rs.trimmedChiLowerLimit << " < " <<
+						rs.trimmedSigmaZero << " < " <<
+						rs.trimmedChiUpperLimit;
+					std::cout << std::setw(CHISQRLIMITS) << std::left << ss.str();
+					ss.str("");
+					ss << "*** ";
+					switch (rs.trimmedPassFail)
+					{
+					case test_stat_pass:
+						ss << "PASSED";
+						break;
+					case test_stat_warning:
+						ss << "WARNING";
+						break;
+					case test_stat_fail:
+						ss << "FAILED";
+						break;
+					}
+					ss << " ***";
+				}
+				std::cout << std::setw(PASS_FAIL) << std::right << ss.str() << std::endl;
+			}
+
 			std::cout << "+" << OUTPUTLINE << std::endl << std::endl;
 		}
 	}
