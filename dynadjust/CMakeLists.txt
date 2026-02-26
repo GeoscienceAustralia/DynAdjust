@@ -6,6 +6,7 @@ option(BUILD_TESTING "Enable testing" OFF)
 option(BUILD_STATIC "Build static binaries in the 'static' directory" OFF)
 option(USE_OPENMP "Use OpenMP for parallel processing" OFF)
 option(ILP64 "Use ILP64 interface (64-bit matrix indexing) for BLAS and LAPACK" OFF)
+option(BUILD_COVERAGE "Build with code coverage instrumentation (forces Debug build)" OFF)
 
 # Build optimization options
 option(USE_PRECOMPILED_HEADERS "Use precompiled headers to speed up compilation" ON)
@@ -28,6 +29,16 @@ endif()
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
+endif()
+
+if(BUILD_COVERAGE)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        message(FATAL_ERROR "Code coverage requires GCC or Clang")
+    endif()
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type forced to Debug for coverage" FORCE)
+    message(STATUS "Code coverage enabled (BUILD_COVERAGE=ON), build type forced to Debug")
+    add_compile_options(--coverage)
+    add_link_options(--coverage)
 endif()
 
 message("")
