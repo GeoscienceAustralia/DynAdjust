@@ -112,11 +112,14 @@ void DateSINEXFormat(T* os, const DateT& theDate, bool calculateSeconds = false)
         auto time_since_epoch = now.time_since_epoch();
         auto today_duration = time_since_epoch % std::chrono::hours(24);
         auto seconds = std::chrono::duration_cast<std::chrono::seconds>(today_duration).count();
-        
-        *os << std::left << std::setw(5) << seconds;
+
+        *os << std::right << std::setw(5) << seconds;
     } else {
         *os << "00000";
     }
+
+    // Restore default fill character so callers aren't affected
+    *os << std::setfill(' ');
 }
 
 // Calculate year fraction (0.0 to 1.0)
