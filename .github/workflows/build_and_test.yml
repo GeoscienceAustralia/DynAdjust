@@ -624,7 +624,7 @@ jobs:
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       PKGS: >
-        libxerces-c-dev xsdcxx libboost-program-options-dev libopenblas-dev liblapacke-dev gmt ghostscript
+        libxerces-c-dev xsdcxx libboost-program-options-dev libboost-filesystem-dev libboost-timer-dev libboost-date-time-dev libboost-chrono-dev libopenblas-dev liblapacke-dev gmt ghostscript
 
     steps:
 
@@ -703,7 +703,7 @@ jobs:
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       PKGS: >
-        libxerces-c-dev xsdcxx libboost-program-options-dev gmt ghostscript lldb-18
+        libxerces-c-dev xsdcxx libboost-program-options-dev libboost-filesystem-dev libboost-timer-dev libboost-date-time-dev libboost-chrono-dev gmt ghostscript lldb-18
 
     steps:
 
