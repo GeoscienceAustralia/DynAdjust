@@ -69,8 +69,9 @@ dna_adjust::dna_adjust()
 	, blowupDetected_(false)
 	, currentRelaxation_(1.0)
 	, prevMaxCorr_(0.0)
-	, oscillationCount_(0)
-	, monotonicDecreaseCount_(0)
+	, rawMaxCorr_(0.0)
+	, rawCorrHistory_{}
+	, iterationCount_(0)
 {
 	statusMessages_.clear();
 	bstBinaryRecords_.clear();
@@ -205,8 +206,10 @@ void dna_adjust::InitialiseAdjustment()
 
 	currentRelaxation_ = projectSettings_.a.relaxation;
 	prevMaxCorr_ = 0.0;
-	oscillationCount_ = 0;
-	monotonicDecreaseCount_ = 0;
+	rawMaxCorr_ = 0.0;
+	for (int i = 0; i < 4; i++)
+		rawCorrHistory_[i] = 0.0;
+	iterationCount_ = 0;
 	blowupDetected_ = false;
 
 	bstBinaryRecords_.clear();
@@ -2558,6 +2561,7 @@ void dna_adjust::AdjustPhased()
 		blockLargeCorr_ = 0;
 		largestCorr_ = 0.0;
 		maxCorr_ = 0.0;
+		rawMaxCorr_ = 0.0;
 
 		// initialise potential outlier count and statistical
 		// quantities
@@ -2968,15 +2972,26 @@ void dna_adjust::ShrinkForwardMatrices(const UINT32 currentBlock)
 // - adjust_forward_thread::operator()()
 void dna_adjust::UpdateEstimatesForward(const UINT32 currentBlock)
 {
-	// Guard against numerical blow-up
-	if (fabs(v_corrections_.at(currentBlock).compute_maximum_value()) > 1.0e3)
+	// Guard against numerical blow-up (e.g. singular matrices)
+	if (fabs(v_corrections_.at(currentBlock).compute_maximum_value()) > 1.0e10)
 	{
 		blowupDetected_ = true;
 		v_corrections_.at(currentBlock).zero();
 		return;
 	}
 
-	// Convergence reporting on full (unscaled) corrections before relaxation
+	// Track raw (pre-relaxation) corrections for spectral radius estimation
+	if (v_blockMeta_.at(currentBlock)._blockLast || v_blockMeta_.at(currentBlock)._blockIsolated)
+	{
+		double rawAbsMax = fabs(v_corrections_.at(currentBlock).compute_maximum_value());
+		if (rawAbsMax > fabs(rawMaxCorr_))
+			rawMaxCorr_ = v_corrections_.at(currentBlock).maxvalue();
+	}
+
+	if (currentRelaxation_ < 1.0)
+		v_corrections_.at(currentBlock).scale(currentRelaxation_);
+
+	// Track effective (post-relaxation) corrections for convergence
 	if (v_blockMeta_.at(currentBlock)._blockLast || v_blockMeta_.at(currentBlock)._blockIsolated)
 	{
 		if (fabs(v_corrections_.at(currentBlock).compute_maximum_value()) > fabs(maxCorr_))
@@ -2989,8 +3004,6 @@ void dna_adjust::UpdateEstimatesForward(const UINT32 currentBlock)
 		}
 	}
 
-	if (currentRelaxation_ < 1.0)
-		v_corrections_.at(currentBlock).scale(currentRelaxation_);
 	v_estimatedStations_.at(currentBlock).add(v_corrections_.at(currentBlock));
 
 	// compute degrees of freedom (this is only performed once here during forward pass)
@@ -3721,7 +3734,7 @@ void dna_adjust::UpdateEstimatesFinal(const UINT32 currentBlock)
 	}
 
 	// Guard against numerical blow-up in reverse/combine pass
-	if (fabs(corrections->compute_maximum_value()) > 1.0e3)
+	if (fabs(corrections->compute_maximum_value()) > 1.0e10)
 	{
 		blowupDetected_ = true;
 		corrections->zero();
@@ -8553,36 +8566,44 @@ void dna_adjust::UpdateAdaptiveRelaxation()
 {
 	double absMaxCorr = fabs(maxCorr_);
 	double absPrevMaxCorr = fabs(prevMaxCorr_);
+	iterationCount_++;
 
-	// Sign change detection (skip first iteration where prevMaxCorr_ == 0)
-	bool signChanged = (prevMaxCorr_ != 0.0) &&
-		((prevMaxCorr_ > 0.0) != (maxCorr_ > 0.0));
+	// Store effective corrections in circular buffer
+	UINT32 idx = (iterationCount_ - 1) % 4;
+	double twoAgo = rawCorrHistory_[(idx + 2) % 4];
+	rawCorrHistory_[idx] = absMaxCorr;
 
-	if (signChanged)
+	if (iterationCount_ < 4)
 	{
-		oscillationCount_++;
-		monotonicDecreaseCount_ = 0;
-	}
-	else
-	{
-		oscillationCount_ = 0;
-		if (absPrevMaxCorr > 0.0 && absMaxCorr < absPrevMaxCorr)
-			monotonicDecreaseCount_++;
-		else
-			monotonicDecreaseCount_ = 0;
+		prevMaxCorr_ = maxCorr_;
+		return;
 	}
 
-	// Ratchet down on sustained oscillation
-	if (oscillationCount_ >= 3)
+	// Compare with same-phase value from 2 iterations ago.
+	// In a 2-cycle oscillation, this captures the true growth rate.
+	if (twoAgo > 0.0)
 	{
-		currentRelaxation_ *= 0.5;
-		if (currentRelaxation_ < 0.001)
-			currentRelaxation_ = 0.001;
-	}
-	// Slowly recover during monotonic convergence
-	else if (monotonicDecreaseCount_ >= 3)
-	{
-		currentRelaxation_ = std::min(1.0, currentRelaxation_ * 1.2);
+		double rho2 = absMaxCorr / twoAgo;
+
+		if (rho2 > 1.0)
+		{
+			// Same-phase corrections are growing — halve relaxation
+			currentRelaxation_ *= 0.5;
+			if (currentRelaxation_ < 0.001)
+				currentRelaxation_ = 0.001;
+		}
+		else if (rho2 < 0.5 && currentRelaxation_ < projectSettings_.a.relaxation)
+		{
+			// Converging rapidly — recover relaxation
+			currentRelaxation_ = std::min(projectSettings_.a.relaxation,
+				currentRelaxation_ * 1.5);
+		}
+		else if (rho2 < 0.9 && currentRelaxation_ < projectSettings_.a.relaxation)
+		{
+			// Converging steadily — gentle recovery
+			currentRelaxation_ = std::min(projectSettings_.a.relaxation,
+				currentRelaxation_ * 1.1);
+		}
 	}
 
 	prevMaxCorr_ = maxCorr_;

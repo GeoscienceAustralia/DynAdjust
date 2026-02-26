@@ -1104,8 +1104,9 @@ class dna_adjust {
     bool blowupDetected_;
     double currentRelaxation_;
     double prevMaxCorr_;
-    UINT32 oscillationCount_;
-    UINT32 monotonicDecreaseCount_;
+    double rawMaxCorr_;
+    double rawCorrHistory_[4];
+    UINT32 iterationCount_;
     void UpdateAdaptiveRelaxation();
 
     UINT32 bmsr_count_;
