@@ -866,7 +866,7 @@ jobs:
     runs-on: windows-2025
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-      VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess xerces-c vcpkg-tool-ninja
+      VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess boost-filesystem boost-timer boost-date-time boost-chrono xerces-c vcpkg-tool-ninja
       VCPKG_INSTALLATION_ROOT: "C:/vcpkg"
       VCPKG_BINARY_SOURCES: "clear"
       ONEAPI_VERSION: "2025.2"
