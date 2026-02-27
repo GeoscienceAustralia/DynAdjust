@@ -917,20 +917,20 @@ if (BUILD_TESTING)
     target_compile_definitions(test_snx_file_writer PRIVATE __BINARY_NAME__="test_snx_file_writer" __BINARY_DESC__="Unit tests for SNX file writer")
 
     # Register unit tests with CTest
-    add_test(NAME unit-MatrixTest COMMAND test_matrix)
-    add_test(NAME unit-MsrToStnSortTest COMMAND test_msr_to_stn_sort)
-    add_test(NAME unit-BstFileTest COMMAND test_bst_file)
-    add_test(NAME unit-AslFileTest COMMAND test_asl_file)
-    add_test(NAME unit-AmlFileLoaderTest COMMAND test_aml_file_loader)
-    add_test(NAME unit-BmsFileTest COMMAND test_bms_file)
-    add_test(NAME unit-NetworkDataLoaderTest COMMAND test_network_data_loader)
-    add_test(NAME unit-MeasurementProcessorTest COMMAND test_measurement_processor)
-    add_test(NAME unit-DynAdjustPrinterTest COMMAND test_dnaadjust_printer)
-    add_test(NAME unit-GNSSNstatSortTest COMMAND test_gnss_nstat_sort)
-    add_test(NAME unit-BstFileLoaderTest COMMAND test_bst_file_loader)
-    add_test(NAME unit-AslFileLoaderTest COMMAND test_asl_file_loader)
-    add_test(NAME unit-BmsFileLoaderTest COMMAND test_bms_file_loader)
-    add_test(NAME unit-SnxFileWriterTest COMMAND test_snx_file_writer)
+    add_test(NAME unit-MatrixTest COMMAND $<TARGET_FILE:test_matrix>)
+    add_test(NAME unit-MsrToStnSortTest COMMAND $<TARGET_FILE:test_msr_to_stn_sort>)
+    add_test(NAME unit-BstFileTest COMMAND $<TARGET_FILE:test_bst_file>)
+    add_test(NAME unit-AslFileTest COMMAND $<TARGET_FILE:test_asl_file>)
+    add_test(NAME unit-AmlFileLoaderTest COMMAND $<TARGET_FILE:test_aml_file_loader>)
+    add_test(NAME unit-BmsFileTest COMMAND $<TARGET_FILE:test_bms_file>)
+    add_test(NAME unit-NetworkDataLoaderTest COMMAND $<TARGET_FILE:test_network_data_loader>)
+    add_test(NAME unit-MeasurementProcessorTest COMMAND $<TARGET_FILE:test_measurement_processor>)
+    add_test(NAME unit-DynAdjustPrinterTest COMMAND $<TARGET_FILE:test_dnaadjust_printer>)
+    add_test(NAME unit-GNSSNstatSortTest COMMAND $<TARGET_FILE:test_gnss_nstat_sort>)
+    add_test(NAME unit-BstFileLoaderTest COMMAND $<TARGET_FILE:test_bst_file_loader>)
+    add_test(NAME unit-AslFileLoaderTest COMMAND $<TARGET_FILE:test_asl_file_loader>)
+    add_test(NAME unit-BmsFileLoaderTest COMMAND $<TARGET_FILE:test_bms_file_loader>)
+    add_test(NAME unit-SnxFileWriterTest COMMAND $<TARGET_FILE:test_snx_file_writer>)
 
     # ........................................................................
     # Functional tests
@@ -1044,7 +1044,11 @@ if (BUILD_TESTING)
 
     # 5. dynadjust project mode    
     add_test (NAME dynadjust-name-01 COMMAND $<TARGET_FILE:${DYNADJUST_TARGET}> -n sample --import --geoid --reftran --segment --adjust)
-    set_tests_properties(dynadjust-name-01 PROPERTIES ENVIRONMENT "PATH=${CMAKE_BINARY_DIR}/bin:$ENV{PATH}")
+    if(WIN32)
+        set_tests_properties(dynadjust-name-01 PROPERTIES ENVIRONMENT "PATH=${CMAKE_BINARY_DIR}/bin\;$ENV{PATH}")
+    else()
+        set_tests_properties(dynadjust-name-01 PROPERTIES ENVIRONMENT "PATH=${CMAKE_BINARY_DIR}/bin:$ENV{PATH}")
+    endif()
 
     # 6. urban data manipulation
     add_test (NAME imp-urb00-dna-data COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n urban_dna urban-network.stn urban-network.msr --export-xml --export-asl --export-aml --export-map --output-msr-to-stn)
@@ -1943,6 +1947,8 @@ if (BUILD_TESTING)
         PROPERTIES RUN_SERIAL TRUE)
 
     set_tests_properties(test-gnss-network PROPERTIES DEPENDS adjust-gnss-network)
+    set_tests_properties(test-urban-phased-network PROPERTIES DEPENDS adjust-urban-network)
+    set_tests_properties(test-urban-thread-network PROPERTIES DEPENDS adjust-urban-network-thread-01)
 
     set_tests_properties(ref-itrf-pmm-06 PROPERTIES DEPENDS ref-itrf-pmm-05)
     #set_tests_properties(ref-itrf-pmm-07 PROPERTIES DEPENDS ref-itrf-pmm-06)
