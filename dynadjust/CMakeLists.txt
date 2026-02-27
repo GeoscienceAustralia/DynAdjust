@@ -1095,8 +1095,8 @@ if (BUILD_TESTING)
     add_test (NAME geo-inside-03 COMMAND $<TARGET_FILE:${DNAGEOID_TARGET}> -g ./gnss-network-geoid.gsb.asc -t geoid-points-dat.txt --interpolation-method 0)
 
     # Check results with dnadiff
-    add_test (NAME test-urban-phased-network COMMAND $<TARGET_FILE:${DNADIFF_TARGET}> urban.phased.adj urban.phased.adj.expected --skip-headers 62 -t 0.001)
-    add_test (NAME test-urban-thread-network COMMAND $<TARGET_FILE:${DNADIFF_TARGET}> urban_mt.phased-mt.adj urban_mt.phased-mt.adj.expected -t 0.01 -v)
+    add_test (NAME test-urban-phased-network COMMAND $<TARGET_FILE:${DNADIFF_TARGET}> urban.phased.adj urban.phased.adj.expected --skip-to-marker "M Station 1" -t 0.001)
+    add_test (NAME test-urban-thread-network COMMAND $<TARGET_FILE:${DNADIFF_TARGET}> urban_mt.phased-mt.adj urban_mt.phased-mt.adj.expected --skip-to-marker "M Station 1" -t 0.01 -v)
 
     # 8. Source tag preservation in --export-xml (issue #317)
     # Import XML data with <Source> tags and verify they are preserved in export

@@ -32,6 +32,7 @@ namespace dnadiff {
 struct DiffOptions {
     double tolerance = 1e-6;  // Single tolerance for all numeric comparisons
     int skip_header_lines = 0;
+    std::string skip_to_marker;
     bool verbose = false;
 };
 
@@ -57,6 +58,7 @@ class DnaDiff {
 
     // Skip non-comparable content
     bool ShouldSkipLine(const std::string& line) const;
+    bool SkipToMarker(std::ifstream& f, const std::string& marker) const;
 
     // Main comparison function
     bool CompareResultsOnly(const std::string& file1, const std::string& file2);

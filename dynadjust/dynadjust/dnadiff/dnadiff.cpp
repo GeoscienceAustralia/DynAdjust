@@ -113,12 +113,34 @@ bool DnaDiff::ShouldSkipLine(const std::string& line) const {
 
 
 
+bool DnaDiff::SkipToMarker(std::ifstream& f, const std::string& marker) const {
+    std::string line;
+    while (std::getline(f, line)) {
+        if (line.find(marker) != std::string::npos)
+            return true;
+    }
+    return false;
+}
+
 bool DnaDiff::CompareResultsOnly(const std::string& file1,
                                  const std::string& file2) {
     std::ifstream f1(file1);
     std::ifstream f2(file2);
     std::string line1, line2;
     int line_count = 0;
+
+    if (!options_.skip_to_marker.empty()) {
+        if (!SkipToMarker(f1, options_.skip_to_marker)) {
+            std::cerr << "Error: Marker \"" << options_.skip_to_marker
+                      << "\" not found in " << file1_name_ << std::endl;
+            return false;
+        }
+        if (!SkipToMarker(f2, options_.skip_to_marker)) {
+            std::cerr << "Error: Marker \"" << options_.skip_to_marker
+                      << "\" not found in " << file2_name_ << std::endl;
+            return false;
+        }
+    }
 
     // Skip headers in both files
     for (int i = 0; i < options_.skip_header_lines; ++i) {
@@ -306,6 +328,8 @@ bool ParseCommandLine(int argc, char* argv[], std::string& file1,
             options.tolerance = std::stod(argv[++i]);
         } else if (arg == "--skip-headers" && i + 1 < argc) {
             options.skip_header_lines = std::stoi(argv[++i]);
+        } else if (arg == "--skip-to-marker" && i + 1 < argc) {
+            options.skip_to_marker = argv[++i];
         } else if (arg == "--verbose" || arg == "-v") {
             options.verbose = true;
         } else if (arg == "--help" || arg == "-h") {
@@ -325,6 +349,8 @@ void PrintUsage(const std::string& program_name) {
                  "comparisons (default: 1e-6)\n";
     std::cout << "  --skip-headers <n>              Skip first n lines "
                  "(default: 0)\n";
+    std::cout << "  --skip-to-marker <text>         Skip lines in each file "
+                 "until marker text is found\n";
     std::cout << "  --verbose, -v                   Show detailed differences\n";
     std::cout << "  --help, -h                      Show this help message\n";
 }
