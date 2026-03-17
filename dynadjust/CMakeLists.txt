@@ -1744,16 +1744,8 @@ if (BUILD_TESTING)
     add_test (NAME import-no-frame COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n sample -r itrf1975 dsg.stn dsg.msr)
     # no stations and measurements (generated above)
     add_test (NAME import-no-data COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n null ./null.stn ./null.msr)
-    # no DynaML.xsd - remove file in platform-independent manner (using CMake command) by setting up a test dependency
-    add_test (NAME import-no-xsd-file-remove COMMAND ${CMAKE_COMMAND} -E remove DynaML.xsd)
-    add_test (NAME import-no-xsd-file COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n gnss gnss-networkstn.xml gnss-networkmsr.xml)
-    set_tests_properties(import-no-xsd-file PROPERTIES DEPENDS import-no-xsd-file-remove TIMEOUT 5)
-    # Restore DynaML.xsd after testing its absence
-    add_test (NAME import-no-xsd-file-restore COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/../sampleData/DynaML.xsd DynaML.xsd)
-    set_tests_properties(import-no-xsd-file-restore PROPERTIES DEPENDS import-no-xsd-file)
     # no geoid file
     add_test (NAME import-no-geoid COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n geoid --geo-file ./nofile.geo)
-    set_tests_properties(import-no-geoid PROPERTIES DEPENDS import-no-xsd-file-restore)
     # no project file
     add_test (NAME import-no-project COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -p ./nofile.dnaproj)
     # measurement stns not in station file
@@ -1765,7 +1757,7 @@ if (BUILD_TESTING)
     add_test (NAME import-misc-network-size COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n contig --import-contiguous-stn-msr 5000 --export-dna)
 
     set_tests_properties(import-no-option import-invalid-option import-invalid-file import-nearby import-no-files import-no-frame
-        import-no-data import-no-xsd-file import-no-geoid import-no-project import-no-stns import-no-help
+        import-no-data import-no-geoid import-no-project import-no-stns import-no-help
         import-misc-block-size import-misc-network-size import-misc-07
         PROPERTIES WILL_FAIL TRUE)
 

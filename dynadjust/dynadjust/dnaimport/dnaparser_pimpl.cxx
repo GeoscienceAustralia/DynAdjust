@@ -10,8 +10,6 @@
 #include <dynadjust/dnaimport/dnaparser_pimpl.hxx>
 #include <include/measurement_types/dnastntally.hpp>
 
-#include <include/io/DynaML-schema.hxx>
-
 using namespace dynadjust::measurements;
 using namespace dynadjust::epsg;
 using namespace dynadjust::exception;
