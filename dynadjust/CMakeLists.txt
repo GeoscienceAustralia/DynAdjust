@@ -59,10 +59,10 @@ if(BUILD_TESTING)
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 endif()
 
-# Set output directories for all platforms to use ../bin/
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
+# Set output directories for all platforms to use ../bin/ (unless overridden)
+if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
+endif()
 
 # For multi-config generators (Visual Studio, Xcode)
 foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
