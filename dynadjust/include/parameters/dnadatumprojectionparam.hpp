@@ -35,16 +35,20 @@
 #include <include/config/dnatypes-fwd.hpp>
 
 // GRS80 parameters
-const double GRS80_a = 6378137.0;					// Semi major axis (a)
-const double GRS80_inv_f = 298.257222101;			// Inverse flattening (1/f)
+const double GRS80_a = 6378137.0;				// Semi major axis (a)
+const double GRS80_inv_f = 298.257222101;		// Inverse flattening (1/f)
 
 // WGS84 parameters
-const double WGS84_a = 6378137.0;					// Semi major axis (a)
-const double WGS84_inv_f = 298.25722360;			// Inverse flattening (1/f)
+const double WGS84_a = 6378137.0;				// Semi major axis (a)
+const double WGS84_inv_f = 298.25722360;		// Inverse flattening (1/f)
 
 // ANS parameters
 const double ANS_a = 6378160.0;					// Semi major axis (a)
-const double ANS_inv_f = 298.25;					// Inverse flattening (1/f)
+const double ANS_inv_f = 298.25;				// Inverse flattening (1/f)
+
+// International 1924 parameters
+const double International24_a = 6378388.0;     // Semi major axis (a)
+const double International24_inv_f = 297.0;		// Inverse flattening (1/f)
 
 // UTM parameters
 const double FALSE_E = 500000.0;				// False Easting

@@ -218,6 +218,19 @@ U epsgCodeFromName(const S& datumName)
         iequals(datumName, NAD83_CSRS_V8_alias2_s) || 
 		iequals(datumName, NAD83_CSRS_V8_alias3_s))
         return NAD83_CSRS_V8_i_xyz;
+    // SIRGAS
+    if (iequals(datumName, YACARE_ROUUSAMS_s)) 
+		return YACARE_ROUUSAMS_i;
+    if (iequals(datumName, SIRGAS_ROU98_s) || 
+		iequals(datumName, SIRGAS_ROU98_alias_s)) 
+		return SIRGAS_ROU98_i_xyz;
+	if (iequals(datumName, SIRGAS_1995_s) ||
+		iequals(datumName, SIRGAS_1995_alias1_s) ||
+		iequals(datumName, SIRGAS_1995_alias2_s)) 
+		return SIRGAS_1995_i_xyz;
+    if (iequals(datumName, SIRGAS_2000_s) ||
+		iequals(datumName, SIRGAS_2000_alias_s)) 
+		return SIRGAS_2000_i_xyz;
 
     std::stringstream ss;
     ss << "  epsgCodeFromName: '" << datumName << "' is not a supported reference frame label." << std::endl;
@@ -341,6 +354,18 @@ S epsgStringFromName(const S& datumName)
     case NAD83_CSRS_V8_i:
     case NAD83_CSRS_V8_i_xyz: 
 		return NAD83_CSRS_v8_c;
+	// SIRGAS
+    case YACARE_ROUUSAMS_i:
+        return YACARE_ROUUSAMS_c;
+    case SIRGAS_ROU98_i:
+    case SIRGAS_ROU98_i_xyz:
+        return SIRGAS_ROU98_c;
+    case SIRGAS_1995_i:
+    case SIRGAS_1995_i_xyz:
+        return SIRGAS_1995_c;
+    case SIRGAS_2000_i:
+    case SIRGAS_2000_i_xyz:
+        return SIRGAS_2000_c;
 	}
 
 	std::stringstream ss;
@@ -388,6 +413,14 @@ bool isEpsgDatumStatic(const U& epsgCode)
 	case NAD83_CSRS_V7_i_xyz:
     case NAD83_CSRS_V8_i:
     case NAD83_CSRS_V8_i_xyz:
+	//SIRGAS
+    case YACARE_ROUUSAMS_i:
+    case SIRGAS_ROU98_i:
+    case SIRGAS_ROU98_i_xyz:
+    case SIRGAS_1995_i:
+    case SIRGAS_1995_i_xyz:
+    case SIRGAS_2000_i:
+    case SIRGAS_2000_i_xyz:
 		return true;
 	// ITRF....
 	case ITRF1988_i_xyz:
@@ -516,6 +549,13 @@ void spheroidFromEpsgCode(const U& epsgCode, epsg_spheroid& ellipsoid)
 	case NAD83_CSRS_V7_i:
     case NAD83_CSRS_V8_i_xyz:
     case NAD83_CSRS_V8_i:
+	// SIRGAS
+	case SIRGAS_ROU98_i:			// Note: epsg.org has incorrectly assigned WGS 84 ellipsoid to SIRGAS ROU98
+	case SIRGAS_ROU98_i_xyz:
+	case SIRGAS_1995_i:
+	case SIRGAS_1995_i_xyz:
+	case SIRGAS_2000_i:
+	case SIRGAS_2000_i_xyz:
 		// authority
 		ellipsoid.authority_.first = "EPSG";
 		ellipsoid.authority_.second = "7019";
@@ -523,6 +563,16 @@ void spheroidFromEpsgCode(const U& epsgCode, epsg_spheroid& ellipsoid)
 		ellipsoid.inv_flattening_ = GRS80_inv_f;
 		ellipsoid.name_ = "GRS 1980";
 		ellipsoid.semi_major_ = GRS80_a;
+		break;
+    // SIRGAS (OLD)
+	case YACARE_ROUUSAMS_i:
+        // authority
+        ellipsoid.authority_.first = "EPSG";
+        ellipsoid.authority_.second = "7022";
+        // ellipsoid params
+        ellipsoid.inv_flattening_ = International24_inv_f;
+        ellipsoid.name_ = "International 1924";
+        ellipsoid.semi_major_ = International24_a;
 		break;
 	// WGS84
 	case WGS84_transit_i:
@@ -670,6 +720,18 @@ std::string referenceepochFromEpsgCode(const U& epsgCode)
     case NAD83_CSRS_V8_i_xyz:
     case NAD83_CSRS_V8_i: 
 		return NAD83_CSRS_V8_epoch;
+		// SIRGAS
+	case YACARE_ROUUSAMS_i:
+		return YACARE_ROUUSAMS_epoch;
+	case SIRGAS_ROU98_i:
+	case SIRGAS_ROU98_i_xyz:
+		return SIRGAS_ROU98_epoch;
+	case SIRGAS_1995_i:
+	case SIRGAS_1995_i_xyz:
+		return SIRGAS_1995_epoch;
+	case SIRGAS_2000_i:
+	case SIRGAS_2000_i_xyz: 
+		return SIRGAS_2000_epoch;
 	default:
 		std::stringstream ss;
 		ss << "  referenceepochFromEpsgCode: EPSG code '" << epsgCode << "' is not a supported EPSG code." << std::endl;
@@ -799,6 +861,17 @@ S datumFromEpsgCode(const U& epsgCode)
     case NAD83_CSRS_V8_i_xyz:
     case NAD83_CSRS_V8_i: 
 		return NAD83_CSRS_V8_s;
+	case YACARE_ROUUSAMS_i: 
+		return YACARE_ROUUSAMS_s;
+    case SIRGAS_ROU98_i_xyz:
+    case SIRGAS_ROU98_i: 
+		return SIRGAS_ROU98_s;
+    case SIRGAS_1995_i_xyz:
+    case SIRGAS_1995_i:
+		return SIRGAS_1995_s;
+	case SIRGAS_2000_i_xyz:
+    case SIRGAS_2000_i: 
+		return SIRGAS_2000_s;
 	default:
 		std::stringstream ss;
 		ss << "  datumFromEpsgCode: EPSG code '" << epsgCode << "' is not a supported EPSG code." << std::endl;
@@ -908,6 +981,14 @@ bool validateEpsgCode(const U& epsgCode)
 	case NAD83_CSRS_V7_i:
     case NAD83_CSRS_V8_i_xyz:
     case NAD83_CSRS_V8_i:
+	// SIRGAS
+    case YACARE_ROUUSAMS_i:
+    case SIRGAS_ROU98_i_xyz:
+	case SIRGAS_ROU98_i:
+    case SIRGAS_1995_i_xyz:
+	case SIRGAS_1995_i:
+    case SIRGAS_2000_i_xyz:
+    case SIRGAS_2000_i:
 		return true;
 	default:
 		std::stringstream ss;
