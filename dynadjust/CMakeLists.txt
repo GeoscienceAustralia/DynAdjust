@@ -1106,6 +1106,28 @@ if (BUILD_TESTING)
     add_test (NAME reftran-source-test COMMAND $<TARGET_FILE:${DNAREFTRAN_TARGET}> srctest -r itrf2014 -e 01.01.2020 --export-xml)
     add_test (NAME check-source-reftran COMMAND bash check_source_tags.sh srctest.ITRF2014.01.01.2020msr.xml CAMPAIGN_2023A CAMPAIGN_2023B EMPTY)
 
+    # 8a. XML import with and without xsi:noNamespaceSchemaLocation (issue #346)
+    # Verify dnaimport handles XML files regardless of whether the schema location
+    # attribute is present. Strip the attribute and import each sample data pair.
+
+    # gnss-network: with schema location (original files)
+    add_test (NAME import-xml-gnss-with-xsd COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n xsd_gnss gnss-networkstn.xml gnss-networkmsr.xml -r GDA2020)
+    # gnss-network: without schema location
+    add_test (NAME import-xml-gnss-strip COMMAND bash strip_schema_location.sh gnss-networkstn.xml gnss-networkstn-noxsd.xml)
+    add_test (NAME import-xml-gnss-strip-msr COMMAND bash strip_schema_location.sh gnss-networkmsr.xml gnss-networkmsr-noxsd.xml)
+    add_test (NAME import-xml-gnss-without-xsd COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n xsd_gnss gnss-networkstn-noxsd.xml gnss-networkmsr-noxsd.xml -r GDA2020)
+    set_tests_properties(import-xml-gnss-strip import-xml-gnss-strip-msr PROPERTIES FIXTURES_SETUP gnss_strip)
+    set_tests_properties(import-xml-gnss-without-xsd PROPERTIES FIXTURES_REQUIRED gnss_strip)
+
+    # urban-network: with schema location
+    add_test (NAME import-xml-urban-with-xsd COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n xsd_urban urban-networkstn.xml urban-networkmsr.xml -r GDA2020)
+    # urban-network: without schema location
+    add_test (NAME import-xml-urban-strip COMMAND bash strip_schema_location.sh urban-networkstn.xml urban-networkstn-noxsd.xml)
+    add_test (NAME import-xml-urban-strip-msr COMMAND bash strip_schema_location.sh urban-networkmsr.xml urban-networkmsr-noxsd.xml)
+    add_test (NAME import-xml-urban-without-xsd COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n xsd_urban urban-networkstn-noxsd.xml urban-networkmsr-noxsd.xml -r GDA2020)
+    set_tests_properties(import-xml-urban-strip import-xml-urban-strip-msr PROPERTIES FIXTURES_SETUP urban_strip)
+    set_tests_properties(import-xml-urban-without-xsd PROPERTIES FIXTURES_REQUIRED urban_strip)
+
     # 9. gnss reference frame transformations
     add_test (NAME ref-gnss01-network COMMAND $<TARGET_FILE:${DNAREFTRAN_TARGET}> gnss -r itrf2014 -e 01.01.2020)
     add_test (NAME ref-gnss02-network COMMAND $<TARGET_FILE:${DNAREFTRAN_TARGET}> gnss -r itrf1988 -e 03.12.1995)
