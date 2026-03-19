@@ -300,10 +300,13 @@ message(STATUS "Found Boost version: ${Boost_VERSION}")
 # Set up libraries
 # ----------------------------------------------------------------------------
 
+find_package(Threads REQUIRED)
+
 set(DNA_LIBRARIES
     ${Boost_LIBRARIES}
     ${XercesC_LIBRARIES}
     ${XERCES_ICU_LIBRARIES}
+    Threads::Threads
 )
 
 # ----------------------------------------------------------------------------
