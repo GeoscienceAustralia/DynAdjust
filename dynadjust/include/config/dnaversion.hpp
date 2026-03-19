@@ -310,7 +310,7 @@ const char* const __plot_dll_name__ = "libdnaplot.so";
 
 #if defined(__clang__)                                   // Clang compiler
   #define __COMPILER__ "Clang"
-  #define __COMPILER_VERSION__ __VERSION__
+  #define __COMPILER_VERSION__ __clang_version__
 #elif defined(__GNUC__) || defined(__GNUG__)				// GNU GCC
   #define __COMPILER__ "GNU GCC"
   #define __COMPILER_VERSION__ __VERSION__
