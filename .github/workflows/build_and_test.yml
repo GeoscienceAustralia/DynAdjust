@@ -1145,8 +1145,9 @@ jobs:
           # Source Intel OneAPI environment
           source /opt/intel/oneapi/setvars.sh
 
-          # Modify PATH to use our binaries
+          # Modify PATH and LD_LIBRARY_PATH to use our binaries
           export PATH="../bin:$PATH"
+          export LD_LIBRARY_PATH="../bin:${LD_LIBRARY_PATH:-}"
 
           # Run the test script and capture output
           set +e  # Don't exit on error
@@ -1169,8 +1170,9 @@ jobs:
           # Source Intel OneAPI environment
           source /opt/intel/oneapi/setvars.sh
 
-          # Modify PATH to use our binaries
+          # Modify PATH and LD_LIBRARY_PATH to use our binaries
           export PATH="../bin:$PATH"
+          export LD_LIBRARY_PATH="../bin:${LD_LIBRARY_PATH:-}"
 
           # Run the test script and capture output
           set +e  # Don't exit on error

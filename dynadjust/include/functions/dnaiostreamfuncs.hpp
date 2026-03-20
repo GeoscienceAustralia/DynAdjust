@@ -132,7 +132,7 @@ void print_file_header(
 	stream << std::setw(PRINT_VAR_PAD) << std::left << "File created:";
 	std::ostringstream datetime_ss;
 	boost::posix_time::time_facet* p_time_output = new boost::posix_time::time_facet;
-	std::locale special_locale (std::locale(""), p_time_output);
+	std::locale special_locale (std::locale::classic(), p_time_output);
 	// special_locale takes ownership of the p_time_output facet
 	datetime_ss.imbue (special_locale);
 	(*p_time_output).format("%A, %d %B %Y, %X");

@@ -59,10 +59,16 @@ if(BUILD_TESTING)
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 endif()
 
-# Set output directories for all platforms to use ../bin/
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
+# Set output directories for all platforms to use ../bin/ (unless overridden)
+if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
+endif()
+if(NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
+endif()
+if(NOT CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../bin)
+endif()
 
 # For multi-config generators (Visual Studio, Xcode)
 foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
@@ -300,10 +306,13 @@ message(STATUS "Found Boost version: ${Boost_VERSION}")
 # Set up libraries
 # ----------------------------------------------------------------------------
 
+find_package(Threads REQUIRED)
+
 set(DNA_LIBRARIES
     ${Boost_LIBRARIES}
     ${XercesC_LIBRARIES}
     ${XERCES_ICU_LIBRARIES}
+    Threads::Threads
 )
 
 # ----------------------------------------------------------------------------
