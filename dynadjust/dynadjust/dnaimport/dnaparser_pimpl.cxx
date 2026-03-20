@@ -940,6 +940,19 @@ DnaXmlFormat_pimpl::DnaXmlFormat_pimpl(std::ifstream* is, PUINT32 clusterID, con
 	_referenceframe = referenceframe;
 	_epoch = epoch;
 
+	// Initialise file EPSG and epoch from the default reference frame.
+	// Previously these were set by the XSD attribute defaults during
+	// validation.  With dont_validate, the attribute parsers are only
+	// called when the attributes are present in the XML, so we need
+	// sensible fallbacks.
+	try {
+		_fileEpsg = epsgStringFromName<std::string>(_referenceframe);
+	}
+	catch (...) {
+		_fileEpsg.clear();
+	}
+	_fileEpoch = epoch;
+
 	// capture first file flag
 	_firstFile = firstFile;
 

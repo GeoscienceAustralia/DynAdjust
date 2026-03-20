@@ -539,6 +539,7 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		{
 			std::stringstream ss;
 			ss << "The default input file reference frame \"" << referenceframe_p.str() << "\" is not recognised.";
+			import_file_mutex.unlock();
 			SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
 		}
 
@@ -566,6 +567,7 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		}
 		std::stringstream ss;
 		ss << "ParseXML(): An std::ios_base failure was encountered while parsing " << fileName << "." << std::endl << "  " << f.what();
+		import_file_mutex.unlock();
 		SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
 	}
 	catch (const std::system_error& e)
@@ -584,12 +586,14 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		}
 		std::stringstream ss;
 		ss << "ParseXML(): An std::ios_base failure was encountered while parsing " << fileName << "." << std::endl << "  " << e.what();
+		import_file_mutex.unlock();
 		SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
 	}
-	catch (const XMLInteropException& e) 
+	catch (const XMLInteropException& e)
 	{
 		std::stringstream ss;
 		ss << "ParseXML(): An exception was encountered while parsing " << fileName << "." << std::endl << "  " << e.what();
+		import_file_mutex.unlock();
 		SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
 	}
 	catch (const ::xml_schema::parsing& e)
@@ -597,7 +601,7 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		std::stringstream ss("");
 		ss << e.what();
 
-		::xsd::cxx::parser::diagnostics<char>::const_iterator _it;		
+		::xsd::cxx::parser::diagnostics<char>::const_iterator _it;
 		for (_it=e.diagnostics().begin(); _it!=e.diagnostics().end(); _it++)
 		{
 			ss << std::endl;
@@ -606,19 +610,29 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 			ss << ", severity " <<  _it->severity() << std::endl;
 			ss << "  - " << _it->message();
 		}
+		import_file_mutex.unlock();
 		SignalExceptionParse(ss.str(), 0);
 	}
 	catch (const ::xml_schema::exception& e)
 	{
 		std::stringstream ss;
 		ss << "ParseXML(): An xml_schema exception was encountered while parsing " << fileName << "." << std::endl << "  " << e.what();
+		import_file_mutex.unlock();
 		SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
+	}
+	catch (const std::exception& e)
+	{
+		std::stringstream ss;
+		ss << "ParseXML(): An error was encountered while parsing " << fileName << "." << std::endl << "  " << e.what();
+		import_file_mutex.unlock();
+		SignalExceptionParse(ss.str(), 0);
 	}
 	catch (...)
 	{
 		std::stringstream ss;
 		ss << "ParseXML(): An unknown error was encountered while parsing " << fileName << "." << std::endl;
-		SignalExceptionParse(ss.str(), 0);	
+		import_file_mutex.unlock();
+		SignalExceptionParse(ss.str(), 0);
 	}
 
 	if (parseStatus_ != PARSE_SUCCESS)
