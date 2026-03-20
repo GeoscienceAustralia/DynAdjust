@@ -21,8 +21,6 @@
 
 #include <dynadjust/dnaimport/dnainterop.hpp>
 
-//#include <include/io/DynaML-schema.hxx>
-
 using namespace dynadjust::epsg;
 
 MsrTally	g_map_tally;
@@ -400,18 +398,6 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 	_filespecifiedreferenceframe = false;
 	_filespecifiedepoch = false;
 
-	// Check if DynaML.xsd exists in the current directory
-	// This prevents the XML parser from hanging when the schema file is missing
-	if (!std::filesystem::exists("DynaML.xsd"))
-	{
-		import_file_mutex.unlock();
-		std::stringstream ss;
-		ss << "ParseXML(): DynaML.xsd schema file not found in the current directory." << std::endl;
-		ss << "  The XML parser requires this file to validate XML input files." << std::endl;
-		ss << "  Please ensure DynaML.xsd is present in the working directory.";
-		SignalExceptionParse(ss.str(), 0);
-	}
-
 	try
 	{
 		// Instantiate individual parsers.
@@ -473,7 +459,7 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		::xml_schema::document doc_p (DnaXmlFormat_p, "DnaXmlFormat");
 
 		DnaXmlFormat_p.pre();
-		doc_p.parse (*ifsInputFILE_);
+		doc_p.parse (*ifsInputFILE_, ::xml_schema::flags::dont_validate);
 		DnaXmlFormat_p.post_DnaXmlFormat (vStations, vMeasurements);
 
         // unlock after parsing
@@ -553,6 +539,7 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		{
 			std::stringstream ss;
 			ss << "The default input file reference frame \"" << referenceframe_p.str() << "\" is not recognised.";
+			import_file_mutex.unlock();
 			SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
 		}
 
@@ -580,6 +567,7 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		}
 		std::stringstream ss;
 		ss << "ParseXML(): An std::ios_base failure was encountered while parsing " << fileName << "." << std::endl << "  " << f.what();
+		import_file_mutex.unlock();
 		SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
 	}
 	catch (const std::system_error& e)
@@ -598,12 +586,14 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		}
 		std::stringstream ss;
 		ss << "ParseXML(): An std::ios_base failure was encountered while parsing " << fileName << "." << std::endl << "  " << e.what();
+		import_file_mutex.unlock();
 		SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
 	}
-	catch (const XMLInteropException& e) 
+	catch (const XMLInteropException& e)
 	{
 		std::stringstream ss;
 		ss << "ParseXML(): An exception was encountered while parsing " << fileName << "." << std::endl << "  " << e.what();
+		import_file_mutex.unlock();
 		SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
 	}
 	catch (const ::xml_schema::parsing& e)
@@ -611,7 +601,7 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		std::stringstream ss("");
 		ss << e.what();
 
-		::xsd::cxx::parser::diagnostics<char>::const_iterator _it;		
+		::xsd::cxx::parser::diagnostics<char>::const_iterator _it;
 		for (_it=e.diagnostics().begin(); _it!=e.diagnostics().end(); _it++)
 		{
 			ss << std::endl;
@@ -620,19 +610,29 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 			ss << ", severity " <<  _it->severity() << std::endl;
 			ss << "  - " << _it->message();
 		}
+		import_file_mutex.unlock();
 		SignalExceptionParse(ss.str(), 0);
 	}
 	catch (const ::xml_schema::exception& e)
 	{
 		std::stringstream ss;
 		ss << "ParseXML(): An xml_schema exception was encountered while parsing " << fileName << "." << std::endl << "  " << e.what();
+		import_file_mutex.unlock();
 		SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
+	}
+	catch (const std::exception& e)
+	{
+		std::stringstream ss;
+		ss << "ParseXML(): An error was encountered while parsing " << fileName << "." << std::endl << "  " << e.what();
+		import_file_mutex.unlock();
+		SignalExceptionParse(ss.str(), 0);
 	}
 	catch (...)
 	{
 		std::stringstream ss;
 		ss << "ParseXML(): An unknown error was encountered while parsing " << fileName << "." << std::endl;
-		SignalExceptionParse(ss.str(), 0);	
+		import_file_mutex.unlock();
+		SignalExceptionParse(ss.str(), 0);
 	}
 
 	if (parseStatus_ != PARSE_SUCCESS)

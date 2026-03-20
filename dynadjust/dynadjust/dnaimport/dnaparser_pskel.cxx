@@ -38,8 +38,6 @@
 
 #include <dynadjust/dnaimport/dnaparser_pskel.hxx>
 
-#include <include/io/DynaML-schema.hxx>
-
 using namespace dynadjust::measurements;
 
 // Clusterpoint_pskel

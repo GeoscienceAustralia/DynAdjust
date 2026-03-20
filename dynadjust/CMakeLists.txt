@@ -1106,6 +1106,28 @@ if (BUILD_TESTING)
     add_test (NAME reftran-source-test COMMAND $<TARGET_FILE:${DNAREFTRAN_TARGET}> srctest -r itrf2014 -e 01.01.2020 --export-xml)
     add_test (NAME check-source-reftran COMMAND bash check_source_tags.sh srctest.ITRF2014.01.01.2020msr.xml CAMPAIGN_2023A CAMPAIGN_2023B EMPTY)
 
+    # 8a. XML import with and without xsi:noNamespaceSchemaLocation (issue #346)
+    # Verify dnaimport handles XML files regardless of whether the schema location
+    # attribute is present. Strip the attribute and import each sample data pair.
+
+    # gnss-network: with schema location (original files)
+    add_test (NAME import-xml-gnss-with-xsd COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n xsd_gnss gnss-networkstn.xml gnss-networkmsr.xml -r GDA2020)
+    # gnss-network: without schema location
+    add_test (NAME import-xml-gnss-strip COMMAND bash strip_schema_location.sh gnss-networkstn.xml gnss-networkstn-noxsd.xml)
+    add_test (NAME import-xml-gnss-strip-msr COMMAND bash strip_schema_location.sh gnss-networkmsr.xml gnss-networkmsr-noxsd.xml)
+    add_test (NAME import-xml-gnss-without-xsd COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n xsd_gnss gnss-networkstn-noxsd.xml gnss-networkmsr-noxsd.xml -r GDA2020)
+    set_tests_properties(import-xml-gnss-strip import-xml-gnss-strip-msr PROPERTIES FIXTURES_SETUP gnss_strip)
+    set_tests_properties(import-xml-gnss-without-xsd PROPERTIES FIXTURES_REQUIRED gnss_strip)
+
+    # urban-network: with schema location
+    add_test (NAME import-xml-urban-with-xsd COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n xsd_urban urban-networkstn.xml urban-networkmsr.xml -r GDA2020)
+    # urban-network: without schema location
+    add_test (NAME import-xml-urban-strip COMMAND bash strip_schema_location.sh urban-networkstn.xml urban-networkstn-noxsd.xml)
+    add_test (NAME import-xml-urban-strip-msr COMMAND bash strip_schema_location.sh urban-networkmsr.xml urban-networkmsr-noxsd.xml)
+    add_test (NAME import-xml-urban-without-xsd COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n xsd_urban urban-networkstn-noxsd.xml urban-networkmsr-noxsd.xml -r GDA2020)
+    set_tests_properties(import-xml-urban-strip import-xml-urban-strip-msr PROPERTIES FIXTURES_SETUP urban_strip)
+    set_tests_properties(import-xml-urban-without-xsd PROPERTIES FIXTURES_REQUIRED urban_strip)
+
     # 9. gnss reference frame transformations
     add_test (NAME ref-gnss01-network COMMAND $<TARGET_FILE:${DNAREFTRAN_TARGET}> gnss -r itrf2014 -e 01.01.2020)
     add_test (NAME ref-gnss02-network COMMAND $<TARGET_FILE:${DNAREFTRAN_TARGET}> gnss -r itrf1988 -e 03.12.1995)
@@ -1744,16 +1766,8 @@ if (BUILD_TESTING)
     add_test (NAME import-no-frame COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n sample -r itrf1975 dsg.stn dsg.msr)
     # no stations and measurements (generated above)
     add_test (NAME import-no-data COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n null ./null.stn ./null.msr)
-    # no DynaML.xsd - remove file in platform-independent manner (using CMake command) by setting up a test dependency
-    add_test (NAME import-no-xsd-file-remove COMMAND ${CMAKE_COMMAND} -E remove DynaML.xsd)
-    add_test (NAME import-no-xsd-file COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n gnss gnss-networkstn.xml gnss-networkmsr.xml)
-    set_tests_properties(import-no-xsd-file PROPERTIES DEPENDS import-no-xsd-file-remove TIMEOUT 5)
-    # Restore DynaML.xsd after testing its absence
-    add_test (NAME import-no-xsd-file-restore COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/../sampleData/DynaML.xsd DynaML.xsd)
-    set_tests_properties(import-no-xsd-file-restore PROPERTIES DEPENDS import-no-xsd-file)
     # no geoid file
     add_test (NAME import-no-geoid COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n geoid --geo-file ./nofile.geo)
-    set_tests_properties(import-no-geoid PROPERTIES DEPENDS import-no-xsd-file-restore)
     # no project file
     add_test (NAME import-no-project COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -p ./nofile.dnaproj)
     # measurement stns not in station file
@@ -1765,7 +1779,7 @@ if (BUILD_TESTING)
     add_test (NAME import-misc-network-size COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n contig --import-contiguous-stn-msr 5000 --export-dna)
 
     set_tests_properties(import-no-option import-invalid-option import-invalid-file import-nearby import-no-files import-no-frame
-        import-no-data import-no-xsd-file import-no-geoid import-no-project import-no-stns import-no-help
+        import-no-data import-no-geoid import-no-project import-no-stns import-no-help
         import-misc-block-size import-misc-network-size import-misc-07
         PROPERTIES WILL_FAIL TRUE)
 
