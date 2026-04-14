@@ -192,7 +192,7 @@ void dna_adjust::AdjustPhasedMultiThread()
 		if (IsCancelled())
 			break;
 
-		std::string iteration_time_str = format_wall_time(it_time.elapsed().wall);
+		std::string iteration_time_str = FormatElapsedTime(it_time.elapsed().wall.count() / 1.0e9);
 
 		///////////////////////////////////
 		// protected write to adj file (not needed here since write to

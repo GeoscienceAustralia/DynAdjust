@@ -102,7 +102,7 @@ namespace networkadjust {
 extern std::mutex maxCorrMutex;
 
 using dynadjust::cpu_timer;
-using dynadjust::format_wall_time;
+using dynadjust::FormatElapsedTime;
 
 // forward declaration of dna_adjust
 class dna_adjust;
