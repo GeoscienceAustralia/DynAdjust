@@ -91,6 +91,12 @@ bool prepareAdjustmentExceptionThrown(const std::vector<std::exception_ptr>& pre
 //
 void dna_adjust::AdjustPhasedMultiThread()
 {
+	if (projectSettings_.a.lm_enabled)
+	{
+		AdjustPhasedMultiThreadLM();
+		return;
+	}
+
 	initialiseIteration();
 
 	std::string corr_msg;
@@ -295,7 +301,7 @@ void dna_adjust::SolveMT(bool COMPUTE_INVERSE, const UINT32& block)
 	{
 		// Compute inverse of normals (aposteriori variance matrix)
 		// (AT * V-1 * A)-1
-		FormInverseVarianceMatrix(&(v_normalsR_.at(block)), false);
+		FormInverseVarianceMatrix(&(v_normalsR_.at(block)), false, true);
 	}
 
 	// compute weighted "measured minus computed"
@@ -304,7 +310,10 @@ void dna_adjust::SolveMT(bool COMPUTE_INVERSE, const UINT32& block)
 
 	// Solve corrections from normal equations
 	v_correctionsR_.at(block).redim(v_designR_.at(block).columns(), 1);
-	v_correctionsR_.at(block).multiply(v_normalsR_.at(block), "N", At_Vinv_m, "N");
+	if (v_normalsR_.at(block).is_symmetric())
+		v_correctionsR_.at(block).multiply_sym(v_normalsR_.at(block), At_Vinv_m);
+	else
+		v_correctionsR_.at(block).multiply(v_normalsR_.at(block), "N", At_Vinv_m, "N");
 
 	// debug output?
 	if (projectSettings_.g.verbose > 3)

@@ -21,6 +21,7 @@
 
 #include <dynadjust/dnaadjustwrapper/dnaadjustprogress.hpp>
 #include <dynadjust/dnaadjust/dnaadjust.hpp>
+#include <include/math/dnamatrix_contiguous.hpp>
 
 /// \cond
 #include <time.h>
@@ -366,24 +367,28 @@ void dna_adjust_progress_thread::processAdjustment()
 					
 			// print new block to screen when adjusting only
 			if (block != currentBlock && _dnaAdj->IsAdjusting())
-			{						
+			{
 				ss.str("");
 				ss << "  Iteration " << std::right << std::setw(2) << std::fixed << std::setprecision(0) << _dnaAdj->CurrentIteration();
 
 				if (_p->a.multi_thread && !_dnaAdj->processingCombine())
 					ss << std::left << std::setw(13) << ", adjusting...";
 				else
-					ss << ", block " << std::left << std::setw(6) << std::fixed << std::setprecision(0) << _dnaAdj->CurrentBlock() + 1;
-						
-				sst.str("");
-				if (first_time)
 				{
-					sst << std::setw(PROGRESS_ADJ_BLOCK_28) << std::left << " ";
-					first_time = false;
+					ss << ", block " << std::left << std::setw(4) << std::fixed << std::setprecision(0) << _dnaAdj->CurrentBlock() + 1;
+					UINT32 stnCount = _dnaAdj->CurrentBlockStationCount();
+					if (stnCount > 0)
+					{
+						int max_t = dna_adjust::GetMaxBlasThreads();
+						ss << " (" << std::right << std::setw(5) << stnCount << " stns, " << std::setw(2) << max_t << "T)";
+					}
+					int64_t elapsedMs = _dnaAdj->LastBlockElapsedMs();
+					if (elapsedMs > 0)
+						ss << "  " << std::fixed << std::setprecision(1) << (elapsedMs / 1000.0) << "s";
 				}
-				
-				sst << PROGRESS_BACKSPACE_28 << std::setw(PROGRESS_ADJ_BLOCK_28) << std::left << ss.str();
-				coutMessage(sst.str());
+				ss << std::endl;
+				coutMessage(ss.str());
+				first_time = true;
 
 				currentBlock = block;
 			}
