@@ -94,11 +94,9 @@ void dna_adjust::AdjustPhasedMultiThread()
 	initialiseIteration();
 
 	std::string corr_msg;
-	std::ostringstream ss;
 	UINT32 i;
 	bool iterate(true);
 
-	std::chrono::milliseconds iteration_time(std::chrono::milliseconds(0));
 	cpu_timer it_time, tot_time;
 
 #if defined(__ICC) || defined(__INTEL_COMPILER)		// Intel compiler
@@ -169,7 +167,6 @@ void dna_adjust::AdjustPhasedMultiThread()
 		for_each(mt_adjust_threads.begin(), mt_adjust_threads.end(), std::mem_fn(&std::thread::join));
 #endif
 		// This point is reached when the threads have finished
-		iteration_time = std::chrono::duration_cast<std::chrono::milliseconds>(it_time.elapsed().wall);
 
 		//delete mt_adjust_threads;
 #if defined(__ICC) || defined(__INTEL_COMPILER)		// Intel compiler
@@ -195,18 +192,12 @@ void dna_adjust::AdjustPhasedMultiThread()
 		if (IsCancelled())
 			break;
 
-		ss.str("");
-		if (iteration_time >= std::chrono::seconds(1)) {
-			auto seconds = std::chrono::duration_cast<std::chrono::seconds>(iteration_time);
-			ss << seconds.count() << "s";
-		} else {
-			ss << iteration_time.count() << "ms";
-		}
+		std::string iteration_time_str = format_wall_time(it_time.elapsed().wall);
 
 		///////////////////////////////////
 		// protected write to adj file (not needed here since write to
 		// adj file at this stage is via single thread
-		adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Elapsed time" << ss.str() << std::endl;
+		adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Elapsed time" << iteration_time_str << std::endl;
 		OutputLargestCorrection(corr_msg);
 		///////////////////////////////////
 
@@ -214,6 +205,7 @@ void dna_adjust::AdjustPhasedMultiThread()
 			debug_file << concurrentAdjustments.print_adjusted_blocks();
 
 		iterationCorrections_.add_message(corr_msg);
+		iterationTimes_.add_message(iteration_time_str);
 		iterationQueue_.push_and_notify(CurrentIteration());				// currentIteration begins at 1, so not zero-indexed
 
 		// continue iterating?

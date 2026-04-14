@@ -72,6 +72,16 @@ private:
     std::chrono::high_resolution_clock::time_point start_time_;
 };
 
+inline std::string format_wall_time(std::chrono::nanoseconds wall) {
+    double seconds = wall.count() / 1.0e9;
+    std::ostringstream oss;
+    if (seconds >= 1.0)
+        oss << std::fixed << std::setprecision(3) << seconds << "s";
+    else
+        oss << std::fixed << std::setprecision(3) << (seconds * 1000.0) << "ms";
+    return oss.str();
+}
+
 }  // namespace dynadjust
 
 #endif  // DNATIMER_H_

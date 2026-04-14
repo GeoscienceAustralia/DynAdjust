@@ -86,8 +86,9 @@ void PrintSummaryMessage(dna_adjust* netAdjust, const project_settings* p, boost
 			break;
 		std::stringstream ss("");
 		ss << "  Iteration " << std::right << std::setw(2) << std::fixed << std::setprecision(0) << currentIteration;
-		ss << ", max station corr: " << std::right << std::setw(12) << netAdjust->GetMaxCorrection(currentIteration) << std::endl;
-		std::cout << PROGRESS_BACKSPACE_28 << std::setw(28) << std::left << ss.str();
+		ss << ", max station corr: " << std::right << std::setw(12) << netAdjust->GetMaxCorrection(currentIteration);
+		ss << ", time: " << netAdjust->GetIterationTime(currentIteration) << std::endl;
+		std::cout << PROGRESS_BACKSPACE_28 << std::left << ss.str();
 	}
 
 	if (p->a.report_mode)
