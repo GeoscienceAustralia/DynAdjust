@@ -2433,7 +2433,7 @@ void dna_adjust::AdjustSimultaneous()
 
 		// update data for messages
 		iterationCorrections_.add_message(corr_msg);
-		iterationTimes_.add_message(format_wall_time(it_time.elapsed().wall));
+		iterationTimes_.add_message(FormatElapsedTime(it_time.elapsed().wall.count() / 1.0e9));
 		iterationQueue_.push_and_notify(CurrentIteration());	// currentIteration begins at 1, so not zero-indexed
 		isIterationComplete_ = true;
 		
@@ -2571,7 +2571,7 @@ void dna_adjust::AdjustPhased()
 		OutputLargestCorrection(corr_msg);
 
 		iterationCorrections_.add_message(corr_msg);
-		iterationTimes_.add_message(format_wall_time(it_time.elapsed().wall));
+		iterationTimes_.add_message(FormatElapsedTime(it_time.elapsed().wall.count() / 1.0e9));
 		iterationQueue_.push_and_notify(CurrentIteration());	// currentIteration begins at 1, so not zero-indexed
 		isIterationComplete_ = true;
 
@@ -2650,7 +2650,7 @@ void dna_adjust::AdjustPhasedBlock1()
 		adjustStatus_ = ADJUST_THRESHOLD_EXCEEDED;
 
 	iterationCorrections_.add_message(corr_msg);
-	iterationTimes_.add_message(format_wall_time(it_time.elapsed().wall));
+	iterationTimes_.add_message(FormatElapsedTime(it_time.elapsed().wall.count() / 1.0e9));
 	iterationQueue_.push_and_notify(CurrentIteration());	// currentIteration begins at 1, so not zero-indexed
 
 	ValidateandFinaliseAdjustment(tot_time);

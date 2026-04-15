@@ -942,6 +942,13 @@ if (BUILD_TESTING)
     target_link_libraries(test_snx_file_writer PRIVATE ${DNA_LIBRARIES})
     target_compile_definitions(test_snx_file_writer PRIVATE __BINARY_NAME__="test_snx_file_writer" __BINARY_DESC__="Unit tests for SNX file writer")
 
+    # Test: test_format_elapsed_time
+    add_executable(test_format_elapsed_time
+        ${UNIT_TEST_DIR}/test_format_elapsed_time.cpp
+    )
+    target_include_directories(test_format_elapsed_time PRIVATE ${UNIT_TEST_DIR} ${CMAKE_SOURCE_DIR}/include)
+    target_compile_definitions(test_format_elapsed_time PRIVATE __BINARY_NAME__="test_format_elapsed_time" __BINARY_DESC__="Unit tests for FormatElapsedTime helper")
+
     # Register unit tests with CTest
     add_test(NAME unit-MatrixTest COMMAND $<TARGET_FILE:test_matrix>)
     add_test(NAME unit-MsrToStnSortTest COMMAND $<TARGET_FILE:test_msr_to_stn_sort>)
@@ -957,6 +964,7 @@ if (BUILD_TESTING)
     add_test(NAME unit-AslFileLoaderTest COMMAND $<TARGET_FILE:test_asl_file_loader>)
     add_test(NAME unit-BmsFileLoaderTest COMMAND $<TARGET_FILE:test_bms_file_loader>)
     add_test(NAME unit-SnxFileWriterTest COMMAND $<TARGET_FILE:test_snx_file_writer>)
+    add_test(NAME unit-FormatElapsedTimeTest COMMAND $<TARGET_FILE:test_format_elapsed_time>)
 
     # ........................................................................
     # Functional tests
@@ -2026,7 +2034,7 @@ if (BUILD_TESTING)
         unit-AmlFileLoaderTest unit-BmsFileTest unit-NetworkDataLoaderTest
         unit-MeasurementProcessorTest unit-DynAdjustPrinterTest unit-GNSSNstatSortTest
         unit-BstFileLoaderTest unit-AslFileLoaderTest unit-BmsFileLoaderTest
-        unit-SnxFileWriterTest
+        unit-SnxFileWriterTest unit-FormatElapsedTimeTest
     )
     set_tests_properties(${UNIT_TESTS} PROPERTIES
         RUN_SERIAL FALSE

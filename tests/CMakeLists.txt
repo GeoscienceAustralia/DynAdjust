@@ -219,6 +219,16 @@ target_compile_definitions(test_gnss_nstat_sort PRIVATE
     __BINARY_DESC__="Unit tests for GNSS n-stat sort in alternate units"
 )
 
+# Test 11: FormatElapsedTime helper (issue #351)
+add_executable(test_format_elapsed_time
+    test_format_elapsed_time.cpp
+)
+
+target_compile_definitions(test_format_elapsed_time PRIVATE
+    __BINARY_NAME__="test_format_elapsed_time"
+    __BINARY_DESC__="Unit tests for FormatElapsedTime helper (issue #351)"
+)
+
 # Enable testing
 enable_testing()
 
@@ -233,16 +243,17 @@ add_test(NAME NetworkDataLoaderTest COMMAND test_network_data_loader)
 add_test(NAME MeasurementProcessorTest COMMAND test_measurement_processor)
 add_test(NAME DynAdjustPrinterTest COMMAND test_dnaadjust_printer)
 add_test(NAME GNSSNstatSortTest COMMAND test_gnss_nstat_sort)
+add_test(NAME FormatElapsedTimeTest COMMAND test_format_elapsed_time)
 
 # Custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS test_matrix test_msr_to_stn_sort test_bst_file test_asl_file test_aml_file_loader test_bms_file test_network_data_loader test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort
+    DEPENDS test_matrix test_msr_to_stn_sort test_bst_file test_asl_file test_aml_file_loader test_bms_file test_network_data_loader test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort test_format_elapsed_time
     COMMENT "Running all tests"
 )
 
 # Custom target equivalent to 'make all'
 add_custom_target(tests_all
-    DEPENDS test_matrix test_msr_to_stn_sort test_bst_file test_asl_file test_aml_file_loader test_bms_file test_network_data_loader test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort
+    DEPENDS test_matrix test_msr_to_stn_sort test_bst_file test_asl_file test_aml_file_loader test_bms_file test_network_data_loader test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort test_format_elapsed_time
     COMMENT "Building all tests"
 )
