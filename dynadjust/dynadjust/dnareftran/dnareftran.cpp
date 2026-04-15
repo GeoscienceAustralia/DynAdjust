@@ -82,8 +82,6 @@ void dna_reftran::TransformBinaryFiles(const std::string& bstFile, const std::st
 	// Identify and apply any substitutions for WGS84 in the list of measurements
 	ApplyMeasurementFrameSubstitutions();
 
-	datumTo_.SetDatumFromName(newFrame, newEpoch);
-
 	// 2. Transform measurements first (because pre-transformed station 
 	// coordinates are required)
 	TransformMeasurementRecords(newFrame, newEpoch);
@@ -312,6 +310,14 @@ void dna_reftran::LoadWGS84FrameSubstitutions()
 	frameSubstitution.reset(new WGS84_ITRF2014<std::string, UINT32, double>);
 	_frameSubstitutions.push_back(frameSubstitution);
 
+	// SIRGAS95 to ITRF94
+    frameSubstitution.reset(new SIRGAS95_ITRF94<std::string, UINT32, double>);
+    _frameSubstitutions.push_back(frameSubstitution);
+
+	// SIRGAS2000 to ITRF2000
+    frameSubstitution.reset(new SIRGAS2000_ITRF2000<std::string, UINT32, double>);
+    _frameSubstitutions.push_back(frameSubstitution);
+
 	std::sort(_frameSubstitutions.begin(), _frameSubstitutions.end(), 
 		CompareSubstituteOnFrameName< frame_substitutions_t<std::string, UINT32, double>, std::string>());
 
@@ -380,6 +386,49 @@ void dna_reftran::LogFrameSubstitutions(std::vector<string_string_pair>& substit
 		}
 	);
 	
+}
+
+void dna_reftran::ApplyToFrameSubstitution()
+{
+	std::string epsgSubstitute;
+
+	std::string strEpsgTo(datumTo_.GetEpsgCode_s());
+    std::string strEpochTo(datumTo_.GetEpoch_s());
+
+	_v_frame_substitutions.clear();
+
+	try {
+        if (IsolateandApplySubstitute(strEpsgTo, strEpochTo, epsgSubstitute)) 
+		{
+            _v_frame_substitutions.push_back(string_string_pair(
+				datumFromEpsgString(std::string(strEpsgTo)),
+                datumFromEpsgString(epsgSubstitute)));
+            datumTo_.SetDatum(epsgSubstitute);
+            datumTo_.SetEpoch(strEpochTo);
+        }
+    } catch (const RefTranException& e) {
+        std::stringstream error_msg;
+        error_msg << std::endl
+                  << "    - Target frame:  " << datumFromEpsgString<std::string>(strEpsgTo) << " doesn't exist."
+                  << std::endl;
+
+        switch (e.exception_type()) {
+        case REFTRAN_WGS84_TRANS_UNSUPPORTED: {
+            std::stringstream throw_msg;
+            throw_msg << e.what() << error_msg.str() << std::endl;
+            throw RefTranException(throw_msg.str(), REFTRAN_WGS84_TRANS_UNSUPPORTED);
+            break;
+        }
+        default: throw RefTranException(e.what()); break;
+        }
+    }
+
+	if (_v_frame_substitutions.empty()) 
+		return;
+    if (projectSettings_.g.verbose < 2) 
+		return;
+
+    LogFrameSubstitutions(_v_frame_substitutions, "Frame");
 }
 
 	
@@ -1455,8 +1504,10 @@ void dna_reftran::TransformStationRecords(const std::string& newFrame, const std
 #endif
 
 	try {
-		// 1. Get the datum (and epoch) of the desired system
-		datumTo_.SetDatumFromName(newFrame, newEpoch);
+		// 1. Get the datum (and epoch) of the desired system and apply the
+        // appropriate substitution (required to determine the transformation parameters)
+        datumTo_.SetDatumFromName(newFrame, newEpoch);
+        ApplyToFrameSubstitution();
 		
 		// 2. For every station, get the datum, then transform
 		//    TransformStation takes
@@ -1573,8 +1624,10 @@ void dna_reftran::TransformMeasurementRecords(const std::string& newFrame, const
 #endif
 
 	try {
-		// 1. Get the datum (and epoch) of the desired system
-		datumTo_.SetDatumFromName(newFrame, newEpoch);
+		// 1. Get the datum (and epoch) of the desired system and apply the
+        // appropriate substitution (required to determine the transformation parameters)
+        datumTo_.SetDatumFromName(newFrame, newEpoch);
+        ApplyToFrameSubstitution();
 	
 		// 2. For every measurement, get the datum, determine parameters, then transform
 		for (msr_it=bmsBinaryRecords_.begin(); msr_it!=bmsBinaryRecords_.end(); ++msr_it)

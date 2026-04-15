@@ -381,6 +381,39 @@ public:
 	virtual ~WGS84_ITRF2014() {}
 };
 
+// SIRGAS95 to ITRF94
+template <class T1 = std::string, class T2 = UINT32, class T3 = double>
+class SIRGAS95_ITRF94 : public frame_substitutions_t<T1, T2, T3> {
+   public:
+    SIRGAS95_ITRF94() {
+        frame_substitutions::frame_name = SIRGAS_1995_s;
+        frame_substitutions::frame_epsg = SIRGAS_1995_i_xyz;
+        frame_substitutions::frame_desc = "";
+        frame_substitutions::substitute_name = ITRF1994_s;
+        frame_substitutions::substitute_epsg = ITRF1994_i_xyz;
+
+        frame_substitutions::from_epoch = dateFromString<boost::gregorian::date>("01.01.1900");
+        frame_substitutions::to_epoch = boost::gregorian::day_clock::local_day() + boost::gregorian::years(100);
+    };
+    virtual ~SIRGAS95_ITRF94() {}
+};
+
+// SIRGAS2000 to ITRF2000
+template <class T1 = std::string, class T2 = UINT32, class T3 = double>
+class SIRGAS2000_ITRF2000 : public frame_substitutions_t<T1, T2, T3> {
+   public:
+    SIRGAS2000_ITRF2000() {
+        frame_substitutions::frame_name = SIRGAS_2000_s;
+        frame_substitutions::frame_epsg = SIRGAS_2000_i_xyz;
+        frame_substitutions::frame_desc = "";
+        frame_substitutions::substitute_name = ITRF2000_s;
+        frame_substitutions::substitute_epsg = ITRF2000_i_xyz;
+
+        frame_substitutions::from_epoch = dateFromString<boost::gregorian::date>("01.01.1900");
+        frame_substitutions::to_epoch = boost::gregorian::day_clock::local_day() + boost::gregorian::years(100);
+    };
+    virtual ~SIRGAS2000_ITRF2000() {}
+};
 
 // FUNCTIONS
 
