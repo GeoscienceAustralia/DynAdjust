@@ -2112,6 +2112,7 @@ _ADJUST_STATUS_ dna_adjust::AdjustNetwork()
 	isIterationComplete_ = false;
 	isAdjustmentQuestionable_ = false;
 	iterationCorrections_.clear_messages();
+	iterationTimes_.clear_messages();
 
 	if (projectSettings_.o._database_ids)
 		LoadDatabaseId();
@@ -2432,6 +2433,7 @@ void dna_adjust::AdjustSimultaneous()
 
 		// update data for messages
 		iterationCorrections_.add_message(corr_msg);
+		iterationTimes_.add_message(format_wall_time(it_time.elapsed().wall));
 		iterationQueue_.push_and_notify(CurrentIteration());	// currentIteration begins at 1, so not zero-indexed
 		isIterationComplete_ = true;
 		
@@ -2567,8 +2569,9 @@ void dna_adjust::AdjustPhased()
 
 		// Calculate and print largest adjustment correction and station ID
 		OutputLargestCorrection(corr_msg);
-		
+
 		iterationCorrections_.add_message(corr_msg);
+		iterationTimes_.add_message(format_wall_time(it_time.elapsed().wall));
 		iterationQueue_.push_and_notify(CurrentIteration());	// currentIteration begins at 1, so not zero-indexed
 		isIterationComplete_ = true;
 
@@ -2645,8 +2648,9 @@ void dna_adjust::AdjustPhasedBlock1()
 
 	if (fabs(maxCorr_) > projectSettings_.a.iteration_threshold)
 		adjustStatus_ = ADJUST_THRESHOLD_EXCEEDED;
-		
+
 	iterationCorrections_.add_message(corr_msg);
+	iterationTimes_.add_message(format_wall_time(it_time.elapsed().wall));
 	iterationQueue_.push_and_notify(CurrentIteration());	// currentIteration begins at 1, so not zero-indexed
 
 	ValidateandFinaliseAdjustment(tot_time);

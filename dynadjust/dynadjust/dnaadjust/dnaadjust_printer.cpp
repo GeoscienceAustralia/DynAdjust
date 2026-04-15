@@ -80,22 +80,13 @@ void DynAdjustPrinter::PrintIteration(const UINT32& iteration) {
 }
 
 void DynAdjustPrinter::PrintAdjustmentTime(cpu_timer& time, int timer_type) {
-    // calculate and print total time
-    auto elapsed = time.elapsed();
-    double seconds = elapsed.wall.count() / 1.0e9;
-    
-    std::stringstream ss;
-    if (seconds >= 1.0) {
-        ss << std::fixed << std::setprecision(3) << seconds << "s";
-    } else {
-        ss << std::fixed << std::setprecision(3) << (seconds * 1000.0) << "ms";
-    }
+    std::string time_str = format_wall_time(time.elapsed().wall);
 
     if (timer_type == 0) // iteration_time equivalent
-        adjust_.adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Elapsed time" << ss.str() << std::endl;
+        adjust_.adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Elapsed time" << time_str << std::endl;
     else
     {
-        adjust_.adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Total time" << ss.str() << std::endl << std::endl;
+        adjust_.adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Total time" << time_str << std::endl << std::endl;
     }
 }
 

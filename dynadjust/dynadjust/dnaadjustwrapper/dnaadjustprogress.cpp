@@ -323,13 +323,14 @@ void dna_adjust_progress_thread::processAdjustment()
 				ss.str("");
 				ss << "  Iteration " << std::right << std::setw(2) << std::fixed << std::setprecision(0) << currentIteration;
 				ss << ", max station corr: " << std::right << std::setw(PROGRESS_ADJ_BLOCK_12) <<
-					_dnaAdj->GetMaxCorrection(currentIteration) << std::endl;
-					
+					_dnaAdj->GetMaxCorrection(currentIteration);
+				ss << ", time: " << _dnaAdj->GetIterationTime(currentIteration) << std::endl;
+
 				coutMessage(ss.str());
 			}
 			std::this_thread::sleep_for(std::chrono::milliseconds(80));
 		}
-		
+
 		break;
 	case Phased_Block_1Mode:
 	case PhasedMode:
@@ -350,12 +351,13 @@ void dna_adjust_progress_thread::processAdjustment()
 						
 				ss.str("");
 				ss << "  Iteration " << std::right << std::setw(2) << std::fixed << std::setprecision(0) << currentIteration;
-				ss << ", max station corr: " << std::right << std::setw(PROGRESS_ADJ_BLOCK_12) << _dnaAdj->GetMaxCorrection(currentIteration) << std::endl;
-				
+				ss << ", max station corr: " << std::right << std::setw(PROGRESS_ADJ_BLOCK_12) << _dnaAdj->GetMaxCorrection(currentIteration);
+				ss << ", time: " << _dnaAdj->GetIterationTime(currentIteration) << std::endl;
+
 				sst.str("");
 				if (first_time)
 					sst << std::setw(PROGRESS_ADJ_BLOCK_28) << std::left << " ";
-				sst << PROGRESS_BACKSPACE_28 << std::setw(PROGRESS_ADJ_BLOCK_28) << std::left << ss.str();
+				sst << PROGRESS_BACKSPACE_28 << std::left << ss.str();
 				coutMessage(sst.str());
 				first_time = true;
 			}

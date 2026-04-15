@@ -102,6 +102,7 @@ namespace networkadjust {
 extern std::mutex maxCorrMutex;
 
 using dynadjust::cpu_timer;
+using dynadjust::format_wall_time;
 
 // forward declaration of dna_adjust
 class dna_adjust;
@@ -349,6 +350,12 @@ class dna_adjust {
         if (iteration == 0)
             return iterationCorrections_.get_message(iteration); // safe guard
         return iterationCorrections_.get_message(iteration - 1);
+    };
+
+    inline std::string GetIterationTime(const UINT32& iteration) const {
+        if (iteration == 0)
+            return iterationTimes_.get_message(iteration); // safe guard
+        return iterationTimes_.get_message(iteration - 1);
     };
     /////////////////////////////
 
@@ -1118,6 +1125,7 @@ class dna_adjust {
     bool allStationsFixed_;
 
     message_bank<std::string> iterationCorrections_;
+    message_bank<std::string> iterationTimes_;
 
     // For each block
     vUINT32 v_ContiguousNetList_; // vector of contiguous network IDs
