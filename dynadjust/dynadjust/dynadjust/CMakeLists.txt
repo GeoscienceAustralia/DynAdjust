@@ -70,14 +70,9 @@ if(BUILD_STATIC)
         #CURL::libcurl
         "-framework CoreFoundation")
     else()
-      # On Linux/Unix, we can use full static linking
       target_link_options(${STATIC_TARGET_NAME} PRIVATE
-        -Wl,-Bstatic
-        -fno-builtin
         -static-libgcc
-        -static-libstdc++
-        -static)
-
+        -static-libstdc++)
     endif()
   elseif(WIN32)
     # On Windows with MSVC

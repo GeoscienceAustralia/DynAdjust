@@ -73,9 +73,9 @@ endif()
 # For multi-config generators (Visual Studio, Xcode)
 foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
     string(TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG_UPPER)
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG_UPPER} ${CMAKE_SOURCE_DIR}/../bin)
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG_UPPER} ${CMAKE_SOURCE_DIR}/../bin)
-    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG_UPPER} ${CMAKE_SOURCE_DIR}/../bin)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG_UPPER} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG_UPPER} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+    set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG_UPPER} ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 endforeach()
 
 if (BUILD_STATIC)
@@ -616,6 +616,23 @@ if(BUILD_STATIC)
                 endif()
             endif()
         endforeach()
+
+        # For MKL builds, add static MKL libraries (MKL::MKL is an imported
+        # target that the generic .a finder above cannot resolve)
+        if(USE_MKL AND MKL_FOUND AND DEFINED ENV{MKLROOT})
+            set(MKL_LIB_DIR "$ENV{MKLROOT}/lib")
+            if(ILP64)
+                set(MKL_INTERFACE_LIB "${MKL_LIB_DIR}/libmkl_intel_ilp64.a")
+            else()
+                set(MKL_INTERFACE_LIB "${MKL_LIB_DIR}/libmkl_intel_lp64.a")
+            endif()
+            list(APPEND STATIC_LIBS_LIST
+                "-Wl,--start-group"
+                "${MKL_INTERFACE_LIB}"
+                "${MKL_LIB_DIR}/libmkl_sequential.a"
+                "${MKL_LIB_DIR}/libmkl_core.a"
+                "-Wl,--end-group")
+        endif()
 
         message("")
         message(STATUS "STATIC_LIBS_LIST=${STATIC_LIBS_LIST}")
