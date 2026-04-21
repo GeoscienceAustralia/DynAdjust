@@ -621,6 +621,7 @@ void dna_reftran::WriteBinaryStationFile(const std::string& bstfileName)
 	snprintf(bst_meta_.modifiedBy, sizeof(bst_meta_.modifiedBy), "%s", __BINARY_NAME__);
 	snprintf(bst_meta_.epsgCode, sizeof(bst_meta_.epsgCode), "%s", strEpsg.substr(0, STN_EPSG_WIDTH).c_str());
 	snprintf(bst_meta_.epoch, sizeof(bst_meta_.epoch), "%s", strEpoch.substr(0, STN_EPOCH_WIDTH).c_str());
+	// observation_epoch is immutable across transformations - intentionally not overwritten.
 	bst_meta_.reftran = true;
 
 	try {
@@ -655,6 +656,7 @@ void dna_reftran::WriteBinaryMeasurementFile(const std::string& bmsfileName)
 	snprintf(bms_meta_.modifiedBy, sizeof(bms_meta_.modifiedBy), "%s", __BINARY_NAME__);
 	snprintf(bms_meta_.epsgCode, sizeof(bms_meta_.epsgCode), "%s", strEpsg.substr(0, STN_EPSG_WIDTH).c_str());
 	snprintf(bms_meta_.epoch, sizeof(bms_meta_.epoch), "%s", strEpoch.substr(0, STN_EPOCH_WIDTH).c_str());
+	// observation_epoch is immutable across transformations - intentionally not overwritten.
 	bms_meta_.reftran = true;
 
 	try {
@@ -1532,6 +1534,7 @@ void dna_reftran::TransformStationRecords(const std::string& newFrame, const std
 			// d. Update meta
 			snprintf(stn_it->epsgCode, sizeof(stn_it->epsgCode), "%s", datumTo_.GetEpsgCode_s().c_str());
 			snprintf(stn_it->epoch, sizeof(stn_it->epoch), "%s", datumTo_.GetEpoch_s().c_str());
+			// observation_epoch is immutable across transformations - intentionally not overwritten.
 			transformationPerformed_ = true;
 			m_stnsTransformed++;
 		}
@@ -1607,15 +1610,15 @@ void dna_reftran::TransformStation(it_vstn_t& stn_it, const CDnaDatum& datumFrom
 
 void dna_reftran::TransformMeasurementRecords(const std::string& newFrame, const std::string& newEpoch)
 {
-	it_vmsr_t msr_it;
+	it_vmsr_t msr_it = bmsBinaryRecords_.end();
 	CDnaDatum datumFrom;
 	data_type_ = msr_data;
-	
+
 	// Create the transformation parameters to be used for the
 	// entire set of measurement records.  If a measurement is in a different
 	// frame, obtain new parameters
 	transformation_parameter_set transformationParameters;
-	
+
 	transformationPerformed_ = false;
 	m_msrsTransformed = m_msrsNotTransformed = 0;
 
@@ -1623,13 +1626,12 @@ void dna_reftran::TransformMeasurementRecords(const std::string& newFrame, const
 	TRACE("\nTransforming measurements...\n\n");
 #endif
 
+	// Setup before the measurement loop - errors here cannot reference a specific measurement
+	datumTo_.SetDatumFromName(newFrame, newEpoch);
+	ApplyToFrameSubstitution();
+
 	try {
-		// 1. Get the datum (and epoch) of the desired system and apply the
-        // appropriate substitution (required to determine the transformation parameters)
-        datumTo_.SetDatumFromName(newFrame, newEpoch);
-        ApplyToFrameSubstitution();
-	
-		// 2. For every measurement, get the datum, determine parameters, then transform
+		// For every measurement, get the datum, determine parameters, then transform
 		for (msr_it=bmsBinaryRecords_.begin(); msr_it!=bmsBinaryRecords_.end(); ++msr_it)
 		{
 			// a. ignore measurements not subject to geodetic datum
@@ -1794,6 +1796,8 @@ void dna_reftran::TransformMeasurement_GX(it_vmsr_t& msr_it, const CDnaDatum& da
 		msr_it->term1 = coordinates2_mod.get(0, 0) - coordinates1_mod.get(0, 0);
 		//TRACE("\nTransformed baseline\n");
 		//TRACE("%.4f\n", msr_it->term1);
+		// observation_epoch is immutable across transformations - the three X/Y/Z
+		// component writes below intentionally overwrite only epsgCode and epoch.
 		snprintf(msr_it->epsgCode, sizeof(msr_it->epsgCode), "%s", datumTo_.GetEpsgCode_s().c_str());
 		snprintf(msr_it->epoch, sizeof(msr_it->epoch), "%s", datumTo_.GetEpoch_s().c_str());
 		msr_it++;
@@ -1884,6 +1888,8 @@ void dna_reftran::TransformMeasurement_Y(it_vmsr_t& msr_it, const CDnaDatum& dat
 		}
 		
 		// Assign 'transformed' elements
+		// observation_epoch is immutable across transformations - the three X/Y/Z
+		// component writes below intentionally overwrite only epsgCode and epoch.
 		msr_it->term1 = coordinates_mod.get(0, 0);
 		snprintf(msr_it->epsgCode, sizeof(msr_it->epsgCode), "%s", datumTo_.GetEpsgCode_s().c_str());
 		snprintf(msr_it->epoch, sizeof(msr_it->epoch), "%s", datumTo_.GetEpoch_s().c_str());

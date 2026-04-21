@@ -76,7 +76,8 @@ CDnaGpsBaseline::CDnaGpsBaseline(CDnaGpsBaseline&& g)
 	m_referenceFrame = g.m_referenceFrame;
 	m_epsgCode = g.m_epsgCode;
 	m_epoch = g.m_epoch;
-	
+	m_observation_epoch = g.m_observation_epoch;
+
 	m_dX = g.m_dX;
 	m_dY = g.m_dY;
 	m_dZ = g.m_dZ;
@@ -114,6 +115,7 @@ CDnaGpsBaseline& CDnaGpsBaseline::operator= (CDnaGpsBaseline&& rhs)
 	m_referenceFrame = rhs.m_referenceFrame;
 	m_epsgCode = rhs.m_epsgCode;
 	m_epoch = rhs.m_epoch;
+	m_observation_epoch = rhs.m_observation_epoch;
 
 	m_dX = rhs.m_dX;
 	m_dY = rhs.m_dY;
@@ -371,6 +373,7 @@ UINT32 CDnaGpsBaseline::SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t& it
 	m_dVscale = it_msr->scale4;
 
 	m_epoch = it_msr->epoch;
+	m_observation_epoch = it_msr->observation_epoch;
 	m_epsgCode = it_msr->epsgCode;
 	m_referenceFrame = datumFromEpsgString<std::string>(it_msr->epsgCode);
 
@@ -437,6 +440,7 @@ void CDnaGpsBaseline::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIn
 
 	snprintf(measRecord.epsgCode, sizeof(measRecord.epsgCode), "%s", m_epsgCode.substr(0, STN_EPSG_WIDTH).c_str());
 	snprintf(measRecord.epoch, sizeof(measRecord.epoch), "%s", m_epoch.substr(0, STN_EPOCH_WIDTH).c_str());
+	snprintf(measRecord.observation_epoch, sizeof(measRecord.observation_epoch), "%s", m_observation_epoch.substr(0, STN_EPOCH_WIDTH).c_str());
 
 	// X
 	measRecord.measAdj = m_measAdj;
@@ -485,7 +489,7 @@ void CDnaGpsBaseline::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIn
 	// now write covariance elements
 	std::vector<CDnaCovariance>::const_iterator _it_cov;
 	for (_it_cov=m_vGpsCovariances.begin(); _it_cov!=m_vGpsCovariances.end(); ++_it_cov)
-		_it_cov->WriteBinaryMsr(binary_stream, msrIndex, m_epsgCode, m_epoch);
+		_it_cov->WriteBinaryMsr(binary_stream, msrIndex, m_epsgCode, m_epoch, m_observation_epoch);
 }
 
 void CDnaGpsBaseline::SerialiseDatabaseMap(std::ofstream* os)
@@ -650,17 +654,18 @@ CDnaGpsBaselineCluster::CDnaGpsBaselineCluster(CDnaGpsBaselineCluster&& g)
 	m_dVscale = g.m_dVscale;
 	m_lclusterID = g.m_lclusterID;
 	m_MSmeasurementStations = g.m_MSmeasurementStations;
-	
+
 	m_referenceFrame = g.m_referenceFrame;
 	m_epsgCode = g.m_epsgCode;
 	m_epoch = g.m_epoch;
+	m_observation_epoch = g.m_observation_epoch;
 
 	m_msr_db_map = g.m_msr_db_map;
 
 	m_dbidmap = g.m_dbidmap;
 }
 
-// move assignment operator 
+// move assignment operator
 CDnaGpsBaselineCluster& CDnaGpsBaselineCluster::operator= (CDnaGpsBaselineCluster&& rhs)
 {
 	// check for assignment to self!
@@ -674,6 +679,7 @@ CDnaGpsBaselineCluster& CDnaGpsBaselineCluster::operator= (CDnaGpsBaselineCluste
 	m_referenceFrame = rhs.m_referenceFrame;
 	m_epsgCode = rhs.m_epsgCode;
 	m_epoch = rhs.m_epoch;
+	m_observation_epoch = rhs.m_observation_epoch;
 
 	m_dPscale = rhs.m_dPscale;
 	m_dLscale = rhs.m_dLscale;
@@ -891,6 +897,7 @@ UINT32 CDnaGpsBaselineCluster::SetMeasurementRec(const vstn_t& binaryStn, it_vms
 
 	m_referenceFrame = datumFromEpsgString<std::string>(it_msr->epsgCode);
 	m_epoch = it_msr->epoch;
+	m_observation_epoch = it_msr->observation_epoch;
 	m_epsgCode = it_msr->epsgCode;
 	m_sourceFileIndex = it_msr->sourceFileIndex;
 

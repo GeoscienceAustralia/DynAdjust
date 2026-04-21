@@ -283,6 +283,7 @@ typedef struct stn_t {
 		memset(epsgCode, '\0', sizeof(epsgCode));
 		snprintf(epsgCode, sizeof(epsgCode), "7843");
 		memset(epoch, '\0', sizeof(epoch));
+		memset(observation_epoch, '\0', sizeof(observation_epoch));
 		memset(plate, '\0', sizeof(plate));
 	}
 
@@ -311,9 +312,13 @@ typedef struct stn_t {
 	UINT32	clusterID;						// cluster ID (which cluster this station belongs to)
 	UINT16	unusedStation;					// is this station unused?
 	char	epsgCode[STN_EPSG_WIDTH];		// epsg ID, i.e. NNNNN (where NNNNN is in the range 0-32767)
-	char	epoch[STN_EPOCH_WIDTH];			// date, i.e. "DD.MM.YYYY" (10 chars)
-											// if datum is dynamic, Epoch is YYYY MM DD
-											// if datum is static, Epoch is ignored
+	char	epoch[STN_EPOCH_WIDTH];			// Epoch of Reference Frame, i.e. "DD.MM.YYYY" (10 chars)
+											// Mutable via dnareftran; reflects the reference frame's epoch.
+											// If datum is static, Epoch is ignored.
+	char	observation_epoch[STN_EPOCH_WIDTH];	// Epoch of Observation, i.e. "DD.MM.YYYY" (10 chars)
+											// Immutable under reftran. Timestamp at which the station
+											// coordinates were observed/measured. Used for discontinuity
+											// station-instance allocation. Empty if not supplied.
 	char	plate[STN_PLATE_WIDTH];			// Tectonic plate identifier. Typically two characters.
 } station_t;
 
@@ -330,7 +335,8 @@ typedef v_stn_string::iterator it_stn_string;
 typedef struct input_file_meta {
 	char	filename[FILE_NAME_WIDTH+1];	// Input file path
 	char	epsgCode[STN_EPSG_WIDTH+1];		// Input file epsg ID, i.e. NNNNN (where NNNNN is in the range 0-32767). "Mixed" if stations are on different reference frames
-	char	epoch[STN_EPOCH_WIDTH+1];		// Input file epoch
+	char	epoch[STN_EPOCH_WIDTH+1];		// Input file reference frame epoch (mutable)
+	char	observation_epoch[STN_EPOCH_WIDTH+1];	// Input file observation epoch (immutable)
 	UINT16	filetype;						// Input file type (geodesyml, dynaml, dna, csv, sinex)
 	UINT16	datatype;						// Input data type (station, measurement, both)
 } input_file_meta_t;
@@ -371,6 +377,7 @@ typedef struct binary_file_meta {
 		memcpy(modifiedBy, rhs.modifiedBy, sizeof(modifiedBy));
 		memcpy(epsgCode, rhs.epsgCode, sizeof(epsgCode));
 		memcpy(epoch, rhs.epoch, sizeof(epoch));
+		memcpy(observation_epoch, rhs.observation_epoch, sizeof(observation_epoch));
 		rhs.inputFileMeta = nullptr;
 		rhs.sourceFileMeta = nullptr;
 	}
@@ -388,6 +395,7 @@ typedef struct binary_file_meta {
 			memcpy(modifiedBy, rhs.modifiedBy, sizeof(modifiedBy));
 			memcpy(epsgCode, rhs.epsgCode, sizeof(epsgCode));
 			memcpy(epoch, rhs.epoch, sizeof(epoch));
+			memcpy(observation_epoch, rhs.observation_epoch, sizeof(observation_epoch));
 			inputFileCount = rhs.inputFileCount;
 			inputFileMeta = rhs.inputFileMeta;
 			sourceFileCount = rhs.sourceFileCount;
@@ -401,7 +409,8 @@ typedef struct binary_file_meta {
 	bool				reduced;						// indicates whether the data is reduced(true) or raw(false)
 	char				modifiedBy[MOD_NAME_WIDTH+1];	// the program that modified this file
 	char				epsgCode[STN_EPSG_WIDTH+1];		// epsg ID, i.e. NNNNN (where NNNNN is in the range 0-32767). "Mixed" if stations are on different reference frames
-	char				epoch[STN_EPOCH_WIDTH+1];		// date, i.e. "DD.MM.YYYY" (10 chars)
+	char				epoch[STN_EPOCH_WIDTH+1];		// Epoch of Reference Frame (mutable)
+	char				observation_epoch[STN_EPOCH_WIDTH+1];	// Epoch of Observation (immutable; preserved across reftran)
 	bool				reftran;						// the data has been transformed to another frame and/or epoch
 	bool				geoid;							// geoid separation values have been obtained
     std::uint64_t		inputFileCount;					// Number of source file metadata elements

@@ -318,6 +318,29 @@ int ParseCommandLineOptions(const int& argc, char* argv[], const boost::program_
         p.i.user_supplied_epoch = 1;
     }
 
+    if (vm.count(OBSERVATION_EPOCH)) {
+        // Get today's date?
+        if (iequals(p.i.observation_epoch, "today"))
+            p.i.observation_epoch = stringFromToday<boost::gregorian::date>();
+        // Has the user supplied the year only?
+        else if (p.i.observation_epoch.rfind(".") == std::string::npos)
+            p.i.observation_epoch.insert(0, "01.01.");
+
+        if (p.i.observation_epoch.length() < 10) {
+            std::string dateStr = FormatDateString(p.i.observation_epoch);
+            if (dateStr.empty()) {
+                std::cout << std::endl
+                          << "- Error: Cannot parse observation epoch '" << p.i.observation_epoch << "'." << std::endl
+                          << "  Please supply date in the format dd.mm.yyyy" << std::endl
+                          << std::endl;
+                return EXIT_FAILURE;
+            }
+            p.i.observation_epoch = dateStr;
+        }
+
+        p.i.user_supplied_observation_epoch = 1;
+    }
+
     //////////////////////////////////////////////////////////////////////////////
     // Data screening options
     if (vm.count(GET_MSRS_TRANSCENDING_BOX)) p.i.include_transcending_msrs = 1;
@@ -1029,7 +1052,7 @@ int ImportDataFiles(dna_import& parserDynaML, vdnaStnPtr* vStations, vdnaMsrPtr*
                     // Initialise the 'default' datum (frame and epoch) for the project, from the first file, unless the
                     // frame and epoch have been set by the user, in which case InitialiseDatum has already initialised
                     // the datum.
-                    parserDynaML.InitialiseDatum(p.i.reference_frame, p.i.epoch);
+                    parserDynaML.InitialiseDatum(p.i.reference_frame, p.i.epoch, p.i.observation_epoch);
                 } catch (const XMLInteropException& e) {
                     std::stringstream ss;
                     ss << "- Error: ";
@@ -1280,11 +1303,15 @@ int main(int argc, char* argv[]) {
                           (std::string("Project epoch for all stations and measurements when input files do not "
                                        "specify an epoch. Default is ") +
                            p.i.epoch + ".")
-                              .c_str())(OVERRIDE_INPUT_FRAME,
-                                        (std::string("Replace the reference frame specified in the input files with "
-                                                     "the reference frame specified by arg in --") +
-                                         std::string(REFERENCE_FRAME))
-                                            .c_str());
+                              .c_str())(OBSERVATION_EPOCH, boost::program_options::value<std::string>(&p.i.observation_epoch),
+                                        "Default observation epoch (immutable under dnareftran) for "
+                                        "measurements that do not supply one. Format dd.mm.yyyy. "
+                                        "Use special value \"today\" to capture the current date.")(
+                                            OVERRIDE_INPUT_FRAME,
+                                            (std::string("Replace the reference frame specified in the input files with "
+                                                         "the reference frame specified by arg in --") +
+                                             std::string(REFERENCE_FRAME))
+                                                .c_str());
 
         data_screening_options.add_options()(
             BOUNDING_BOX, boost::program_options::value<std::string>(&p.i.bounding_box),
@@ -1511,7 +1538,7 @@ int main(int argc, char* argv[]) {
     // See comments in InitialiseDatum()
     try {
         // Initialise the 'default' datum for the project.
-        parserDynaML.InitialiseDatum(p.i.reference_frame, p.i.epoch);
+        parserDynaML.InitialiseDatum(p.i.reference_frame, p.i.epoch, p.i.observation_epoch);
     } catch (const XMLInteropException& e) {
         std::cout << std::endl << cmd_line_banner;
         imp_file << std::endl << cmd_line_banner;
@@ -1677,6 +1704,25 @@ int main(int argc, char* argv[]) {
     // discontinuities be parsed prior to reading any SINEX files.
     if (vm.count(STATION_DISCONTINUITY_FILE)) {
         p.i.apply_discontinuities = true;
+
+        // Static datums have no meaningful reference-frame epoch, so the discontinuity
+        // matcher will fall back to that (possibly incorrect) value unless the user
+        // supplies an observation epoch per-measurement or via --observation-epoch.
+        // See issue #325.
+        if (isEpsgDatumStatic(epsgCode) && !p.i.user_supplied_observation_epoch) {
+            std::stringstream wss;
+            wss << std::endl
+                << "- Warning: --discontinuity-file is in use with static datum " << p.i.reference_frame
+                << "." << std::endl
+                << "  Station-instance allocation relies on 'Epoch of Observation'. Supply it per-measurement" << std::endl
+                << "  via <EpochOfObservation> / DNA column 25, or set a project default via --observation-epoch." << std::endl
+                << "  Without it, the reference-frame epoch will be used as a fallback, which may be incorrect" << std::endl
+                << "  for a static datum." << std::endl
+                << std::endl;
+            if (!p.g.quiet)
+                std::cout << wss.str();
+            imp_file << wss.str();
+        }
 
         // Does it exist?
         if (!std::filesystem::exists(p.i.stn_discontinuityfile)) {
@@ -2534,6 +2580,12 @@ int main(int argc, char* argv[]) {
             return EXIT_FAILURE;
         }
     }
+
+    // Apply the project-level observation_epoch (from --observation-epoch) to measurements
+    // whose observation_epoch is empty or auto-defaulted from the reference-frame epoch.
+    // No-op when --observation-epoch was not supplied.
+    if (p.i.user_supplied_observation_epoch)
+        parserDynaML.ApplyProjectObservationEpoch((vdnaMsrPtr*)&vmeasurementsTotal);
 
     // Create binary measurement file.
     // Binary measurement file can be serialised without stations

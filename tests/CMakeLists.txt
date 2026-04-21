@@ -229,6 +229,22 @@ target_compile_definitions(test_format_elapsed_time PRIVATE
     __BINARY_DESC__="Unit tests for FormatElapsedTime helper (issue #351)"
 )
 
+# Test 12: DynadjustFile v1.1 back-compat test (issue #325)
+add_executable(test_dynadjust_file
+    test_dynadjust_file.cpp
+    ${IO_COMMON_SOURCES}
+)
+
+target_link_libraries(test_dynadjust_file
+    ${PLATFORM_LIBS}
+    ${Boost_LIBRARIES}
+)
+
+target_compile_definitions(test_dynadjust_file PRIVATE
+    __BINARY_NAME__="test_dynadjust_file"
+    __BINARY_DESC__="Unit tests for DynadjustFile v1.1 back-compat (issue #325)"
+)
+
 # Enable testing
 enable_testing()
 
@@ -244,16 +260,17 @@ add_test(NAME MeasurementProcessorTest COMMAND test_measurement_processor)
 add_test(NAME DynAdjustPrinterTest COMMAND test_dnaadjust_printer)
 add_test(NAME GNSSNstatSortTest COMMAND test_gnss_nstat_sort)
 add_test(NAME FormatElapsedTimeTest COMMAND test_format_elapsed_time)
+add_test(NAME DynadjustFileTest COMMAND test_dynadjust_file)
 
 # Custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS test_matrix test_msr_to_stn_sort test_bst_file test_asl_file test_aml_file_loader test_bms_file test_network_data_loader test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort test_format_elapsed_time
+    DEPENDS test_matrix test_msr_to_stn_sort test_bst_file test_asl_file test_aml_file_loader test_bms_file test_network_data_loader test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort test_format_elapsed_time test_dynadjust_file
     COMMENT "Running all tests"
 )
 
 # Custom target equivalent to 'make all'
 add_custom_target(tests_all
-    DEPENDS test_matrix test_msr_to_stn_sort test_bst_file test_asl_file test_aml_file_loader test_bms_file test_network_data_loader test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort test_format_elapsed_time
+    DEPENDS test_matrix test_msr_to_stn_sort test_bst_file test_asl_file test_aml_file_loader test_bms_file test_network_data_loader test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort test_format_elapsed_time test_dynadjust_file
     COMMENT "Building all tests"
 )

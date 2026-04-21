@@ -276,9 +276,18 @@ public:
 
 	inline std::string GetReferenceFrame() const { return m_referenceFrame; }
 	inline std::string GetEpoch() const { return m_epoch; }
-	
+	inline std::string GetObservationEpoch() const { return m_observation_epoch; }
+
 	inline void SetReferenceFrame(const std::string& r) { m_referenceFrame = trimstr(r); }
-	inline void SetEpoch(const std::string& e) { m_epoch = trimstr(e); }
+	// Default observation_epoch to epoch when unset so legacy inputs preserve
+	// prior behaviour; once set, observation_epoch is immutable under reftran.
+	inline void SetEpoch(const std::string& e)
+	{
+		m_epoch = trimstr(e);
+		if (m_observation_epoch.empty())
+			m_observation_epoch = m_epoch;
+	}
+	inline void SetObservationEpoch(const std::string& e) { m_observation_epoch = trimstr(e); }
 	inline void SetEpsg(const std::string& e) { m_epsgCode = trimstr(e); }
 
 	std::string m_strName;
@@ -325,6 +334,7 @@ protected:
 	std::string	m_referenceFrame;
 	std::string	m_epsgCode;
 	std::string	m_epoch;
+	std::string	m_observation_epoch;
 
 	CONSTRAINT_TYPE m_constraintType;
 };

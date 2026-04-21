@@ -94,6 +94,7 @@ typedef struct {
 	UINT32 msr_targ_ht;
 	UINT32 msr_id_msr;
 	UINT32 msr_id_cluster;
+	UINT32 msr_gps_obs_epoch;	// DNA v3.02+ column; 0 if file predates v3.02
 } dna_msr_fields;
 
 // DNA version 1.00
@@ -440,6 +441,82 @@ public:
 };
 
 
+// DNA version 3.02 - adds a 25th column for the observation epoch.
+// Columns 0-23 are identical to version 3.01.
+template <class U>
+struct _dna_msr_fields_302_
+{
+	static const U _locations_[25];
+	static const U _widths_[25];
+};
+
+template <class U>
+const U _dna_msr_fields_302_<U>::_locations_[25] =
+{
+	0,		// msr type
+	1,		// ignore
+	2,		// instrument name
+	22,		// target 1
+	42,		// target 2
+	62,		// linear measurement
+	62,		// gps measurement
+	82,		// gps vcv 1
+	102,	// gps vcv 2
+	122,	// gps vcv 3
+	62,		// gps vscale
+	72,		// gps pscale
+	82,		// gps lscale
+	92,		// gps hscale
+	102,	// gps ref frame
+	122,	// gps epoch (reference-frame epoch)
+	76,		// angular d
+	80,		// angular m
+	82,		// angular s
+	90,		// standard deviation
+	99,		// inst height
+	106,	// target height
+	142,	// msr id
+	152,	// cluster id
+	162		// gps observation epoch
+};
+
+template <class U>
+const U _dna_msr_fields_302_<U>::_widths_[25] =
+{
+	1,		// msr type
+	1,		// ignore
+	20,		// instrument name
+	20,		// target 1
+	20,		// target 2
+	14,		// linear measurement
+	20,		// gps measurement
+	20,		// gps vcv 1
+	20,		// gps vcv 2
+	20,		// gps vcv 3
+	10,		// gps vscale
+	10,		// gps pscale
+	10,		// gps lscale
+	10,		// gps hscale
+	20,		// gps ref frame
+	20,		// gps epoch (reference-frame epoch)
+	4,		// angular d
+	2,		// angular m
+	8,		// angular s
+	9,		// standard deviation
+	7,		// inst height
+	7,		// target height
+	10,		// msr id
+	10,		// cluster id
+	20		// gps observation epoch
+};
+
+class dna_msr_fields_302
+	: public _dna_msr_fields_302_<UINT16>
+{
+public:
+};
+
+
 
 template <typename U>
 void assignDNASTNFieldParameters(const UINT16* locs, const UINT16* widths, 
@@ -523,7 +600,9 @@ void assignDNAMSRFieldParameters(const UINT16* locs, const UINT16* widths,
 	dflocs.msr_targ_ht = locs[21];
 	dflocs.msr_id_msr = locs[22];
 	dflocs.msr_id_cluster = locs[23];
-	
+	// Default the 3.02-introduced field to 0; a v3.02 branch overrides it below.
+	dflocs.msr_gps_obs_epoch = 0;
+
 	dfwidths.msr_type = widths[0];
 	dfwidths.msr_ignore = widths[1];
 	dfwidths.msr_inst = widths[2];
@@ -548,14 +627,26 @@ void assignDNAMSRFieldParameters(const UINT16* locs, const UINT16* widths,
 	dfwidths.msr_targ_ht = widths[21];
 	dfwidths.msr_id_msr = widths[22];
 	dfwidths.msr_id_cluster = widths[23];
-	
+	dfwidths.msr_gps_obs_epoch = 0;
 }
 	
 
 template <typename U>
-void determineDNAMSRFieldParameters(const std::string& version, 
+void determineDNAMSRFieldParameters(const std::string& version,
 	dna_msr_fields& dflocs, dna_msr_fields& dfwidths, const U u=0)
 {
+	if (iequals(version, "3.02"))
+	{
+		assignDNAMSRFieldParameters<U>(dna_msr_fields_302::_locations_,
+			dna_msr_fields_302::_widths_,
+			dflocs, dfwidths);
+		// The 3.02-introduced observation-epoch column is beyond the shared
+		// 24-entry assigner, so set it explicitly here.
+		dflocs.msr_gps_obs_epoch = dna_msr_fields_302::_locations_[24];
+		dfwidths.msr_gps_obs_epoch = dna_msr_fields_302::_widths_[24];
+		return;
+	}
+
 	if (iequals(version, "3.01"))
 	{
 		assignDNAMSRFieldParameters<U>(dna_msr_fields_301::_locations_,

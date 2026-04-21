@@ -171,6 +171,7 @@ const char* const REFERENCE_FRAME = "reference-frame";
 const char* const REFERENCE_FRAME_R = "reference-frame,r";
 const char* const EPOCH = "epoch";
 const char* const EPOCH_E = "epoch,e";
+const char* const OBSERVATION_EPOCH = "observation-epoch";
 const char* const OVERRIDE_INPUT_FRAME = "override-input-ref-frame";
 const char* const TECTONIC_PLATE_BDY_FILE = "plate-boundary-file";
 const char* const TECTONIC_PLATE_BDY_FILE_B = "plate-boundary-file,b";

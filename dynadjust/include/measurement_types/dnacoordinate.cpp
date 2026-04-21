@@ -202,6 +202,7 @@ UINT32 CDnaCoordinate::SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t& it_
 	m_dStdDev = sqrt(it_msr->term2);
 
 	m_epoch = it_msr->epoch;
+	m_observation_epoch = it_msr->observation_epoch;
 	m_sourceFileIndex = it_msr->sourceFileIndex;
 
 	CDnaMeasurement::SetDatabaseMap(*dbidmap);
@@ -229,6 +230,7 @@ void CDnaCoordinate::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrInd
 	measRecord.fileOrder = ((*msrIndex)++);
 
 	snprintf(measRecord.epoch, sizeof(measRecord.epoch), "%s", m_epoch.substr(0, STN_EPOCH_WIDTH).c_str());
+	snprintf(measRecord.observation_epoch, sizeof(measRecord.observation_epoch), "%s", m_observation_epoch.substr(0, STN_EPOCH_WIDTH).c_str());
 
 	binary_stream->write(reinterpret_cast<char *>(&measRecord), sizeof(measurement_t));
 }

@@ -224,3 +224,42 @@ TEST_CASE("Write and read back synthetic data", "[BstFile]") {
 
     cleanup_temp_files();
 }
+
+TEST_CASE("observation_epoch round-trip preserves distinct epoch values", "[BstFile][observation_epoch]") {
+    BstFile bst_loader;
+    vstn_t stations;
+    binary_file_meta_t bst_meta;
+
+    cleanup_temp_files();
+
+    station_t stn;
+    snprintf(stn.stationName, sizeof(stn.stationName), "OBS001");
+    snprintf(stn.stationNameOrig, sizeof(stn.stationNameOrig), "OBS001_2015");
+    snprintf(stn.epoch, sizeof(stn.epoch), "01.01.2020");
+    snprintf(stn.observation_epoch, sizeof(stn.observation_epoch), "15.06.2015");
+    stn.initialLatitude = -35.0;
+    stn.currentLatitude = -35.0;
+    stn.initialLongitude = 149.0;
+    stn.currentLongitude = 149.0;
+    stn.initialHeight = 100.0;
+    stn.currentHeight = 100.0;
+    stn.zone = 55;
+    stn.fileOrder = 1;
+    stn.nameOrder = 1;
+    stations.push_back(stn);
+
+    create_test_binary_meta(bst_meta, static_cast<UINT32>(stations.size()));
+    snprintf(bst_meta.observation_epoch, sizeof(bst_meta.observation_epoch), "15.06.2015");
+
+    bst_loader.WriteFile(TEMP_BST_FILE, &stations, bst_meta);
+
+    vstn_t loaded;
+    binary_file_meta_t loaded_meta;
+    bst_loader.LoadFile(TEMP_BST_FILE, &loaded, loaded_meta);
+
+    REQUIRE(std::string(loaded[0].epoch) == "01.01.2020");
+    REQUIRE(std::string(loaded[0].observation_epoch) == "15.06.2015");
+    REQUIRE(std::string(loaded_meta.observation_epoch) == "15.06.2015");
+
+    cleanup_temp_files();
+}

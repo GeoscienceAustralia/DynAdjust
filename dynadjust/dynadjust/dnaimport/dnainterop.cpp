@@ -174,7 +174,8 @@ void dna_import::BuildExtractStationsList(const std::string& stnList, pvstring v
 }
 	
 
-void dna_import::InitialiseDatum(const std::string& reference_frame, const std::string epoch)
+void dna_import::InitialiseDatum(const std::string& reference_frame, const std::string epoch,
+	const std::string observation_epoch)
 {
 	try {
 		// Take the default reference frame, set either by the user or
@@ -196,11 +197,13 @@ void dna_import::InitialiseDatum(const std::string& reference_frame, const std::
 	if (datum_.GetEpoch() == timeImmemorial<boost::gregorian::date>())
 		m_strProjectDefaultEpoch = "";
 
+	m_strProjectObservationEpoch = observation_epoch;
+
 	// Update binary file meta
 	// Note: the following rule applies each time a set of files is loaded via import:
 	//	* This method (InitialiseDatum) is called (from dnaimportwrapper) before any files are loaded.
 	//    By default, the bst & bms meta are initialised with the reference frame and reference epoch.
-	//  * The datum and epoch within the first file (if present) is used to set the default project 
+	//  * The datum and epoch within the first file (if present) is used to set the default project
 	//    datum. If a datum isn't provided in the first input file, e.g. SINEX file, the default datum
 	//    (GDA2020) is used. As each subsequent file is loaded, the default frame and epoch are assumed.
 	//  * After all files have been loaded, InitialiseDatum is called again to set the metadata.
@@ -210,6 +213,56 @@ void dna_import::InitialiseDatum(const std::string& reference_frame, const std::
     snprintf(bms_meta_.epsgCode, sizeof(bms_meta_.epsgCode), "%s", m_strProjectDefaultEpsg.substr(0, STN_EPSG_WIDTH).c_str());
     snprintf(bst_meta_.epoch, sizeof(bst_meta_.epoch), "%s", m_strProjectDefaultEpoch.substr(0, STN_EPOCH_WIDTH).c_str());
     snprintf(bms_meta_.epoch, sizeof(bms_meta_.epoch), "%s", m_strProjectDefaultEpoch.substr(0, STN_EPOCH_WIDTH).c_str());
+    // observation_epoch is immutable; record the CLI-supplied project-level value (empty if not supplied).
+    snprintf(bst_meta_.observation_epoch, sizeof(bst_meta_.observation_epoch), "%s", m_strProjectObservationEpoch.substr(0, STN_EPOCH_WIDTH).c_str());
+    snprintf(bms_meta_.observation_epoch, sizeof(bms_meta_.observation_epoch), "%s", m_strProjectObservationEpoch.substr(0, STN_EPOCH_WIDTH).c_str());
+}
+
+
+void dna_import::ApplyProjectObservationEpoch(vdnaMsrPtr* vMeasurements)
+{
+	if (m_strProjectObservationEpoch.empty() || vMeasurements == nullptr)
+		return;
+
+	const std::string& obsEpoch = m_strProjectObservationEpoch;
+
+	// A measurement's observation_epoch is treated as "not explicitly set" when it is
+	// empty or equal to the reference-frame epoch (the auto-default from SetEpoch).
+	auto needs_override = [](const std::string& msrObsEpoch, const std::string& msrEpoch) {
+		return msrObsEpoch.empty() || msrObsEpoch == msrEpoch;
+	};
+
+	for (auto& msr_ptr : *vMeasurements)
+	{
+		if (!msr_ptr)
+			continue;
+
+		if (needs_override(msr_ptr->GetObservationEpoch(), msr_ptr->GetEpoch()))
+			msr_ptr->SetObservationEpoch(obsEpoch);
+
+		// GPS baseline cluster (G/X): propagate to every baseline element
+		if (auto* baselines = msr_ptr->GetBaselines_ptr())
+		{
+			for (auto& bsl : *baselines)
+			{
+				if (needs_override(bsl.GetObservationEpoch(), bsl.GetEpoch()))
+					bsl.SetObservationEpoch(obsEpoch);
+			}
+		}
+
+		// GPS point cluster (Y): propagate to every point element
+		if (auto* points = msr_ptr->GetPoints_ptr())
+		{
+			for (auto& pnt : *points)
+			{
+				if (needs_override(pnt.GetObservationEpoch(), pnt.GetEpoch()))
+					pnt.SetObservationEpoch(obsEpoch);
+			}
+		}
+
+		// Direction set (D): directions inherit from the parent measurement; no per-direction
+		// observation_epoch field exists beyond what the set-level value already carries.
+	}
 }
 	
 
@@ -436,7 +489,7 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		StationCoord_p.parsers (string_p, string_p, string_p, Height_p, string_p, GeoidModel_p);
 
 		DnaMeasurement_p.parsers (string_p, string_p, string_p, string_p, string_p, string_p, string_p, string_p,
-				string_p, string_p, Directions_p, string_p, string_p, string_p, GPSBaseline_p, string_p, string_p,
+				string_p, string_p, Directions_p, string_p, string_p, string_p, string_p, GPSBaseline_p, string_p, string_p,
 				string_p, Clusterpoint_p, string_p, string_p, string_p, string_p,
 				(projectSettings_.i.prefer_single_x_as_g == TRUE ? true : false));
 
@@ -818,12 +871,16 @@ void dna_import::ApplyDiscontinuitiesMeasurements(vdnaMsrPtr* vMeasurements)
 			continue;
 		}
 
-		// Check if an epoch been provided with this measurement
-		if (_it_msr->get()->GetEpoch().empty())
+		// Prefer the observation epoch for discontinuity matching; fall back
+		// to reference-frame epoch if the file did not supply an observation epoch.
+		std::string match_epoch = _it_msr->get()->GetObservationEpoch();
+		if (match_epoch.empty())
+			match_epoch = _it_msr->get()->GetEpoch();
+		if (match_epoch.empty())
 			continue;
 
 		// Capture the epoch of the measurement
-		site_date = dateFromString<boost::gregorian::date>(_it_msr->get()->GetEpoch());
+		site_date = dateFromString<boost::gregorian::date>(match_epoch);
 
 		// 2. Handle 'first' station for every measurement type
 		stn1 = _it_msr->get()->GetFirst();
@@ -930,8 +987,15 @@ void dna_import::ApplyDiscontinuitiesMeasurements_GX(std::vector<CDnaGpsBaseline
 		_it_msr != vGpsBaselines->end();
 		_it_msr++)
 	{
+		// Prefer observation epoch; fall back to reference-frame epoch.
+		std::string match_epoch = _it_msr->GetObservationEpoch();
+		if (match_epoch.empty())
+			match_epoch = _it_msr->GetEpoch();
+		if (match_epoch.empty())
+			continue;
+
 		// Capture the start date of the site
-		site_date = dateFromString<boost::gregorian::date>(_it_msr->GetEpoch());
+		site_date = dateFromString<boost::gregorian::date>(match_epoch);
 
 		// Station 1
 		stn1 = _it_msr->GetFirst();
@@ -983,8 +1047,15 @@ void dna_import::ApplyDiscontinuitiesMeasurements_Y(std::vector<CDnaGpsPoint>* v
 		_it_msr != vGpsPoints->end();
 		_it_msr++)
 	{
+		// Prefer observation epoch; fall back to reference-frame epoch.
+		std::string match_epoch = _it_msr->GetObservationEpoch();
+		if (match_epoch.empty())
+			match_epoch = _it_msr->GetEpoch();
+		if (match_epoch.empty())
+			continue;
+
 		// Capture the start date of the site
-		site_date = dateFromString<boost::gregorian::date>(_it_msr->GetEpoch());
+		site_date = dateFromString<boost::gregorian::date>(match_epoch);
 
 		// Station 1
 		stn1 = _it_msr->GetFirst();
@@ -1148,7 +1219,7 @@ void dna_import::ParseDNA(const std::string& fileName, vdnaStnPtr* vStations, PU
 			projectSettings_.r.epoch = fileEpoch;
 			m_strProjectDefaultEpoch = fileEpoch;
 
-			InitialiseDatum(projectSettings_.i.reference_frame, projectSettings_.i.epoch);
+			InitialiseDatum(projectSettings_.i.reference_frame, projectSettings_.i.epoch, projectSettings_.i.observation_epoch);
 		}
 	}
 
@@ -1739,12 +1810,18 @@ void dna_import::ParseDNAMSRLinear(const std::string& sBuf, dnaMsrPtr& msr_ptr)
 
 	// Epoch
 	msr_ptr->SetEpoch(ParseEpochValue(sBuf, "ParseDNAMSRLinear"));
+	// Observation epoch (DNA v3.02 column, optional)
+	{
+		std::string obs_epoch = ParseObsEpochValue(sBuf, "ParseDNAMSRLinear");
+		if (!obs_epoch.empty())
+			msr_ptr->SetObservationEpoch(obs_epoch);
+	}
 
 	// Capture msr_id and cluster_id (for database referencing)
 	ParseDatabaseIds(sBuf, "ParseDNAMSRLinear", msr_ptr->GetTypeC());
 	msr_ptr->SetDatabaseMap(m_msr_db_map);
 
-	// instrument and target heights only make sense for 
+	// instrument and target heights only make sense for
 	// slope distances, vertical angles and zenith distances
 	switch (msr_ptr->GetTypeC())
 	{
@@ -1806,6 +1883,12 @@ void dna_import::ParseDNAMSRCoordinate(const std::string& sBuf, dnaMsrPtr& msr_p
 
 	// Epoch
 	msr_ptr->SetEpoch(ParseEpochValue(sBuf, "ParseDNAMSRLinear"));
+	// Observation epoch (DNA v3.02 column, optional)
+	{
+		std::string obs_epoch = ParseObsEpochValue(sBuf, "ParseDNAMSRCoordinate");
+		if (!obs_epoch.empty())
+			msr_ptr->SetObservationEpoch(obs_epoch);
+	}
 
 	// Capture msr_id and cluster_id (for database referencing), then set
 	// database id info
@@ -1821,6 +1904,7 @@ void dna_import::ParseDNAMSRGPSBaselines(std::string& sBuf, dnaMsrPtr& msr_ptr, 
 
 	bslTmp.SetReferenceFrame(msr_ptr->GetReferenceFrame());
 	bslTmp.SetEpoch(msr_ptr->GetEpoch());
+	bslTmp.SetObservationEpoch(msr_ptr->GetObservationEpoch());
 
 	// Measurement type
 	std::string tmp;
@@ -1943,10 +2027,18 @@ void dna_import::ParseDNAMSRGPSBaselines(std::string& sBuf, dnaMsrPtr& msr_ptr, 
 				// Set the baseline epoch
 				bslTmp.SetEpoch(tmp);
 			}
+
+			// Observation epoch (DNA v3.02 column, optional; overrides default)
+			std::string obs_epoch = ParseObsEpochValue(sBuf, "ParseDNAMSRGPSBaselines");
+			if (!obs_epoch.empty())
+			{
+				msr_ptr->SetObservationEpoch(obs_epoch);
+				bslTmp.SetObservationEpoch(obs_epoch);
+			}
 		}
 		catch (std::runtime_error& e) {
 			std::stringstream ss;
-			ss << "ParseDNAMSRGPSBaselines(): Error parsing epoch:  " << 
+			ss << "ParseDNAMSRGPSBaselines(): Error parsing epoch:  " <<
 			 	std::endl << "    " << e.what();
 			SignalExceptionParseDNA(ss.str(), "", dml_.msr_gps_epoch);
 		}
@@ -2042,6 +2134,7 @@ void dna_import::ParseDNAMSRGPSPoints(std::string& sBuf, dnaMsrPtr& msr_ptr, boo
 
 	pntTmp.SetReferenceFrame(msr_ptr->GetReferenceFrame());
 	pntTmp.SetEpoch(msr_ptr->GetEpoch());
+	pntTmp.SetObservationEpoch(msr_ptr->GetObservationEpoch());
 
 	// Measurement type
 	std::string tmp;
@@ -2136,6 +2229,7 @@ void dna_import::ParseDNAMSRGPSPoints(std::string& sBuf, dnaMsrPtr& msr_ptr, boo
 		// Set the point frame
 		pntTmp.SetReferenceFrame(projectSettings_.i.reference_frame);
 		pntTmp.SetEpoch(msr_ptr->GetEpoch());
+		pntTmp.SetObservationEpoch(msr_ptr->GetObservationEpoch());
 	}
 	else //if (!projectSettings_.i.override_input_rfame)
 	{
@@ -2153,7 +2247,7 @@ void dna_import::ParseDNAMSRGPSPoints(std::string& sBuf, dnaMsrPtr& msr_ptr, boo
 		}
 		catch (std::runtime_error& e) {
 			std::stringstream ss;
-			ss << "ParseDNAMSRGPSPoints(): Error parsing reference frame:  " << std::endl << 
+			ss << "ParseDNAMSRGPSPoints(): Error parsing reference frame:  " << std::endl <<
 				"    " << e.what();
 			SignalExceptionParseDNA(ss.str(), "", dml_.msr_gps_reframe);
 		}
@@ -2179,10 +2273,18 @@ void dna_import::ParseDNAMSRGPSPoints(std::string& sBuf, dnaMsrPtr& msr_ptr, boo
 				// Set the point epoch
 				pntTmp.SetEpoch(tmp);
 			}
+
+			// Observation epoch (DNA v3.02 column, optional; overrides default)
+			std::string obs_epoch = ParseObsEpochValue(sBuf, "ParseDNAMSRGPSPoints");
+			if (!obs_epoch.empty())
+			{
+				msr_ptr->SetObservationEpoch(obs_epoch);
+				pntTmp.SetObservationEpoch(obs_epoch);
+			}
 		}
 		catch (std::runtime_error& e) {
 			std::stringstream ss;
-			ss << "ParseDNAMSRGPSPoints(): Error parsing epoch:  " << std::endl << 
+			ss << "ParseDNAMSRGPSPoints(): Error parsing epoch:  " << std::endl <<
 				"    " << e.what();
 			SignalExceptionParseDNA(ss.str(), "", dml_.msr_gps_epoch);
 		}
@@ -2691,7 +2793,7 @@ std::string dna_import::ParseEpochValue(const std::string& sBuf, const std::stri
 {
 	if (sBuf.length() <= dml_.msr_gps_epoch)
 		return "";
-	
+
 	std::string epoch;
 	try {
 		if (sBuf.length() > static_cast<std::string::size_type>(dml_.msr_gps_epoch + dmw_.msr_gps_epoch))
@@ -2705,6 +2807,30 @@ std::string dna_import::ParseEpochValue(const std::string& sBuf, const std::stri
 	}
 
 	return epoch;
+}
+
+std::string dna_import::ParseObsEpochValue(const std::string& sBuf, const std::string& calling_function)
+{
+	// DNA v3.01 (and earlier) files don't have an observation-epoch column;
+	// in that case the field layout leaves msr_gps_obs_epoch at 0.
+	if (dml_.msr_gps_obs_epoch == 0 || dmw_.msr_gps_obs_epoch == 0)
+		return "";
+	if (sBuf.length() <= dml_.msr_gps_obs_epoch)
+		return "";
+
+	std::string obs_epoch;
+	try {
+		if (sBuf.length() > static_cast<std::string::size_type>(dml_.msr_gps_obs_epoch + dmw_.msr_gps_obs_epoch))
+			obs_epoch = trimstr(sBuf.substr(dml_.msr_gps_obs_epoch, dmw_.msr_gps_obs_epoch));
+		else
+			obs_epoch = trimstr(sBuf.substr(dml_.msr_gps_obs_epoch));
+	}
+	catch (...) {
+		SignalExceptionParseDNA(calling_function + "(): Could not extract observation epoch from the record:  ",
+			sBuf, dml_.msr_gps_obs_epoch);
+	}
+
+	return obs_epoch;
 }
 
 std::string dna_import::ParseGPSMsrValue(const std::string& sBuf, const std::string& element, const std::string& calling_function)
@@ -2770,6 +2896,12 @@ void dna_import::ParseDNAMSRAngular(const std::string& sBuf, dnaMsrPtr& msr_ptr)
 
 	// Epoch
 	msr_ptr->SetEpoch(ParseEpochValue(sBuf, "ParseDNAMSRAngular"));
+	// Observation epoch (DNA v3.02 column, optional)
+	{
+		std::string obs_epoch = ParseObsEpochValue(sBuf, "ParseDNAMSRAngular");
+		if (!obs_epoch.empty())
+			msr_ptr->SetObservationEpoch(obs_epoch);
+	}
 
 	// Capture msr_id and cluster_id (for database referencing), then set
 	// database id info
@@ -2849,6 +2981,12 @@ UINT32 dna_import::ParseDNAMSRDirections(std::string& sBuf, dnaMsrPtr& msr_ptr, 
 
 		// Epoch
 		msr_ptr->SetEpoch(ParseEpochValue(sBuf, "ParseDNAMSRDirections"));
+		// Observation epoch (DNA v3.02 column, optional)
+		{
+			std::string obs_epoch = ParseObsEpochValue(sBuf, "ParseDNAMSRDirections");
+			if (!obs_epoch.empty())
+				msr_ptr->SetObservationEpoch(obs_epoch);
+		}
 
 		// Capture msr_id and cluster_id (for database referencing)
 		ParseDatabaseIds(sBuf, "ParseDNAMSRDirections", msr_ptr->GetTypeC());

@@ -65,6 +65,7 @@ CDnaDirection::CDnaDirection(CDnaDirection&& d)
 	m_msr_db_map = d.m_msr_db_map;
 
 	m_epoch = d.m_epoch;
+	m_observation_epoch = d.m_observation_epoch;
 }
 
 // move assignment operator 
@@ -599,13 +600,14 @@ UINT32 CDnaDirection::SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t& it_m
 	m_dStdDev = sqrt(it_msr->term2);
 
 	m_epoch = it_msr->epoch;
+	m_observation_epoch = it_msr->observation_epoch;
 	m_sourceFileIndex = it_msr->sourceFileIndex;
 
 	CDnaMeasurement::SetDatabaseMap(*dbidmap);
-	
+
 	return 0;
 }
-	
+
 
 void CDnaDirection::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex) const
 {
@@ -636,6 +638,7 @@ void CDnaDirection::WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrInde
 	measRecord.fileOrder = ((*msrIndex)++);
 
 	snprintf(measRecord.epoch, sizeof(measRecord.epoch), "%s", m_epoch.substr(0, STN_EPOCH_WIDTH).c_str());
+	snprintf(measRecord.observation_epoch, sizeof(measRecord.observation_epoch), "%s", m_observation_epoch.substr(0, STN_EPOCH_WIDTH).c_str());
 
 	binary_stream->write(reinterpret_cast<char *>(&measRecord), sizeof(measurement_t));
 }
