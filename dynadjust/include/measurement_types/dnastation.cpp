@@ -120,7 +120,7 @@ CDnaStation::CDnaStation(const std::string& referenceframe, const std::string& e
 	, m_fgeoidSep(0.), m_dmeridianDef(0.), m_dverticalDef(0.)
 	, m_lfileOrder(0), m_lnameOrder(0)
 	, m_zone(0), m_unusedStation(INVALID_STATION)
-	, m_referenceFrame(referenceframe), m_epoch(epoch)
+	, m_referenceFrame(referenceframe), m_epoch(epoch), m_observation_epoch(epoch)
 	, m_constraintType(free_3D)
 {
 	m_epsgCode = epsgStringFromName<std::string>(referenceframe);
@@ -170,6 +170,7 @@ CDnaStation::CDnaStation(const CDnaStation& newStation)
 	m_referenceFrame = newStation.m_referenceFrame;
 	m_epsgCode = newStation.m_epsgCode;
 	m_epoch = newStation.m_epoch;
+	m_observation_epoch = newStation.m_observation_epoch;
 
 	m_constraintType = newStation.m_constraintType;
 }
@@ -215,6 +216,7 @@ CDnaStation::CDnaStation(const std::string& strName, const std::string& strConst
 	m_referenceFrame = DEFAULT_DATUM;
 	m_epsgCode = DEFAULT_EPSG_S;
 	m_epoch = "";
+	m_observation_epoch = "";
 }
 
 CDnaStation& CDnaStation::operator =(const CDnaStation& rhs)
@@ -261,9 +263,10 @@ CDnaStation& CDnaStation::operator =(const CDnaStation& rhs)
 	m_referenceFrame = rhs.m_referenceFrame;
 	m_epsgCode = rhs.m_epsgCode;
 	m_epoch = rhs.m_epoch;
+	m_observation_epoch = rhs.m_observation_epoch;
 
 	m_constraintType = rhs.m_constraintType;
-	
+
 	return *this;
 }
 
@@ -675,6 +678,7 @@ void CDnaStation::WriteBinaryStn(std::ofstream* binary_stream, const UINT16 bUnu
 	stationRecord.unusedStation = bUnused;
 
 	strcpy(stationRecord.epoch, m_epoch.substr(0, STN_EPOCH_WIDTH).c_str());
+	strcpy(stationRecord.observation_epoch, m_observation_epoch.substr(0, STN_EPOCH_WIDTH).c_str());
 	strcpy(stationRecord.epsgCode, m_epsgCode.substr(0, STN_EPSG_WIDTH).c_str());
 
 	binary_stream->write(reinterpret_cast<char *>(&stationRecord), sizeof(station_t));
@@ -948,6 +952,7 @@ void CDnaStation::SetStationRec(const station_t& stationRecord)
 	m_unusedStation = (stationRecord.unusedStation == VALID_STATION ? true : false);
 
 	m_epoch = stationRecord.epoch;
+	m_observation_epoch = stationRecord.observation_epoch;
 	m_epsgCode = stationRecord.epsgCode;
 	m_referenceFrame = datumFromEpsgCode<std::string, UINT32>(LongFromString<UINT32>(m_epsgCode));
 }

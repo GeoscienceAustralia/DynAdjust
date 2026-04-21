@@ -43,6 +43,7 @@
 				<xs:element ref="Ignore" minOccurs="0"/>
 				<xs:element ref="ReferenceFrame" minOccurs="0"/>
 				<xs:element ref="Epoch" minOccurs="0"/>
+				<xs:element ref="EpochOfObservation" minOccurs="0"/>
 				<xs:element ref="First"/>
 				<xs:element ref="Second"/>
 				<xs:element ref="Third"/>
@@ -194,6 +195,7 @@
 	<xs:element name="Source" type="xs:string"/>
 	<xs:element name="ReferenceFrame" type="xs:string"/>
 	<xs:element name="Epoch" type="xs:string"/>
+	<xs:element name="EpochOfObservation" type="xs:string"/>
 	<xs:element name="MeasurementID" type="xs:string"/>
 	<xs:element name="ClusterID" type="xs:string"/>
 </xs:schema>

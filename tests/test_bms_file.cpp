@@ -555,3 +555,37 @@ TEST_CASE("Source file index round-trip", "[BmsFile][roundtrip][source]") {
 
     cleanup_temp_files();
 }
+
+TEST_CASE("observation_epoch round-trip preserves distinct values", "[BmsFile][observation_epoch]") {
+    BmsFile bms_loader;
+    vmsr_t measurements;
+    binary_file_meta_t meta;
+
+    cleanup_temp_files();
+
+    measurement_t msr = {};
+    msr.measType = 'G';
+    msr.measurementStations = 2;
+    snprintf(msr.epsgCode, sizeof(msr.epsgCode), "7843");
+    snprintf(msr.epoch, sizeof(msr.epoch), "01.01.2020");
+    snprintf(msr.observation_epoch, sizeof(msr.observation_epoch), "15.06.2015");
+    msr.station1 = 0;
+    msr.station2 = 1;
+    msr.term1 = 1234.5;
+    measurements.push_back(msr);
+
+    create_test_binary_meta(meta, measurements.size());
+    snprintf(meta.observation_epoch, sizeof(meta.observation_epoch), "15.06.2015");
+
+    bms_loader.WriteFile(TEMP_BMS_FILE, &measurements, meta);
+
+    vmsr_t loaded;
+    binary_file_meta_t loaded_meta;
+    bms_loader.LoadFile(TEMP_BMS_FILE, &loaded, loaded_meta);
+
+    REQUIRE(std::string(loaded[0].epoch) == "01.01.2020");
+    REQUIRE(std::string(loaded[0].observation_epoch) == "15.06.2015");
+    REQUIRE(std::string(loaded_meta.observation_epoch) == "15.06.2015");
+
+    cleanup_temp_files();
+}

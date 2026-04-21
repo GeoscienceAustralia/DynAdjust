@@ -593,6 +593,30 @@ void DnaMeasurement_pimpl::Epoch(const ::std::string& Epoch)
 	}
 }
 
+void DnaMeasurement_pimpl::EpochOfObservation(const ::std::string& EpochOfObservation)
+{
+	if (!_dnaCurrentMsr)
+		throw XMLInteropException("\"Type\" element must be the first element within \"DnaMeasurement\".", 0);
+
+	try
+	{
+		if (EpochOfObservation.empty())
+			return;
+
+		_dnaCurrentMsr->SetObservationEpoch(EpochOfObservation);
+	}
+	catch (const std::runtime_error& e) {
+		std::stringstream ss("");
+		ss << e.what();
+		ss << "    - Measurement type:    " << _dnaCurrentMsr->GetType() << std::endl <<
+			"    - From:                " << _dnaCurrentMsr->GetFirst() << std::endl <<
+			"    - To:                  " << _dnaCurrentMsr->GetTarget() << std::endl <<
+			"    - Reference frame:     " << _dnaCurrentMsr->GetReferenceFrame() << std::endl <<
+			"    - Epoch of observation: " << EpochOfObservation << std::endl;
+		throw XMLInteropException(ss.str(), 0);
+	}
+}
+
 void DnaMeasurement_pimpl::ReferenceFrame(const ::std::string& ReferenceFrame)
 {
 	if (!_dnaCurrentMsr)

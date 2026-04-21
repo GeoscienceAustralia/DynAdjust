@@ -180,8 +180,16 @@ public:
 	inline void ResetFileOrder() const { g_fileOrder = 0; }
 	inline bool filespecifiedReferenceFrame() const { return _filespecifiedreferenceframe; }
 	inline bool filespecifiedEpoch() const { return _filespecifiedepoch; }
-	void InitialiseDatum(const std::string& reference_frame, const std::string epoch="");
-	
+	void InitialiseDatum(const std::string& reference_frame, const std::string epoch="",
+		const std::string observation_epoch="");
+
+	// Applies the project-level observation epoch (from --observation-epoch) to every
+	// measurement whose observation_epoch is empty or equal to its reference-frame epoch
+	// (i.e. was auto-defaulted). Explicit file-level values set via <EpochOfObservation>
+	// or DNA v3.02 column 25 that differ from epoch are preserved. No-op if the CLI flag
+	// was not supplied.
+	void ApplyProjectObservationEpoch(vdnaMsrPtr* vMeasurements);
+
 	void PrintMeasurementsToStations(std::string& m2s_file, MsrTally* parsemsrTally,
 		std::string& bst_file, std::string& bms_file, std::string& aml_file, pvASLPtr vAssocStnList);
 
@@ -236,6 +244,7 @@ private:
 	std::string ParseScaleHValue(const std::string& sBuf, const std::string& calling_function);
 	std::string ParseRefFrameValue(const std::string& sBuf, const std::string& calling_function);
 	std::string ParseEpochValue(const std::string& sBuf, const std::string& calling_function);
+	std::string ParseObsEpochValue(const std::string& sBuf, const std::string& calling_function);
 
 	void ParseDatabaseIds(const std::string& sBuf, const std::string& calling_function, const char msrType);
 	void ParseDatabaseClusterId(const std::string& sBuf, const std::string& calling_function);
@@ -338,6 +347,7 @@ private:
 
 	std::string		m_strProjectDefaultEpsg;
 	std::string		m_strProjectDefaultEpoch;
+	std::string		m_strProjectObservationEpoch;	// Project-level observation epoch from --observation-epoch (immutable; may be empty)
 	std::string		m_msrComments;
 
 	vvUINT32	v_ISL_;				// Inner stations

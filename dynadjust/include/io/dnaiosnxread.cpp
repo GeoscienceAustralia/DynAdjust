@@ -939,10 +939,15 @@ void DnaIoSnx::ParseSinexStn(std::ifstream** snx_file, const char* sinexRec, vdn
 				stn_ptr->SetReferenceFrame(datum.GetName());
 				stn_ptr->SetEpsg(datum.GetEpsgCode_s());
 
-				yy = LongFromString<UINT32>(sBuf.substr(27, 2)), 
-				doy = LongFromString<UINT32>(sBuf.substr(30, 3)), 
+				yy = LongFromString<UINT32>(sBuf.substr(27, 2)),
+				doy = LongFromString<UINT32>(sBuf.substr(30, 3)),
 				ss = ParseDateFromYyDoy(yy, doy, doy_yyyy, std::string(" "));
-				stn_ptr->SetEpoch(stringFromDate(dateFromStringstream_doy_year<boost::gregorian::date, std::stringstream>(ss)));
+				{
+					std::string sinex_epoch = stringFromDate(dateFromStringstream_doy_year<boost::gregorian::date, std::stringstream>(ss));
+					stn_ptr->SetEpoch(sinex_epoch);
+					// SINEX STAX YY:DOY is the observation data window start — record it as the immutable observation epoch
+					stn_ptr->SetObservationEpoch(sinex_epoch);
+				}
 
 				stn_ptr->SetfileOrder(fileOrder++);
 				stn_ptr->SetXAxis_d(DoubleFromString<double>(trimstr(sBuf.substr(47, 21))));
@@ -1310,6 +1315,7 @@ void DnaIoSnx::ParseSinexMsr(std::ifstream** snx_file, const char* sinexRec, vdn
 	dnaGpsPointCluster->SetReferenceFrame(datum.GetName());
 	dnaGpsPointCluster->SetEpsg(datum.GetEpsgCode_s());
 	dnaGpsPointCluster->SetEpoch(vStations->at(0)->GetEpoch());
+	dnaGpsPointCluster->SetObservationEpoch(vStations->at(0)->GetObservationEpoch());
 
 	UINT32 cov_count, ci;
 
@@ -1328,6 +1334,7 @@ void DnaIoSnx::ParseSinexMsr(std::ifstream** snx_file, const char* sinexRec, vdn
 		dnaGpsPoint->SetReferenceFrame(datum.GetName());
 		dnaGpsPoint->SetEpsg(datum.GetEpsgCode_s());
 		dnaGpsPoint->SetEpoch(vStations->at(p)->GetEpoch());
+		dnaGpsPoint->SetObservationEpoch(vStations->at(p)->GetObservationEpoch());
 
 		dnaGpsPoint->SetPscale(dnaGpsPointCluster->GetPscale());
 		dnaGpsPoint->SetLscale(dnaGpsPointCluster->GetLscale());

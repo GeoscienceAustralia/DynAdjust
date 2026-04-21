@@ -258,6 +258,11 @@ void DnaMeasurement_pskel::Epoch_parser (::xml_schema::string_pskel& p)
 	this->Epoch_parser_ = &p;
 }
 
+void DnaMeasurement_pskel::EpochOfObservation_parser (::xml_schema::string_pskel& p)
+{
+	this->EpochOfObservation_parser_ = &p;
+}
+
 void DnaMeasurement_pskel::GPSBaseline_parser (::GPSBaseline_pskel& p)
 {
 	this->GPSBaseline_parser_ = &p;
@@ -318,6 +323,7 @@ void DnaMeasurement_pskel::parsers (
 	::Directions_pskel& Directions,
 	::xml_schema::string_pskel& Vscale,
 	::xml_schema::string_pskel& Epoch,
+	::xml_schema::string_pskel& EpochOfObservation,
 	::xml_schema::string_pskel& ReferenceFrame,
 	::GPSBaseline_pskel& GPSBaseline,
 	::xml_schema::string_pskel& Hscale,
@@ -343,6 +349,7 @@ void DnaMeasurement_pskel::parsers (
 	this->Directions_parser_ = &Directions;
 	this->Vscale_parser_ = &Vscale;
 	this->Epoch_parser_ = &Epoch;
+	this->EpochOfObservation_parser_ = &EpochOfObservation;
 	this->ReferenceFrame_parser_ = &ReferenceFrame;
 	this->GPSBaseline_parser_ = &GPSBaseline;
 	this->Hscale_parser_ = &Hscale;
@@ -370,6 +377,7 @@ DnaMeasurement_pskel::DnaMeasurement_pskel ()
 	Directions_parser_ (0),
 	Vscale_parser_ (0),
 	Epoch_parser_ (0),
+	EpochOfObservation_parser_ (0),
 	ReferenceFrame_parser_ (0),
 	GPSBaseline_parser_ (0),
 	Hscale_parser_ (0),
@@ -1326,6 +1334,10 @@ void DnaMeasurement_pskel::Epoch (const ::std::string&)
 {
 }
 
+void DnaMeasurement_pskel::EpochOfObservation (const ::std::string&)
+{
+}
+
 void DnaMeasurement_pskel::ReferenceFrame (const ::std::string&)
 {
 }
@@ -1509,6 +1521,16 @@ bool DnaMeasurement_pskel::_start_element_impl (const ::xml_schema::ro_string& n
 
 		if (this->Epoch_parser_)
 			this->Epoch_parser_->pre ();
+
+		return true;
+	}
+
+	if (n == "EpochOfObservation" && ns.empty ())
+	{
+		this->::xml_schema::complex_content::context_.top ().parser_ = this->EpochOfObservation_parser_;
+
+		if (this->EpochOfObservation_parser_)
+			this->EpochOfObservation_parser_->pre ();
 
 		return true;
 	}
@@ -1733,6 +1755,14 @@ bool DnaMeasurement_pskel::_end_element_impl (const ::xml_schema::ro_string& ns,
 	{
 		if (this->Epoch_parser_)
 			this->Epoch (this->Epoch_parser_->post_string ());
+
+		return true;
+	}
+
+	if (n == "EpochOfObservation" && ns.empty ())
+	{
+		if (this->EpochOfObservation_parser_)
+			this->EpochOfObservation (this->EpochOfObservation_parser_->post_string ());
 
 		return true;
 	}
