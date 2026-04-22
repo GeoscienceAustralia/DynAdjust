@@ -56,7 +56,6 @@ void GetDirectionsVarianceMatrix(msr_t_Iterator begin, matrix_2d* vmat)
 	UINT32 a, angle_count(bmsRecord->vectorCount2 - 1);		// number of directions excluding the RO
 	UINT32 skip(0), ignored(bmsRecord->vectorCount1 - bmsRecord->vectorCount2);
 
-	vmat->zero();
 	vmat->redim(angle_count, angle_count);
 
 	bmsRecord++;
@@ -90,8 +89,7 @@ void GetGPSVarianceMatrix(const msr_t_Iterator begin, matrix_2d* vmat)
 {
 	msr_t_Iterator bmsRecord(begin);
 	UINT32 variance_dim(bmsRecord->vectorCount1 * 3), covariance_dim, cov;
-	vmat->zero();
-	vmat->redim(variance_dim, variance_dim);	
+	vmat->redim(variance_dim, variance_dim);
 
 	for (UINT32 var(0), cov_elem; var<variance_dim; var+=3)
 	{
