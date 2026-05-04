@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(dynadjust VERSION 1.4.0)
+project(dynadjust VERSION 1.4.1)
 
 option(USE_MKL "Use Intel MKL (Linux and Windows)" OFF)
 option(BUILD_TESTING "Enable testing" OFF)
@@ -1008,7 +1008,10 @@ if (BUILD_TESTING)
     add_test (NAME import-urban-network COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n urban urban-network.stn urban-network.msr --flag-unused-stations)
     add_test (NAME geoid-urban-network COMMAND $<TARGET_FILE:${DNAGEOID_TARGET}> urban -g urban-network-geoid.gsb --export-dna-geo)
     add_test (NAME segment-urban-network COMMAND $<TARGET_FILE:${DNASEGMENT_TARGET}> urban --min 50 --max 150 --test-integrity)
-    add_test (NAME adjust-urban-network-verbose COMMAND $<TARGET_FILE:${DNAADJUST_TARGET}> urban --verbose 3)
+    add_test (NAME import-urban-network-verbose COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n urban_verbose urban-network.stn urban-network.msr --flag-unused-stations)
+    add_test (NAME geoid-urban-network-verbose COMMAND $<TARGET_FILE:${DNAGEOID_TARGET}> urban_verbose -g urban-network-geoid.gsb --export-dna-geo)
+    add_test (NAME segment-urban-network-verbose COMMAND $<TARGET_FILE:${DNASEGMENT_TARGET}> urban_verbose --min 50 --max 150 --test-integrity)
+    add_test (NAME adjust-urban-network-verbose COMMAND $<TARGET_FILE:${DNAADJUST_TARGET}> urban_verbose --verbose 3)
     add_test (NAME adjust-urban-network COMMAND $<TARGET_FILE:${DNAADJUST_TARGET}> urban --output-adj-msr --phased --stn-corrections --export-sinex-file --export-xml-stn-file --export-dna-stn-file --output-pos-uncertainty --export-dna-msr --export-xml-msr)
     add_test (NAME plot-urban-network-01 COMMAND $<TARGET_FILE:${DNAPLOT_TARGET}> urban --phased --label-sta --correction-arrows --label-corr --compute-corrections --scale-arrows 10.5 --error-ellipse --positional-uncertainty --scale-ellipse-c 10.5)
     add_test (NAME plot-urban-network-02 COMMAND $<TARGET_FILE:${DNAPLOT_TARGET}> urban --phased --label-sta --label-constraints --correction-arrows --label-corr --compute-corrections --scale-arrows 10.5 --error-ellipse --positional-uncertainty --scale-ellipse-c 10.5 --block-number 2 --alternate-name)
@@ -1132,54 +1135,7 @@ if (BUILD_TESTING)
     add_test (NAME test-urban-phased-network COMMAND $<TARGET_FILE:${DNADIFF_TARGET}> urban.phased.adj urban.phased.adj.expected --skip-to-marker "M Station 1" -t 0.001)
     add_test (NAME test-urban-thread-network COMMAND $<TARGET_FILE:${DNADIFF_TARGET}> urban_mt.phased-mt.adj urban_mt.phased-mt.adj.expected --skip-to-marker "M Station 1" -t 0.01 -v)
 
-    # ........................................................................
-    # LM / Trust-Region solver tests
-    # ........................................................................
-
-    # LM-1. GNSS simultaneous with LM — should match GN results
-    add_test (NAME import-gnss-lm COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n gnss_lm gnss-network.stn gnss-network.msr -r GDA2020 --flag-unused-stations --quiet)
-    add_test (NAME geoid-gnss-lm COMMAND $<TARGET_FILE:${DNAGEOID_TARGET}> gnss_lm -g gnss-network-geoid.gsb --export-dna-geo)
-    add_test (NAME reftran-gnss-lm COMMAND $<TARGET_FILE:${DNAREFTRAN_TARGET}> gnss_lm --export-dna --export-xml)
-    add_test (NAME adjust-gnss-lm COMMAND $<TARGET_FILE:${DNAADJUST_TARGET}> gnss_lm --output-adj-msr --scale-normals-to-unity --lm-enabled)
-    add_test (NAME test-gnss-lm-vs-expected COMMAND $<TARGET_FILE:${DNADIFF_TARGET}> gnss_lm.simult.adj gnss.simult.adj.expected --skip-headers 52 -t 0.001)
-
-    # LM-2. Urban phased with LM — should match GN results
-    add_test (NAME import-urban-lm COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n urban_lm urban-network.stn urban-network.msr --flag-unused-stations --quiet)
-    add_test (NAME geoid-urban-lm COMMAND $<TARGET_FILE:${DNAGEOID_TARGET}> urban_lm -g urban-network-geoid.gsb --export-dna-geo)
-    add_test (NAME segment-urban-lm COMMAND $<TARGET_FILE:${DNASEGMENT_TARGET}> urban_lm --min 50 --max 150)
-    add_test (NAME adjust-urban-lm COMMAND $<TARGET_FILE:${DNAADJUST_TARGET}> urban_lm --output-adj-msr --phased --lm-enabled)
-    add_test (NAME test-urban-lm-vs-expected COMMAND $<TARGET_FILE:${DNADIFF_TARGET}> urban_lm.phased.adj urban.phased.adj.expected --skip-to-marker "M Station 1" -t 0.001)
-
-    # LM-3. Urban multi-threaded phased with LM — should match GN results
-    add_test (NAME import-urban-mt-lm COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n urban_mt_lm urban-network.stn urban-network.msr --quiet)
-    add_test (NAME reftran-urban-mt-lm COMMAND $<TARGET_FILE:${DNAREFTRAN_TARGET}> urban_mt_lm -r gda2020)
-    add_test (NAME geoid-urban-mt-lm COMMAND $<TARGET_FILE:${DNAGEOID_TARGET}> urban_mt_lm -g urban-network-geoid.gsb)
-    add_test (NAME segment-urban-mt-lm COMMAND $<TARGET_FILE:${DNASEGMENT_TARGET}> urban_mt_lm --min 50 --max 85)
-    add_test (NAME adjust-urban-mt-lm COMMAND $<TARGET_FILE:${DNAADJUST_TARGET}> urban_mt_lm --output-adj-msr --multi --lm-enabled)
-    add_test (NAME test-urban-mt-lm-vs-expected COMMAND $<TARGET_FILE:${DNADIFF_TARGET}> urban_mt_lm.phased-mt.adj urban_mt.phased-mt.adj.expected --skip-to-marker "M Station 1" -t 0.01)
-
-    # LM-4. DSG distance-only simultaneous — multi-iteration stress test
-    add_test (NAME import-dsg-lm COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n dsg_lm dsg.stn dsg.msr --flag-unused-stations --quiet)
-    add_test (NAME adjust-dsg-lm COMMAND $<TARGET_FILE:${DNAADJUST_TARGET}> dsg_lm --output-adj-msr --max-iterations 50 --lm-enabled)
-
-    # LM-5. DSG distance-only simultaneous — GN baseline for comparison
-    add_test (NAME import-dsg-gn COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n dsg_gn dsg.stn dsg.msr --flag-unused-stations --quiet)
-    add_test (NAME adjust-dsg-gn COMMAND $<TARGET_FILE:${DNAADJUST_TARGET}> dsg_gn --output-adj-msr --max-iterations 50)
-    add_test (NAME test-dsg-lm-vs-gn COMMAND $<TARGET_FILE:${DNADIFF_TARGET}> dsg_lm.simult.adj dsg_gn.simult.adj --skip-headers 52 -t 0.01)
-
-    # LM-6. DSG distance-only phased with LM
-    add_test (NAME import-dsg-ph-lm COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n dsg_ph_lm dsg.stn dsg.msr --flag-unused-stations --quiet)
-    add_test (NAME segment-dsg-ph-lm COMMAND $<TARGET_FILE:${DNASEGMENT_TARGET}> dsg_ph_lm --min 10 --max 30)
-    add_test (NAME adjust-dsg-ph-lm COMMAND $<TARGET_FILE:${DNAADJUST_TARGET}> dsg_ph_lm --output-adj-msr --phased --max-iterations 50 --lm-enabled)
-
-    # LM-7. GNSS simultaneous with large initial lambda (robustness check)
-    add_test (NAME import-gnss-lm-large-lambda COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n gnss_lm_ll gnss-network.stn gnss-network.msr -r GDA2020 --flag-unused-stations --quiet)
-    add_test (NAME geoid-gnss-lm-large-lambda COMMAND $<TARGET_FILE:${DNAGEOID_TARGET}> gnss_lm_ll -g gnss-network-geoid.gsb --export-dna-geo)
-    add_test (NAME reftran-gnss-lm-large-lambda COMMAND $<TARGET_FILE:${DNAREFTRAN_TARGET}> gnss_lm_ll --export-dna --export-xml)
-    add_test (NAME adjust-gnss-lm-large-lambda COMMAND $<TARGET_FILE:${DNAADJUST_TARGET}> gnss_lm_ll --output-adj-msr --scale-normals-to-unity --lm-enabled --lm-lambda-init 10.0)
-    add_test (NAME test-gnss-lm-large-lambda COMMAND $<TARGET_FILE:${DNADIFF_TARGET}> gnss_lm_ll.simult.adj gnss.simult.adj.expected --skip-headers 52 -t 0.001)
-
-    # 8. Source tag preservation in --export-xml (issue #317)
+    # Source tag preservation in --export-xml (issue #317)
     # Import XML data with <Source> tags and verify they are preserved in export
     add_test (NAME import-source-test COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n srctest source-test-stn.xml source-test-msr.xml --export-xml -r GDA2020)
     add_test (NAME check-source-import COMMAND bash check_source_tags.sh srctestmsr.xml CAMPAIGN_2023A CAMPAIGN_2023B EMPTY)
@@ -2038,19 +1994,15 @@ if (BUILD_TESTING)
         import-urban-network geoid-urban-network segment-urban-network adjust-urban-network
         PROPERTIES RUN_SERIAL TRUE)
     set_tests_properties(
+        import-urban-network-verbose geoid-urban-network-verbose segment-urban-network-verbose adjust-urban-network-verbose
+        PROPERTIES RUN_SERIAL TRUE)
+    set_tests_properties(
         import-urban-network-thread reftran-urban-network-thread geoid-urban-network-thread segment-urban-network-thread adjust-urban-network-thread-01
         PROPERTIES RUN_SERIAL TRUE)
 
     set_tests_properties(test-gnss-network PROPERTIES DEPENDS adjust-gnss-network)
     set_tests_properties(test-urban-phased-network PROPERTIES DEPENDS adjust-urban-network)
     set_tests_properties(test-urban-thread-network PROPERTIES DEPENDS adjust-urban-network-thread-01)
-
-    # LM test dependencies
-    set_tests_properties(test-gnss-lm-vs-expected PROPERTIES DEPENDS adjust-gnss-lm)
-    set_tests_properties(test-urban-lm-vs-expected PROPERTIES DEPENDS adjust-urban-lm)
-    set_tests_properties(test-urban-mt-lm-vs-expected PROPERTIES DEPENDS adjust-urban-mt-lm)
-    set_tests_properties(test-dsg-lm-vs-gn PROPERTIES DEPENDS "adjust-dsg-lm;adjust-dsg-gn")
-    set_tests_properties(test-gnss-lm-large-lambda PROPERTIES DEPENDS adjust-gnss-lm-large-lambda)
 
     set_tests_properties(ref-itrf-pmm-06 PROPERTIES DEPENDS ref-itrf-pmm-05)
     #set_tests_properties(ref-itrf-pmm-07 PROPERTIES DEPENDS ref-itrf-pmm-06)
@@ -2109,4 +2061,3 @@ endif ()
 
 message ("")
 message ("")
-

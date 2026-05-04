@@ -17,6 +17,8 @@
 // Description  : DynAdjust Network Adjustment library
 //============================================================================
 
+#include <cstdlib>
+
 #include <dynadjust/dnaadjust/dnaadjust.hpp>
 #include <dynadjust/dnaadjust/dnaadjust-multi.cpp>
 
@@ -47,6 +49,10 @@ dna_adjust::dna_adjust()
 	, currentBlock_(0)
 	, lastBlockElapsedMs_(0)
 	, total_time_(0)
+	, profileTimings_(std::getenv("DYNADJUST_PROFILE") != nullptr)
+	, profileUpdateNormalsNs_(0)
+	, profileStageLoadNs_(0)
+	, profileStageStoreNs_(0)
 	, adjustStatus_(ADJUST_SUCCESS)
 	, currentIteration_(0)
 	, datum_(DEFAULT_EPSG_U)
@@ -140,7 +146,7 @@ dna_adjust::dna_adjust()
 	// Initialize the printer
 	printer_ = std::make_unique<DynAdjustPrinter>(*this);
 }
-	
+
 
 dna_adjust::~dna_adjust()
 {
@@ -206,6 +212,9 @@ void dna_adjust::InitialiseAdjustment()
 
 	adjustStatus_ = ADJUST_SUCCESS;
 	statusMessages_.clear();
+	profileUpdateNormalsNs_.store(0, std::memory_order_relaxed);
+	profileStageLoadNs_.store(0, std::memory_order_relaxed);
+	profileStageStoreNs_.store(0, std::memory_order_relaxed);
 	currentBlock_ = 0;
 	initialiseIteration();
 	
@@ -1276,9 +1285,9 @@ void dna_adjust::UpdateAtVinv(pit_vmsr_t _it_msr, const UINT32& stn1, const UINT
 				std::fixed << std::setprecision(16) << std::setw(26) << variance << std::endl;
 
 	// Build  At * V-1
-	AtVinv->put(stn1, design_row, variance * design->get(design_row, stn1));
-	AtVinv->put(stn1+1, design_row, variance * design->get(design_row, stn1+1));
-	AtVinv->put(stn1+2, design_row, variance * design->get(design_row, stn1+2));
+	AtVinv->dense_put(stn1, design_row, variance * design->dense_get(design_row, stn1));
+	AtVinv->dense_put(stn1+1, design_row, variance * design->dense_get(design_row, stn1+1));
+	AtVinv->dense_put(stn1+2, design_row, variance * design->dense_get(design_row, stn1+2));
 	
 	// Single station measurements
 	switch ((*_it_msr)->measType)
@@ -1293,16 +1302,16 @@ void dna_adjust::UpdateAtVinv(pit_vmsr_t _it_msr, const UINT32& stn1, const UINT
 	}
 
 	// Two station measurements
-	AtVinv->put(stn2, design_row, variance * design->get(design_row, stn2));
-	AtVinv->put(stn2+1, design_row, variance * design->get(design_row, stn2+1));
-	AtVinv->put(stn2+2, design_row, variance * design->get(design_row, stn2+2));
+	AtVinv->dense_put(stn2, design_row, variance * design->dense_get(design_row, stn2));
+	AtVinv->dense_put(stn2+1, design_row, variance * design->dense_get(design_row, stn2+1));
+	AtVinv->dense_put(stn2+2, design_row, variance * design->dense_get(design_row, stn2+2));
 
 	switch ((*_it_msr)->measType)
 	{
 	case 'A':	// Horizontal angle
-		AtVinv->put(stn3, design_row, variance * design->get(design_row, stn3));
-		AtVinv->put(stn3+1, design_row, variance * design->get(design_row, stn3+1));
-		AtVinv->put(stn3+2, design_row, variance * design->get(design_row, stn3+2));
+		AtVinv->dense_put(stn3, design_row, variance * design->dense_get(design_row, stn3));
+		AtVinv->dense_put(stn3+1, design_row, variance * design->dense_get(design_row, stn3+1));
+		AtVinv->dense_put(stn3+2, design_row, variance * design->dense_get(design_row, stn3+2));
 	}
 }
 	
@@ -1312,27 +1321,27 @@ void dna_adjust::UpdateAtVinv_D(const UINT32& stn1, const UINT32& stn2, const UI
 							UINT32& design_row, UINT32& design_row_begin,
 							matrix_2d* Vinv, matrix_2d* design, matrix_2d* AtVinv)
 {
+	const double angle_variance = Vinv->dense_get(angle, angle);
 	for (UINT32 j, i(0); i<3; ++i)													// for each coordinate element (x, y, z)
 	{
 		// add variances
-		AtVinv->elementadd(stn1+i, design_row,											// station1
-			design->get(design_row, stn1+i) * Vinv->get(angle, angle));
-		AtVinv->elementadd(stn2+i, design_row,											// station2
-			design->get(design_row, stn2+i) * Vinv->get(angle, angle));
-		AtVinv->elementadd(stn3+i, design_row,											// station3
-			design->get(design_row, stn3+i) * Vinv->get(angle, angle));
+		const double design1 = design->dense_get(design_row, stn1+i);
+		const double design2 = design->dense_get(design_row, stn2+i);
+		const double design3 = design->dense_get(design_row, stn3+i);
+
+		AtVinv->dense_add(stn1+i, design_row, design1 * angle_variance);				// station1
+		AtVinv->dense_add(stn2+i, design_row, design2 * angle_variance);				// station2
+		AtVinv->dense_add(stn3+i, design_row, design3 * angle_variance);				// station3
 		
 		// add covariances
 		for (j=0; j<angle_count; ++j)
 		{
 			if (j == angle)
 				continue;
-			AtVinv->elementadd(stn1+i, design_row_begin+j,								// station1
-				design->get(design_row, stn1+i) * Vinv->get(angle, j));
-			AtVinv->elementadd(stn2+i, design_row_begin+j,								// station2
-				design->get(design_row, stn2+i) * Vinv->get(angle, j));
-			AtVinv->elementadd(stn3+i, design_row_begin+j,								// station3
-				design->get(design_row, stn3+i) * Vinv->get(angle, j));
+			const double angle_covariance = Vinv->dense_get(angle, j);
+			AtVinv->dense_add(stn1+i, design_row_begin+j, design1 * angle_covariance);	// station1
+			AtVinv->dense_add(stn2+i, design_row_begin+j, design2 * angle_covariance);	// station2
+			AtVinv->dense_add(stn3+i, design_row_begin+j, design3 * angle_covariance);	// station3
 		}			
 	}
 }
@@ -1345,6 +1354,7 @@ void dna_adjust::UpdateAtVinv_D(const UINT32& stn1, const UINT32& stn2, const UI
 //		- PrepareFwdAdj (used by adjust_forward_thread)
 void dna_adjust::UpdateNormals(const UINT32& block, bool MT_ReverseOrCombine)
 {
+	const auto profile_start = profileTimings_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 	UINT32 stn1, stn2, stn3, design_row(0);
 	
 	it_vUINT32 _it_block_msr;
@@ -1425,22 +1435,59 @@ void dna_adjust::UpdateNormals(const UINT32& block, bool MT_ReverseOrCombine)
 				"'." << std::endl;
 			SignalExceptionAdjustment(ss.str(), block);
 		}		
-	}	
+	}
+
+	if (profileTimings_)
+	{
+		const auto elapsed = std::chrono::steady_clock::now() - profile_start;
+		profileUpdateNormalsNs_.fetch_add(
+			static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count()),
+			std::memory_order_relaxed);
+	}
 }
 	
+
+namespace {
+
+inline void add_normal_3x3_from_design_row(UINT32 design_row, UINT32 atvinv_station, UINT32 design_station,
+	matrix_2d* normals, const matrix_2d* design, const matrix_2d* AtVinv)
+{
+	const double* atvinv_col = AtVinv->dense_ptr(atvinv_station, design_row);
+
+	for (UINT32 col = 0; col < 3; ++col)
+	{
+		const double design_value = *design->dense_ptr(design_row, design_station + col);
+		normals->lower_add(atvinv_station, design_station + col,
+			atvinv_col[0] * design_value);
+		normals->lower_add(atvinv_station + 1, design_station + col,
+			atvinv_col[1] * design_value);
+		normals->lower_add(atvinv_station + 2, design_station + col,
+			atvinv_col[2] * design_value);
+	}
+}
+
+inline void add_normal_3x3_from_atvinv_columns(UINT32 design_row, UINT32 atvinv_station, UINT32 normal_station,
+	double scale, matrix_2d* normals, const matrix_2d* AtVinv)
+{
+	for (UINT32 col = 0; col < 3; ++col)
+	{
+		const double* atvinv_col = AtVinv->dense_ptr(atvinv_station, design_row + col);
+		normals->lower_add(atvinv_station, normal_station + col,
+			scale * atvinv_col[0]);
+		normals->lower_add(atvinv_station + 1, normal_station + col,
+			scale * atvinv_col[1]);
+		normals->lower_add(atvinv_station + 2, normal_station + col,
+			scale * atvinv_col[2]);
+	}
+}
+
+} // namespace
 
 void dna_adjust::AddMsrtoNormalsVar(const UINT32& design_row, const UINT32& stn,
 										 matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv)
 {
 	// Add weighted measurement contributions to normal matrix
-	for (UINT32 row, col(0); col<3; ++col)
-	{
-		for (row=0; row<3; ++row)
-		{
-			normals->elementadd(stn+row, stn+col,
-				AtVinv->get(stn+row, design_row) * design->get(design_row, stn+col));
-		}
-	}
+	add_normal_3x3_from_design_row(design_row, stn, stn, normals, design, AtVinv);
 }
 	
 
@@ -1448,50 +1495,20 @@ void dna_adjust::AddMsrtoNormalsCoVar2(const UINT32& design_row, const UINT32& s
 										 matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv)
 {
 	// Add covariance terms (station 1 and station 2) to normal matrix
-	for (UINT32 row, col(0); col<3; ++col)
-	{
-		for (row=0; row<3; ++row)
-		{
-			// 1-2
-			normals->elementadd(stn1+row, stn2+col,
-				AtVinv->get(stn1+row, design_row) * design->get(design_row, stn2+col));
-
-			normals->elementadd(stn2+row, stn1+col,
-				AtVinv->get(stn2+row, design_row) * design->get(design_row, stn1+col));
-		}
-	}
+	add_normal_3x3_from_design_row(design_row, stn1, stn2, normals, design, AtVinv);
+	add_normal_3x3_from_design_row(design_row, stn2, stn1, normals, design, AtVinv);
 }
 
 void dna_adjust::AddMsrtoNormalsCoVar3(const UINT32& design_row, const UINT32& stn1, const UINT32& stn2, const UINT32& stn3,
 										 matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv)
 {
 	// Add covariance terms (station 1, station 2, station 3) to normal matrix
-	for (UINT32 row, col(0); col<3; ++col)
-	{
-		for (row=0; row<3; ++row)
-		{
-			// 1-2
-			normals->elementadd(stn1+row, stn2+col,
-				AtVinv->get(stn1+row, design_row) * design->get(design_row, stn2+col));
-
-			normals->elementadd(stn2+row, stn1+col,
-				AtVinv->get(stn2+row, design_row) * design->get(design_row, stn1+col));
-
-			// 1-3
-			normals->elementadd(stn1+row, stn3+col,
-				AtVinv->get(stn1+row, design_row) * design->get(design_row, stn3+col));
-
-			normals->elementadd(stn3+row, stn1+col,
-				AtVinv->get(stn3+row, design_row) * design->get(design_row, stn1+col));
-
-			// 2-3
-			normals->elementadd(stn2+row, stn3+col,
-				AtVinv->get(stn2+row, design_row) * design->get(design_row, stn3+col));
-
-			normals->elementadd(stn3+row, stn2+col,
-				AtVinv->get(stn3+row, design_row) * design->get(design_row, stn2+col));
-		}
-	}
+	add_normal_3x3_from_design_row(design_row, stn1, stn2, normals, design, AtVinv);
+	add_normal_3x3_from_design_row(design_row, stn2, stn1, normals, design, AtVinv);
+	add_normal_3x3_from_design_row(design_row, stn1, stn3, normals, design, AtVinv);
+	add_normal_3x3_from_design_row(design_row, stn3, stn1, normals, design, AtVinv);
+	add_normal_3x3_from_design_row(design_row, stn2, stn3, normals, design, AtVinv);
+	add_normal_3x3_from_design_row(design_row, stn3, stn2, normals, design, AtVinv);
 }
 
 
@@ -1514,7 +1531,7 @@ void dna_adjust::UpdateNormals_A(const UINT32& stn1, const UINT32& stn2, const U
 void dna_adjust::UpdateNormals_D(const UINT32& block, it_vmsr_t& _it_msr, UINT32& design_row,
 										 matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv)
 {
-	UINT32 row, col, a, angle_count(_it_msr->vectorCount2 - 1);
+	UINT32 a, angle_count(_it_msr->vectorCount2 - 1);
 	UINT32 skip(0), ignored(_it_msr->vectorCount1 - _it_msr->vectorCount2);
 
 	std::vector<UINT32> stations;
@@ -1565,22 +1582,11 @@ void dna_adjust::UpdateNormals_D(const UINT32& block, it_vmsr_t& _it_msr, UINT32
 		}
 
 		// station 1
-		for (col=0; col<3; ++col)
-			for (row=0; row<3; ++row)
-				normals->elementadd(stn1+row, stn1+col,
-					AtVinv->get(stn1+row, design_row+a) * design->get(design_row+a, stn1+col));
-		//
+		add_normal_3x3_from_design_row(design_row+a, stn1, stn1, normals, design, AtVinv);
 		// station 2
-		for (col=0; col<3; ++col)
-			for (row=0; row<3; ++row)
-				normals->elementadd(stn2+row, stn2+col,
-					AtVinv->get(stn2+row, design_row+a) * design->get(design_row+a, stn2+col));
-		//
+		add_normal_3x3_from_design_row(design_row+a, stn2, stn2, normals, design, AtVinv);
 		// station 3
-		for (col=0; col<3; ++col)
-			for (row=0; row<3; ++row)
-				normals->elementadd(stn3+row, stn3+col,
-					AtVinv->get(stn3+row, design_row+a) * design->get(design_row+a, stn3+col));
+		add_normal_3x3_from_design_row(design_row+a, stn3, stn3, normals, design, AtVinv);
 
 		if (a+1 == angle_count)
 			break;
@@ -1611,17 +1617,8 @@ void dna_adjust::UpdateNormals_D(const UINT32& block, it_vmsr_t& _it_msr, UINT32
 				if (stn2 == stn1)
 					continue;
 
-				for (col=0; col<3; ++col)
-				{
-					for (row=0; row<3; ++row)
-					{
-						// 1-2
-						normals->elementadd(stn1+row, stn2+col,
-							AtVinv->get(stn1+row, design_row+a) * design->get(design_row+a, stn2+col));
-						normals->elementadd(stn2+row, stn1+col,
-							AtVinv->get(stn2+row, design_row+a) * design->get(design_row+a, stn1+col));
-					}				
-				}
+				add_normal_3x3_from_design_row(design_row+a, stn1, stn2, normals, design, AtVinv);
+				add_normal_3x3_from_design_row(design_row+a, stn2, stn1, normals, design, AtVinv);
 			}
 		}
 		it_angle++;
@@ -1658,39 +1655,21 @@ void dna_adjust::UpdateNormals_HIJPQR(const UINT32& stn1, UINT32& design_row,
 void dna_adjust::UpdateNormals_G(const UINT32& stn1, const UINT32& stn2, UINT32& design_row,
 										 matrix_2d* normals, matrix_2d* AtVinv)
 {
-	UINT32 col, row;
-
 	// station 2
-	for (col=0; col<3; ++col)
-		for (row=0; row<3; ++row)
-			normals->elementadd(stn2+row, stn2+col,
-				// AtVinv->get(stn2+row, design_row+col) * design->get(design_row+col, stn2+col));
-				// No need to multiply by 1 as stn2 design element is always 1.  See UpdateDesignMeasMatrices_GX()
-				AtVinv->get(stn2+row, design_row+col));
+	// No need to multiply by 1 as stn2 design element is always 1.  See UpdateDesignMeasMatrices_GX()
+	add_normal_3x3_from_atvinv_columns(design_row, stn2, stn2, 1., normals, AtVinv);
 
 	// station 1
-	for (col=0; col<3; ++col)
-		for (row=0; row<3; ++row)
-			normals->elementadd(stn1+row, stn1+col,
-				// AtVinv->get(stn1+row, design_row+col) * design->get(design_row+col, stn1+col));
-				// No need to multiply by -1 as stn1 design element is always -1.  See UpdateDesignMeasMatrices_GX()
-				-AtVinv->get(stn1+row, design_row+col));
+	// No need to multiply by -1 as stn1 design element is always -1.  See UpdateDesignMeasMatrices_GX()
+	add_normal_3x3_from_atvinv_columns(design_row, stn1, stn1, -1., normals, AtVinv);
 
 	// covariance terms (station 1 and station 2)
-	for (col=0; col<3; ++col)
-		for (row=0; row<3; ++row)
-			normals->elementadd(stn1+row, stn2+col,
-				// AtVinv->get(stn1+row, design_row+col) * design->get(design_row+col, stn2+col));
-				// No need to multiply as stn2 is always 1.  See UpdateDesignMeasMatrices_GX()
-				AtVinv->get(stn1+row, design_row+col));
+	// No need to multiply as stn2 is always 1.  See UpdateDesignMeasMatrices_GX()
+	add_normal_3x3_from_atvinv_columns(design_row, stn1, stn2, 1., normals, AtVinv);
 
 	// covariance terms (station 2 and station 1)
-	for (col=0; col<3; ++col)
-		for (row=0; row<3; ++row)
-			normals->elementadd(stn2+row, stn1+col,
-				// AtVinv->get(stn2+row, design_row+col) * design->get(design_row+col, stn1+col));
-				// No need to multiply by -1 as stn1 design element is always -1.  See UpdateDesignMeasMatrices_GX()
-				-AtVinv->get(stn2+row, design_row+col));
+	// No need to multiply by -1 as stn1 design element is always -1.  See UpdateDesignMeasMatrices_GX()
+	add_normal_3x3_from_atvinv_columns(design_row, stn2, stn1, -1., normals, AtVinv);
 
 	design_row += 3;
 }
@@ -2425,12 +2404,6 @@ void dna_adjust::CloseOutputFiles()
 
 void dna_adjust::AdjustSimultaneous()
 {
-	if (projectSettings_.a.lm_enabled)
-	{
-		AdjustSimultaneousLM();
-		return;
-	}
-
 	adjustStatus_ = ADJUST_SUCCESS;
 	initialiseIteration();
 
@@ -2564,6 +2537,7 @@ void dna_adjust::ValidateandFinaliseAdjustment(cpu_timer& tot_time)
 	printer_->PrintAdjustmentStatus();
 	// Compute and print time taken to run adjustment
 	PrintAdjustmentTime(tot_time, total_time);
+	PrintPerformanceProfile();
 }
 	
 void dna_adjust::PrintAdjustmentTime(cpu_timer& time, _TIMER_TYPE_ timerType)
@@ -2577,24 +2551,31 @@ void dna_adjust::PrintAdjustmentTime(cpu_timer& time, _TIMER_TYPE_ timerType)
 	printer_->PrintAdjustmentTime(time, static_cast<int>(timerType));
 }
 
+void dna_adjust::PrintPerformanceProfile() const
+{
+	if (!profileTimings_)
+		return;
+
+	const auto ns_to_ms = [](uint64_t ns) {
+		return static_cast<double>(ns) / 1000000.0;
+	};
+
+	std::cerr << "DynAdjust profile timings:"
+			  << " update_normals=" << std::fixed << std::setprecision(3)
+			  << ns_to_ms(profileUpdateNormalsNs_.load(std::memory_order_relaxed)) << "ms"
+			  << " stage_load=" << ns_to_ms(profileStageLoadNs_.load(std::memory_order_relaxed)) << "ms"
+			  << " stage_store=" << ns_to_ms(profileStageStoreNs_.load(std::memory_order_relaxed)) << "ms"
+			  << std::endl;
+}
+
 void dna_adjust::AdjustPhased()
 {
-	if (projectSettings_.a.lm_enabled)
-	{
-		AdjustPhasedLM();
-		return;
-	}
-
 	initialiseIteration();
 
 	// Reset oscillation diagnostics
 	corrPrev_.clear();
 	stnOscCount_.clear();
 	oscHistory_.clear();
-
-	// Initialise Anderson acceleration if enabled
-	if (projectSettings_.a.aa_enabled)
-		InitialiseAndersonAcceleration();
 
 	std::string corr_msg;
 	std::ostringstream ss;
@@ -2626,10 +2607,6 @@ void dna_adjust::AdjustPhased()
 
 		it_time.start();
 
-		// Snapshot coordinates before iteration for Anderson acceleration
-		if (projectSettings_.a.aa_enabled)
-			ExtractStationCoordinates(aa_x_snapshot_);
-
 		AdjustPhasedForward();
 		if (IsCancelled())
 			break;
@@ -2644,10 +2621,6 @@ void dna_adjust::AdjustPhased()
 		// Calculate and print largest adjustment correction and station ID
 		OutputLargestCorrection(corr_msg);
 		UpdateIterationDiagnostics();
-
-		// Apply Anderson acceleration (mixes last m iterates to accelerate convergence)
-		if (projectSettings_.a.aa_enabled)
-			ApplyAndersonAcceleration(i);
 
 		iterationCorrections_.add_message(corr_msg);
 		iterationTimes_.add_message(FormatElapsedTime(it_time.elapsed().wall.count() / 1.0e9));
@@ -2828,10 +2801,7 @@ void dna_adjust::AdjustPhasedForward()
 		assert(v_measMinusComp_.at(currentBlock).getbuffer() != nullptr && "AdjFwd: measMinusComp null before SolveTry");
 
 		// Least Squares Solution
-		if (projectSettings_.a.lm_enabled)
-			SolveLMTry(true, currentBlock, true);
-		else
-			SolveTry(true, currentBlock);
+		SolveTry(true, currentBlock);
 
 		// Does the user want to print adjusted measurements
 		// on each iteration?
@@ -3531,10 +3501,7 @@ void dna_adjust::AdjustPhasedReverseCombine()
 		BackupNormals(currentBlock, false);
 
 		// Least Squares Solution
-		if (projectSettings_.a.lm_enabled)
-			SolveLMTry(true, currentBlock, true);
-		else
-			SolveTry(true, currentBlock);
+		SolveTry(true, currentBlock);
 
 		if (projectSettings_.o._adj_stn_iteration)
 			adj_file << " done." << std::endl;
@@ -3578,10 +3545,7 @@ void dna_adjust::AdjustPhasedReverseCombine()
 						adj_file << std::endl << std::left << "Adjusting block " << currentBlock+1 << " (reverse, rigorous)... ";
 
 				// Least Squares Solution
-				if (projectSettings_.a.lm_enabled)
-					SolveLMTry(true, currentBlock, true);
-				else
-					SolveTry(true, currentBlock);
+				SolveTry(true, currentBlock);
 
 				if (projectSettings_.o._adj_stn_iteration)
 					adj_file << " done." << std::endl;
@@ -3667,10 +3631,7 @@ void dna_adjust::AdjustPhasedReverse()
 			debug_file << "In isolation" << std::endl;
 
 		// Least Squares Solution
-		if (projectSettings_.a.lm_enabled)
-			SolveLMTry(true, currentBlock, true);
-		else
-			SolveTry(true, currentBlock);
+		SolveTry(true, currentBlock);
 
 		if (projectSettings_.o._adj_stn_iteration)
 			adj_file << " done." << std::endl;
@@ -6689,7 +6650,7 @@ void dna_adjust::Solve(bool COMPUTE_INVERSE, const UINT32& block)
 	// compute weighted "measured minus computed"
 	matrix_2d At_Vinv_m(v_design_.at(block).columns(), 1);
 	At_Vinv_m.multiply(v_AtVinv_.at(block), "N", v_measMinusComp_.at(block), "N");
-	
+
 	// Solve corrections from normal equations
 	v_corrections_.at(block).redim(v_design_.at(block).columns(), 1);
 	if (v_normals_.at(block).is_symmetric())
@@ -6747,609 +6708,6 @@ void dna_adjust::Solve(bool COMPUTE_INVERSE, const UINT32& block)
 	}
 }
 	
-
-// ============================================================================
-// Levenberg-Marquardt / Trust-Region methods
-// ============================================================================
-
-void dna_adjust::InitialiseLMState()
-{
-	lm_lambda_ = projectSettings_.a.lm_lambda_init;
-	chiSquaredPrev_ = 0.0;
-
-	// Resize backup/gradient/station-backup vectors to match block count
-	v_normalsBackup_.resize(blockCount_);
-	v_gradient_.resize(blockCount_);
-	v_estimatedStationsBackup_.resize(blockCount_);
-}
-
-void dna_adjust::SolveLM(bool COMPUTE_FACTOR, const UINT32& block, bool COMPUTE_INVERSE)
-{
-	assert(v_design_.at(block).rows() > 0 && "SolveLM: design has 0 rows");
-	assert(v_design_.at(block).columns() > 0 && "SolveLM: design has 0 columns");
-	assert(v_AtVinv_.at(block).rows() > 0 && "SolveLM: AtVinv has 0 rows");
-	assert(v_AtVinv_.at(block).columns() > 0 && "SolveLM: AtVinv has 0 columns");
-	assert(v_normals_.at(block).rows() > 0 && "SolveLM: normals has 0 rows");
-	assert(v_measMinusComp_.at(block).rows() > 0 && "SolveLM: measMinusComp has 0 rows");
-
-	debug_SolutionInformation(block);
-
-	// 1. Compute gradient: g = At * V^-1 * (meas - comp)
-	UINT32 n = v_normals_.at(block).rows();
-	v_gradient_.at(block).redim(n, 1);
-	v_gradient_.at(block).multiply(v_AtVinv_.at(block), "N", v_measMinusComp_.at(block), "N");
-
-	// Diagonal scaling factors (function-scope so both factor and solve steps can use them)
-	std::vector<double> s_diag;
-	bool useScaling = projectSettings_.a.scale_normals_to_unity;
-
-	if (COMPUTE_FACTOR)
-	{
-		// 2a. Backup pristine normals (before augmentation)
-		v_normalsBackup_.at(block) = v_normals_.at(block);
-
-		// 2b. Apply optional diagonal scaling
-		if (useScaling)
-		{
-			s_diag.resize(n);
-			for (UINT32 i(0); i < n; ++i)
-				s_diag[i] = 1.0 / sqrt(v_normals_.at(block).get(i, i));
-			v_normals_.at(block).scale_symmetric_diagonal(s_diag.data());
-		}
-
-		// 2c. Augment diagonal with identity damping: N_ii += lambda
-		//     Identity damping (N + lambda*I) is used instead of Marquardt scaling
-		//     (N + lambda*diag(N)) because the latter amplifies damping by the diagonal
-		//     magnitude, which can be excessively aggressive for GPS networks where
-		//     diagonal elements (~1e6) dwarf the smallest eigenvalues (~1e3).
-		//     When scaling is active, we add lambda/N_ii to the scaled diagonal so
-		//     that the effective damping in the original (unscaled) space is lambda*I.
-		for (UINT32 i(0); i < n; ++i)
-		{
-			double diag_val = useScaling ? (1.0 / v_normalsBackup_.at(block).get(i, i)) : 1.0;
-			v_normals_.at(block).elementadd(i, i, lm_lambda_ * diag_val);
-		}
-
-		// 2d. Cholesky factor (dpotrf only, no inverse)
-		//     No clearupper() needed — dpotrf(uplo='L') reads only the lower triangle,
-		//     and packed storage has no upper triangle to clear.
-		v_normals_.at(block).cholesky_factor(false);
-
-		// 2f. Scale gradient into scaled space for solve: g_scaled = S * g
-		if (useScaling)
-		{
-			for (UINT32 i(0); i < n; ++i)
-				*v_gradient_.at(block).getbuffer(i, 0) *= s_diag[i];
-		}
-	}
-
-	// 3. Solve: (N + lambda*D) * delta = g  via forward/back substitution
-	//    The solve operates in scaled space when scaling is active.
-	v_corrections_.at(block).redim(n, 1);
-	// Copy (possibly scaled) gradient to corrections (dpotrs overwrites rhs in-place)
-	for (UINT32 i(0); i < n; ++i)
-		v_corrections_.at(block).put(i, 0, v_gradient_.at(block).get(i, 0));
-
-	v_normals_.at(block).cholesky_solve(v_corrections_.at(block), false);
-
-	// 4. Un-scale corrections and gradient back to original space
-	if (COMPUTE_FACTOR && useScaling)
-	{
-		// corrections: delta = S * delta_scaled
-		for (UINT32 i(0); i < n; ++i)
-			*v_corrections_.at(block).getbuffer(i, 0) *= s_diag[i];
-		// gradient: restore g from g_scaled = S * g  =>  g = g_scaled / S = g_scaled * sqrt(N_ii)
-		for (UINT32 i(0); i < n; ++i)
-			*v_gradient_.at(block).getbuffer(i, 0) /= s_diag[i];
-	}
-
-	// At this point, v_gradient_ and v_corrections_ are both in original (unscaled) space,
-	// so ComputePredictedReduction() will compute g^T * delta + lambda * delta^T * D * delta
-	// consistently.
-
-	// 5. Compute inverse of undamped normals (for phased junction carry-forward).
-	//    In phased mode, after solving with LM damping the code needs N^-1 in
-	//    v_normals_ for the junction station variance carry-forward.  Restore
-	//    the pristine (undamped) normals from backup, then invert.
-	if (COMPUTE_INVERSE)
-	{
-		v_normals_.at(block) = v_normalsBackup_.at(block);
-		if (useScaling)
-		{
-			// Recompute scaling from restored normals
-			s_diag.resize(n);
-			for (UINT32 i(0); i < n; ++i)
-				s_diag[i] = 1.0 / sqrt(v_normals_.at(block).get(i, i));
-			v_normals_.at(block).scale_symmetric_diagonal(s_diag.data());
-		}
-
-		FormInverseVarianceMatrix(&v_normals_.at(block), false, false);
-
-		if (useScaling)
-			v_normals_.at(block).scale_symmetric_diagonal(s_diag.data());
-	}
-
-	if (projectSettings_.g.verbose > 0)
-	{
-		if (projectSettings_.a.multi_thread)
-			dbg_file_mutex.lock();
-
-		debug_file << "Block " << block + 1 << " (LM, lambda=" << lm_lambda_ << ")" << std::endl;
-		debug_file << "Corrections " << std::fixed << std::setprecision(16) << v_corrections_.at(block) << std::endl;
-		debug_file.flush();
-
-		if (projectSettings_.a.multi_thread)
-			dbg_file_mutex.unlock();
-	}
-}
-
-void dna_adjust::SolveLMTry(bool COMPUTE_FACTOR, const UINT32& block, bool COMPUTE_INVERSE)
-{
-	try {
-		SolveLM(COMPUTE_FACTOR, block, COMPUTE_INVERSE);
-	}
-	catch (const std::runtime_error& e) {
-		debug_SolutionInformation(block);
-		SignalExceptionAdjustment(e.what(), block);
-	}
-}
-
-double dna_adjust::ComputePredictedReduction(const UINT32& block)
-{
-	// Predicted reduction = g^T * delta + lambda * delta^T * delta
-	// Uses identity damping (D = I), consistent with the augmentation
-	// in SolveLM which adds lambda*I to the normals.
-	double gTd = v_gradient_.at(block).dot(v_corrections_.at(block));
-	double dTd = 0.0;
-	UINT32 n = v_corrections_.at(block).rows();
-	for (UINT32 i = 0; i < n; ++i)
-	{
-		double d_i = v_corrections_.at(block).get(i, 0);
-		dTd += d_i * d_i;
-	}
-	return gTd + lm_lambda_ * dTd;
-}
-
-double dna_adjust::ComputeNetworkPredictedReduction()
-{
-	double total = 0.0;
-	for (UINT32 block = 0; block < blockCount_; ++block)
-		total += ComputePredictedReduction(block);
-	return total;
-}
-
-
-// -----------------------------------------------------------------------
-// Anderson acceleration for phased Gauss-Newton
-// -----------------------------------------------------------------------
-
-void dna_adjust::InitialiseAndersonAcceleration()
-{
-	UINT32 m = projectSettings_.a.aa_depth;
-	UINT32 n = static_cast<UINT32>(bstBinaryRecords_.size()) * 3;
-
-	aa_G_hist_.resize(m);
-	aa_F_hist_.resize(m);
-	for (UINT32 i = 0; i < m; ++i)
-	{
-		aa_G_hist_[i].resize(n, 0.0);
-		aa_F_hist_[i].resize(n, 0.0);
-	}
-	aa_x_snapshot_.resize(n, 0.0);
-	aa_hist_count_ = 0;
-	aa_hist_pos_ = 0;
-}
-
-void dna_adjust::ExtractStationCoordinates(std::vector<double>& coords)
-{
-	UINT32 totalStations = static_cast<UINT32>(bstBinaryRecords_.size());
-	coords.resize(totalStations * 3);
-
-	// Use a visited flag to avoid double-writing junction stations
-	std::vector<bool> visited(totalStations, false);
-
-	for (UINT32 block = 0; block < blockCount_; ++block)
-	{
-		const auto& stnList = v_parameterStationList_.at(block);
-		const auto& estMat = v_estimatedStations_.at(block);
-
-		for (UINT32 s = 0; s < stnList.size(); ++s)
-		{
-			UINT32 bstIdx = stnList[s];
-			if (visited[bstIdx])
-				continue;
-			visited[bstIdx] = true;
-
-			UINT32 row = s * 3;
-			UINT32 ci = bstIdx * 3;
-			coords[ci]     = estMat.get(row, 0);
-			coords[ci + 1] = estMat.get(row + 1, 0);
-			coords[ci + 2] = estMat.get(row + 2, 0);
-		}
-	}
-}
-
-void dna_adjust::ScatterStationCoordinates(const std::vector<double>& coords)
-{
-	for (UINT32 block = 0; block < blockCount_; ++block)
-	{
-		const auto& stnList = v_parameterStationList_.at(block);
-		auto& estMat = v_estimatedStations_.at(block);
-
-		for (UINT32 s = 0; s < stnList.size(); ++s)
-		{
-			UINT32 bstIdx = stnList[s];
-			UINT32 row = s * 3;
-			UINT32 ci = bstIdx * 3;
-			estMat.put(row, 0, coords[ci]);
-			estMat.put(row + 1, 0, coords[ci + 1]);
-			estMat.put(row + 2, 0, coords[ci + 2]);
-		}
-	}
-}
-
-void dna_adjust::ApplyAndersonAcceleration(UINT32 iteration)
-{
-	UINT32 m = projectSettings_.a.aa_depth;
-	UINT32 n = static_cast<UINT32>(aa_x_snapshot_.size());
-
-	// Extract g_k = G(x_k) — post-iteration coordinates
-	std::vector<double> g_k(n);
-	ExtractStationCoordinates(g_k);
-
-	// Compute f_k = g_k - x_k (the fixed-point residual)
-	std::vector<double> f_k(n);
-	for (UINT32 i = 0; i < n; ++i)
-		f_k[i] = g_k[i] - aa_x_snapshot_[i];
-
-	// Store in ring buffer
-	aa_G_hist_[aa_hist_pos_] = g_k;
-	aa_F_hist_[aa_hist_pos_] = f_k;
-	aa_hist_pos_ = (aa_hist_pos_ + 1) % m;
-	if (aa_hist_count_ < m)
-		aa_hist_count_++;
-
-	// Need at least 2 history entries to mix
-	if (aa_hist_count_ < 2)
-		return;
-
-	// m_k = number of difference columns
-	UINT32 m_k = aa_hist_count_ - 1;
-
-	// Build ΔF columns: df[j] = f_k - f_{k-j-1}
-	// The most recent entry is at (aa_hist_pos_ - 1) % m
-	// The entry before that is at (aa_hist_pos_ - 2) % m, etc.
-	UINT32 curr = (aa_hist_pos_ + m - 1) % m;
-
-	// Compute Gram matrix (ΔF^T ΔF) and RHS (ΔF^T f_k) — accumulate over stations
-	std::vector<double> gram(m_k * m_k, 0.0);
-	std::vector<double> rhs(m_k, 0.0);
-
-	for (UINT32 j = 0; j < m_k; ++j)
-	{
-		UINT32 prev_j = (curr + m - j - 1) % m;
-		for (UINT32 k = j; k < m_k; ++k)
-		{
-			UINT32 prev_k = (curr + m - k - 1) % m;
-			double dot = 0.0;
-			for (UINT32 i = 0; i < n; ++i)
-			{
-				double df_j = f_k[i] - aa_F_hist_[prev_j][i];
-				double df_k = f_k[i] - aa_F_hist_[prev_k][i];
-				dot += df_j * df_k;
-			}
-			gram[j * m_k + k] = dot;
-			gram[k * m_k + j] = dot;  // symmetric
-		}
-		// RHS: ΔF^T f_k
-		double dot = 0.0;
-		for (UINT32 i = 0; i < n; ++i)
-		{
-			double df_j = f_k[i] - aa_F_hist_[prev_j][i];
-			dot += df_j * f_k[i];
-		}
-		rhs[j] = dot;
-	}
-
-	// Solve Gram * gamma = rhs via Cholesky (in-place)
-	// If ill-conditioned, skip acceleration
-	std::vector<double> gamma(rhs);
-	for (UINT32 j = 0; j < m_k; ++j)
-	{
-		double sum = gram[j * m_k + j];
-		for (UINT32 k = 0; k < j; ++k)
-			sum -= gram[j * m_k + k] * gram[j * m_k + k];
-		if (sum <= 1e-30)
-			return;  // ill-conditioned, skip acceleration
-		gram[j * m_k + j] = std::sqrt(sum);
-		for (UINT32 i = j + 1; i < m_k; ++i)
-		{
-			sum = gram[i * m_k + j];
-			for (UINT32 k = 0; k < j; ++k)
-				sum -= gram[i * m_k + k] * gram[j * m_k + k];
-			gram[i * m_k + j] = sum / gram[j * m_k + j];
-		}
-	}
-	// Forward substitution: L y = rhs
-	for (UINT32 j = 0; j < m_k; ++j)
-	{
-		for (UINT32 k = 0; k < j; ++k)
-			gamma[j] -= gram[j * m_k + k] * gamma[k];
-		gamma[j] /= gram[j * m_k + j];
-	}
-	// Back substitution: L^T gamma = y
-	for (int j = static_cast<int>(m_k) - 1; j >= 0; --j)
-	{
-		for (UINT32 k = static_cast<UINT32>(j) + 1; k < m_k; ++k)
-			gamma[j] -= gram[k * m_k + j] * gamma[k];
-		gamma[j] /= gram[j * m_k + j];
-	}
-
-	// Compute mixed iterate: x_{k+1} = g_k - ΔG * gamma
-	// where ΔG[j] = g_k - g_{k-j-1}
-	std::vector<double> x_mixed(g_k);
-	for (UINT32 j = 0; j < m_k; ++j)
-	{
-		UINT32 prev_j = (curr + m - j - 1) % m;
-		for (UINT32 i = 0; i < n; ++i)
-			x_mixed[i] -= gamma[j] * (g_k[i] - aa_G_hist_[prev_j][i]);
-	}
-
-	// Safety check: reject if mixed correction is larger than un-mixed
-	double norm_unmixed = 0.0, norm_mixed = 0.0;
-	for (UINT32 i = 0; i < n; ++i)
-	{
-		double d_unmixed = g_k[i] - aa_x_snapshot_[i];
-		double d_mixed = x_mixed[i] - aa_x_snapshot_[i];
-		norm_unmixed += d_unmixed * d_unmixed;
-		norm_mixed += d_mixed * d_mixed;
-	}
-
-	if (norm_mixed > norm_unmixed)
-		return;  // reject — keep un-mixed iterate
-
-	// Accept: scatter mixed coordinates back
-	ScatterStationCoordinates(x_mixed);
-
-	// Update maxCorr_ based on mixed correction
-	double maxCorrMixed = 0.0;
-	for (UINT32 i = 0; i < n; ++i)
-	{
-		double corr = std::fabs(x_mixed[i] - aa_x_snapshot_[i]);
-		if (corr > maxCorrMixed)
-			maxCorrMixed = corr;
-	}
-	maxCorr_ = (maxCorr_ > 0.0 ? maxCorrMixed : -maxCorrMixed);
-}
-
-void dna_adjust::AdjustSimultaneousLM()
-{
-	adjustStatus_ = ADJUST_SUCCESS;
-	initialiseIteration();
-	InitialiseLMState();
-
-	// Reset oscillation diagnostics
-	corrPrev_.clear();
-	stnOscCount_.clear();
-	oscHistory_.clear();
-
-	std::ostringstream ss;
-	std::string corr_msg;
-	cpu_timer it_time, tot_time;
-
-	UINT32 iterCount = 0;
-
-	while (iterCount < projectSettings_.a.max_iterations)
-	{
-		if (IsCancelled())
-			break;
-
-		isIterationComplete_ = false;
-
-		blockLargeCorr_ = 0;
-		largestCorr_ = 0.0;
-
-		if (projectSettings_.o._cmp_msr_iteration)
-			printer_->PrintCompMeasurements(0, "a-priori");
-
-		ss.str("");
-		it_time.start();
-
-		// Solve with LM damping.
-		// Always recompute the Cholesky factor because the LM solver restores
-		// the pristine (unfactored) normals from backup after each step,
-		// and lambda may have changed between iterations.
-		SolveLMTry(true, 0);
-
-		// Print iteration to adj file
-		printer_->PrintIteration(incrementIteration());
-		PrintAdjustmentTime(it_time, iteration_time);
-
-		maxCorr_ = v_corrections_.at(0).compute_maximum_value();
-		OutputLargestCorrection(corr_msg);
-		UpdateIterationDiagnostics();
-
-		// Apply corrections
-		v_estimatedStations_.at(0).add(v_corrections_.at(0));
-
-		// Update geographic coordinates if needed
-		if (v_msrTally_.at(0).ContainsNonGPS())
-			UpdateGeographicCoords();
-
-		if (projectSettings_.g.verbose > 0)
-		{
-			debug_file << "LM iteration " << CurrentIteration()
-				<< ": lambda=" << lm_lambda_
-				<< ", maxCorr=" << maxCorr_
-				<< std::endl;
-			debug_file.flush();
-		}
-
-		// Reduce damping each iteration — the damping serves as regularisation
-		// for early iterations and decays to zero (pure GN) as convergence nears
-		lm_lambda_ /= projectSettings_.a.lm_gamma_down;
-
-		iterationCorrections_.add_message(corr_msg);
-		iterationQueue_.push_and_notify(CurrentIteration());
-		isIterationComplete_ = true;
-
-		// Convergence check
-		bool iterate = !IsCancelled() && fabs(maxCorr_) > projectSettings_.a.iteration_threshold;
-		if (!iterate)
-			break;
-
-		// Per-iteration optional output
-		if (projectSettings_.o._adj_stat_iteration)
-		{
-			ComputeStatisticsOnIteration();
-			printer_->PrintStatistics(false);
-		}
-		if (projectSettings_.o._adj_msr_iteration)
-			ComputeandPrintAdjMsrOnIteration();
-		if (projectSettings_.o._adj_stn_iteration)
-			printer_->PrintBlockStations(adj_file, 0, &v_estimatedStations_.at(0), &v_normals_.at(0),
-				false, !v_msrTally_.at(0).ContainsNonGPS(), !v_msrTally_.at(0).ContainsNonGPS(), true, false);
-
-		iterCount++;
-
-		// Rebuild normals for next iteration
-		bool lastIteration = (iterCount >= projectSettings_.a.max_iterations);
-
-		// Restore normals from backup before UpdateAdjustment rebuilds
-		v_normals_.at(0) = v_normalsBackup_.at(0);
-		UpdateAdjustment(!lastIteration);
-	}
-
-	// Final: restore undamped N and compute full inverse for statistics
-	v_normals_.at(0) = v_normalsBackup_.at(0);
-
-	// Apply same scaling as original Solve() if needed
-	UINT32 n = v_normals_.at(0).rows();
-	std::vector<double> s_diag;
-	if (projectSettings_.a.scale_normals_to_unity)
-	{
-		s_diag.resize(n);
-		for (UINT32 i(0); i < n; ++i)
-			s_diag[i] = 1.0 / sqrt(v_normals_.at(0).get(i, i));
-		v_normals_.at(0).scale_symmetric_diagonal(s_diag.data());
-	}
-
-	// No clearupper() — FormInverseVarianceMatrix/cholesky_inverse handles
-	// both packed and full matrices directly (dpotrf(L) reads only the lower triangle).
-	FormInverseVarianceMatrix(&v_normals_.at(0), false, false);
-
-	if (projectSettings_.a.scale_normals_to_unity)
-		v_normals_.at(0).scale_symmetric_diagonal(s_diag.data());
-
-	ValidateandFinaliseAdjustment(tot_time);
-}
-
-
-void dna_adjust::AdjustPhasedLM()
-{
-	initialiseIteration();
-	InitialiseLMState();
-
-	std::string corr_msg;
-	bool iterate(true);
-
-	cpu_timer it_time, tot_time;
-
-	UINT32 iterCount = 0;
-
-	while (iterCount < projectSettings_.a.max_iterations)
-	{
-		if (IsCancelled())
-			break;
-
-		isIterationComplete_ = false;
-
-		blockLargeCorr_ = 0;
-		largestCorr_ = 0.0;
-		maxCorr_ = 0.0;
-
-		potentialOutlierCount_ = 0;
-		chiSquaredStage_ = 0.;
-		measurementParams_ = 0;
-
-		// Print the iteration # to adj file
-		printer_->PrintIteration(incrementIteration());
-
-		it_time.start();
-
-		AdjustPhasedForward();
-		if (IsCancelled())
-			break;
-
-		AdjustPhasedReverseCombine();
-		if (IsCancelled())
-			break;
-
-		// Calculate and print total time
-		PrintAdjustmentTime(it_time, iteration_time);
-
-		// Calculate and print largest adjustment correction and station ID
-		OutputLargestCorrection(corr_msg);
-		UpdateIterationDiagnostics();
-
-		if (projectSettings_.g.verbose > 0)
-		{
-			debug_file << "LM phased iteration " << CurrentIteration()
-				<< ": lambda=" << lm_lambda_
-				<< ", maxCorr=" << maxCorr_
-				<< std::endl;
-			debug_file.flush();
-		}
-
-		// Reduce damping each iteration — the damping serves as regularisation
-		// for early iterations and decays to zero (pure GN) as convergence nears
-		lm_lambda_ /= projectSettings_.a.lm_gamma_down;
-
-		iterationCorrections_.add_message(corr_msg);
-		iterationQueue_.push_and_notify(CurrentIteration());
-		isIterationComplete_ = true;
-
-		// Continue iterating?
-		iterate = !IsCancelled() && fabs(maxCorr_) > projectSettings_.a.iteration_threshold;
-		if (!iterate)
-			break;
-
-		// Update normals and measured-computed matrices for the next iteration
-		UpdateAdjustment(iterate);
-		if (IsCancelled())
-			break;
-
-		if (projectSettings_.o._adj_stat_iteration)
-		{
-			ComputeStatisticsOnIteration();
-			printer_->PrintStatistics(false);
-		}
-		if (projectSettings_.o._adj_msr_iteration)
-			ComputeandPrintAdjMsrOnIteration();
-
-		iterCount++;
-	}
-
-	chiSquared_ = chiSquaredStage_;
-
-	ValidateandFinaliseAdjustment(tot_time);
-}
-
-
-void dna_adjust::AdjustPhasedMultiThreadLM()
-{
-	// The LM phased solver currently runs single-threaded.  Temporarily clear
-	// multi_thread so that UpdateEstimatesFinal, UpdateAdjustment, and other
-	// helpers use the regular (non-MT) matrices consistently.  Without this,
-	// grow/shrink operations during junction carry-forward target different
-	// matrix sets, leaving stale pseudo-measurements in the AtVinv and
-	// measMinusComp matrices after the reverse sweep.
-	bool savedMultiThread = projectSettings_.a.multi_thread;
-	projectSettings_.a.multi_thread = false;
-	AdjustPhasedLM();
-	projectSettings_.a.multi_thread = savedMultiThread;
-}
-
 
 void dna_adjust::DeSerialiseAdjustedVarianceMatrices()
 {
@@ -7966,7 +7324,6 @@ void dna_adjust::ComputeChiSquareNetwork()
 	}
 }
 	
-
 void dna_adjust::ComputeChiSquarePhased(const UINT32& block)
 {
 	// Compute adjusted measurement statistics
@@ -8225,6 +7582,180 @@ void dna_adjust::PrintOscillationSummary()
 			<< " (iterations " << rec->firstIteration << "-" << rec->lastIteration << ")"
 			<< std::endl;
 	}
+}
+
+bool dna_adjust::MeasurementTouchesOscillatingStation(const UINT32& msrIndex) const
+{
+	if (oscHistory_.empty() || msrIndex >= bmsBinaryRecords_.size())
+		return false;
+
+	std::vector<UINT32> msrStations;
+	GetMsrStations<UINT32>(bmsBinaryRecords_, msrIndex, msrStations);
+
+	for (const auto& stnIndex : msrStations)
+	{
+		if (oscHistory_.find(stnIndex) != oscHistory_.end())
+			return true;
+	}
+
+	return false;
+}
+
+std::string dna_adjust::MeasurementStationNames(const UINT32& msrIndex) const
+{
+	if (msrIndex >= bmsBinaryRecords_.size())
+		return "(measurement index unavailable)";
+
+	std::vector<UINT32> msrStations;
+	GetMsrStations<UINT32>(bmsBinaryRecords_, msrIndex, msrStations);
+
+	std::string stationNames;
+	for (const auto& stnIndex : msrStations)
+	{
+		if (stnIndex >= bstBinaryRecords_.size())
+			continue;
+
+		if (!stationNames.empty())
+			stationNames += " -> ";
+		stationNames += bstBinaryRecords_.at(stnIndex).stationName;
+	}
+
+	if (stationNames.empty())
+		return "(stations unavailable)";
+
+	return stationNames;
+}
+
+void dna_adjust::PrintSuspectMeasurementSummary(std::ostream& os, size_t limit) const
+{
+	struct SuspectMeasurementRecord {
+		UINT32 msrIndex;
+		char measType;
+		UINT32 clusterID;
+		UINT32 fileOrder;
+		double absNStat;
+		double nStat;
+		double tStat;
+		double measCorr;
+		double residualPrec;
+		double pelzerRel;
+		bool exceedsCritical;
+		bool touchesOscillatingStation;
+		std::string stationNames;
+	};
+
+	if (bmsBinaryRecords_.empty() || limit == 0)
+		return;
+
+	std::vector<SuspectMeasurementRecord> records;
+	records.reserve(bmsBinaryRecords_.size());
+
+	for (UINT32 msrIndex = 0; msrIndex < bmsBinaryRecords_.size(); ++msrIndex)
+	{
+		const auto& msr = bmsBinaryRecords_.at(msrIndex);
+		if (msr.ignore ||
+			!std::isfinite(msr.NStat) ||
+			!std::isfinite(msr.residualPrec) ||
+			msr.residualPrec <= 0.0)
+			continue;
+
+		const double absNStat = fabs(msr.NStat);
+		const bool exceedsCritical = absNStat > criticalValue_;
+		const bool touchesOscillatingStation = MeasurementTouchesOscillatingStation(msrIndex);
+
+		if (!exceedsCritical && !touchesOscillatingStation)
+			continue;
+
+		records.push_back({
+			msrIndex,
+			msr.measType,
+			msr.clusterID,
+			msr.fileOrder,
+			absNStat,
+			msr.NStat,
+			msr.TStat,
+			msr.measCorr,
+			msr.residualPrec,
+			msr.PelzerRel,
+			exceedsCritical,
+			touchesOscillatingStation,
+			MeasurementStationNames(msrIndex)
+		});
+	}
+
+	if (records.empty())
+		return;
+
+	std::vector<const SuspectMeasurementRecord*> oscillatingRecords;
+	std::vector<const SuspectMeasurementRecord*> outlierRecords;
+	oscillatingRecords.reserve(records.size());
+	outlierRecords.reserve(records.size());
+
+	for (const auto& record : records)
+	{
+		if (record.touchesOscillatingStation)
+			oscillatingRecords.push_back(&record);
+		if (record.exceedsCritical && !record.touchesOscillatingStation)
+			outlierRecords.push_back(&record);
+	}
+
+	auto sortByNStat = [](const SuspectMeasurementRecord* lhs,
+		const SuspectMeasurementRecord* rhs) {
+		if (lhs->absNStat == rhs->absNStat)
+			return lhs->msrIndex < rhs->msrIndex;
+		return lhs->absNStat > rhs->absNStat;
+	};
+
+	std::sort(oscillatingRecords.begin(), oscillatingRecords.end(), sortByNStat);
+	std::sort(outlierRecords.begin(), outlierRecords.end(), sortByNStat);
+
+	std::ios::fmtflags oldFlags = os.flags();
+	std::streamsize oldPrecision = os.precision();
+
+	auto printRecord = [&os](const SuspectMeasurementRecord& record) {
+		os << "  - " << record.measType
+			<< " msr " << record.msrIndex
+			<< " cluster " << record.clusterID
+			<< " file-order " << record.fileOrder
+			<< " " << record.stationNames
+			<< ": N=" << std::fixed << std::setprecision(2) << record.nStat;
+
+		if (std::isfinite(record.tStat) && fabs(record.tStat) > 0.0)
+			os << ", T=" << std::fixed << std::setprecision(2) << record.tStat;
+
+		os << ", corr=" << std::scientific << std::setprecision(3) << record.measCorr
+			<< ", residual precision=" << std::scientific << std::setprecision(3) << record.residualPrec
+			<< ", Pelzer=" << std::fixed << std::setprecision(2) << record.pelzerRel;
+
+		if (record.exceedsCritical)
+			os << ", exceeds critical";
+		if (record.touchesOscillatingStation)
+			os << ", touches oscillating station";
+
+		os << std::endl;
+	};
+
+	auto printList = [&os, &printRecord, limit](const std::string& title,
+		const std::vector<const SuspectMeasurementRecord*>& list) {
+		if (list.empty())
+			return;
+
+		const size_t listLimit = std::min(list.size(), limit);
+		os << std::endl << "+ " << title << " (" << list.size()
+			<< " total, showing top " << listLimit << "):" << std::endl;
+
+		for (size_t i = 0; i < listLimit; ++i)
+			printRecord(*list.at(i));
+	};
+
+	if (!oscillatingRecords.empty())
+		printList("Suspect measurements connected to oscillating stations", oscillatingRecords);
+
+	printList(oscillatingRecords.empty() ? "Largest measurement N-statistics" :
+		"Largest remaining measurement N-statistics", outlierRecords);
+
+	os.flags(oldFlags);
+	os.precision(oldPrecision);
 }
 
 void dna_adjust::ComputePrecisionAdjMsrs(const UINT32& block /*= 0*/)

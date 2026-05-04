@@ -91,12 +91,6 @@ bool prepareAdjustmentExceptionThrown(const std::vector<std::exception_ptr>& pre
 //
 void dna_adjust::AdjustPhasedMultiThread()
 {
-	if (projectSettings_.a.lm_enabled)
-	{
-		AdjustPhasedMultiThreadLM();
-		return;
-	}
-
 	initialiseIteration();
 
 	std::string corr_msg;
@@ -843,4 +837,3 @@ void dna_adjust::PrepareAdjustmentMultiThread()
 
 }	// namespace networkadjust
 }	// namespace dynadjust
-

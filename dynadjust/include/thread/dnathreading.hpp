@@ -373,8 +373,7 @@ public:
 		std::lock_guard<std::mutex> lock(message_mutex);
 		if (i >= messages.size())
 		{
-			T msg(0);
-			return msg;
+			return T{};
 		}
 		return messages.at(i);
 	}

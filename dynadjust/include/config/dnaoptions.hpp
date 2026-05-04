@@ -433,11 +433,6 @@ public:
 		, map_file(""), bst_file(""), bms_file(""), seg_file(""), comments("") 
 		, command_line_arguments("")
 		, type_b_global (""), type_b_file ("")
-		, lm_enabled(false), lm_lambda_init(1e-3)
-		, lm_eta_good(0.75), lm_eta_accept(0.25)
-		, lm_gamma_up(2.0), lm_gamma_down(3.0)
-		, lm_max_rejects(10)
-		, aa_enabled(false), aa_depth(5)
 		, max_threads(0) {}
 
 private:
@@ -492,19 +487,6 @@ public:
 	std::string		command_line_arguments;
 	std::string      type_b_global;          // Comma delimited string containing Type b uncertainties to be applied to all uncertainties computed from an adjustment
 	std::string      type_b_file;            // File path to Type b uncertainties to be applied to specific site uncertainties computed from an adjustment
-
-	// Levenberg-Marquardt / Trust-Region settings
-	bool		lm_enabled;				// Enable LM/trust-region solver
-	double		lm_lambda_init;			// Initial LM damping parameter
-	double		lm_eta_good;			// Good-step threshold for lambda reduction
-	double		lm_eta_accept;			// Minimum acceptable gain ratio
-	double		lm_gamma_up;			// Lambda increase factor on reject/mediocre
-	double		lm_gamma_down;			// Lambda decrease factor on good step
-	UINT32		lm_max_rejects;			// Max consecutive rejections per iteration
-
-	// Anderson acceleration settings
-	bool		aa_enabled;				// Enable Anderson acceleration for phased GN
-	UINT32		aa_depth;				// Anderson acceleration history depth (default 5)
 
 	// Threading
 	int			max_threads;			// Maximum BLAS threads (0 = auto)

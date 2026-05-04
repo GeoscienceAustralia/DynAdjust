@@ -380,7 +380,12 @@ void dna_adjust_progress_thread::processAdjustment()
 					if (stnCount > 0)
 					{
 						int max_t = dna_adjust::GetMaxBlasThreads();
-						ss << " (" << std::right << std::setw(5) << stnCount << " stns, " << std::setw(2) << max_t << "T)";
+						ss << " (" << std::right << std::setw(5) << stnCount << " stns, ";
+						if (max_t > 0)
+							ss << std::setw(2) << max_t << "T";
+						else
+							ss << "auto";
+						ss << ")";
 					}
 					int64_t elapsedMs = _dnaAdj->LastBlockElapsedMs();
 					if (elapsedMs > 0)
@@ -423,4 +428,3 @@ void dna_adjust_progress_thread::coutMessage(const std::string& message)
 	std::cout.flush();
 	cout_mutex.unlock();
 }
-

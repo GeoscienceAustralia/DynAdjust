@@ -627,15 +627,6 @@ int ParseCommandLineOptions(const int& argc, char* argv[], const boost::program_
 	//	p.a.inverse_method_msr = p.a.inverse_method_lsq;
 	if (vm.count(SCALE_NORMAL_UNITY))
 		p.a.scale_normals_to_unity = 1;
-	if (vm.count(LM_ENABLED))
-		p.a.lm_enabled = true;
-	if (vm.count(AA_ENABLED))
-		p.a.aa_enabled = true;
-	if (p.a.aa_enabled && p.a.lm_enabled)
-	{
-		std::cout << "Warning: --anderson-acceleration is for Gauss-Newton only; disabled because --lm-enabled is set." << std::endl;
-		p.a.aa_enabled = false;
-	}
 	if (vm.count(OUTPUT_ADJ_MSR_TSTAT))
 		p.o._adj_msr_tstat = 1;
 	if (vm.count(OUTPUT_ADJ_MSR_DBID))
@@ -880,31 +871,6 @@ int main(int argc, char* argv[])
 				"Type b uncertainties to be added to each computed uncertainty. arg is a comma delimited string that provides 1D, 2D or 3D uncertainties in the local reference frame (e.g. \"up\" or \"e,n\" or \"e,n,up\").")
 			(TYPE_B_FILE, boost::program_options::value<std::string>(&p.a.type_b_file),
 				"Type b uncertainties file name. Full path to a file containing Type b uncertainties to be added to the computed uncertainty for specific sites.")
-			(LM_ENABLED,
-				"Enable Levenberg-Marquardt / trust-region solver.")
-			(LM_LAMBDA_INIT, boost::program_options::value<double>(&p.a.lm_lambda_init),
-				(std::string("Initial LM damping parameter. Default is ")+
-				StringFromT(p.a.lm_lambda_init)+std::string(".")).c_str())
-			(LM_ETA_GOOD, boost::program_options::value<double>(&p.a.lm_eta_good),
-				(std::string("Good-step threshold for lambda reduction. Default is ")+
-				StringFromT(p.a.lm_eta_good)+std::string(".")).c_str())
-			(LM_ETA_ACCEPT, boost::program_options::value<double>(&p.a.lm_eta_accept),
-				(std::string("Minimum acceptable gain ratio. Default is ")+
-				StringFromT(p.a.lm_eta_accept)+std::string(".")).c_str())
-			(LM_GAMMA_UP, boost::program_options::value<double>(&p.a.lm_gamma_up),
-				(std::string("Lambda increase factor on step rejection. Default is ")+
-				StringFromT(p.a.lm_gamma_up)+std::string(".")).c_str())
-			(LM_GAMMA_DOWN, boost::program_options::value<double>(&p.a.lm_gamma_down),
-				(std::string("Lambda decrease factor on good step. Default is ")+
-				StringFromT(p.a.lm_gamma_down)+std::string(".")).c_str())
-			(LM_MAX_REJECTS, boost::program_options::value<UINT32>(&p.a.lm_max_rejects),
-				(std::string("Maximum consecutive LM rejections per iteration. Default is ")+
-				StringFromT(p.a.lm_max_rejects)+std::string(".")).c_str())
-			(AA_ENABLED,
-				"Enable Anderson acceleration for phased Gauss-Newton adjustment.")
-			(AA_DEPTH, boost::program_options::value<UINT32>(&p.a.aa_depth),
-				(std::string("Anderson acceleration history depth. Default is ")+
-				StringFromT(p.a.aa_depth)+std::string(".")).c_str())
 			;
 
 		staged_adj_options.add_options()
@@ -1214,12 +1180,6 @@ int main(int argc, char* argv[])
 
 		if (p.a.scale_normals_to_unity)
 			std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Scale normals to unity: " << "yes" << std::endl;
-		if (p.a.lm_enabled)
-		{
-			std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  LM solver: " << "enabled" << std::endl;
-			std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  LM lambda init: " << p.a.lm_lambda_init << std::endl;
-			std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  LM eta good/accept: " << p.a.lm_eta_good << " / " << p.a.lm_eta_accept << std::endl;
-		}
 		if (!p.a.station_constraints.empty())
 		{
 			std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Station constraints: " << p.a.station_constraints << std::endl;
@@ -1465,6 +1425,7 @@ int main(int argc, char* argv[])
 	}
 
 	netAdjust.PrintOscillationSummary();
+	netAdjust.PrintSuspectMeasurementSummary(std::cout);
 
 	if (!p.g.quiet)
 		std::cout << std::endl << "+ Open " << leafStr<std::string>(p.o._adj_file) << " to view the adjustment details." << std::endl << std::endl;
@@ -1489,4 +1450,3 @@ int main(int argc, char* argv[])
 
 	return ADJUST_SUCCESS;
 }
-

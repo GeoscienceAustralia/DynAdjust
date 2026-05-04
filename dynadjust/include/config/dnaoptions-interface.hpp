@@ -154,19 +154,6 @@ const char* const RECREATE_STAGE_FILES = "create-stage-files";
 const char* const STAGE_PATH = "stage-path";
 const char* const UPDATE_ORIGINAL_STN_FILE = "update-orig-stn-file";
 
-// Levenberg-Marquardt / Trust-Region options
-const char* const LM_ENABLED = "lm-enabled";
-const char* const LM_LAMBDA_INIT = "lm-lambda-init";
-const char* const LM_ETA_GOOD = "lm-eta-good";
-const char* const LM_ETA_ACCEPT = "lm-eta-accept";
-const char* const LM_GAMMA_UP = "lm-gamma-up";
-const char* const LM_GAMMA_DOWN = "lm-gamma-down";
-const char* const LM_MAX_REJECTS = "lm-max-rejects";
-
-// Anderson acceleration options
-const char* const AA_ENABLED = "anderson-acceleration";
-const char* const AA_DEPTH = "aa-depth";
-
 // Threading options
 const char* const MAX_THREADS = "max-threads";
 

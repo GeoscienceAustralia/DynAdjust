@@ -291,6 +291,8 @@ class dna_adjust {
     //                                                 INPUT_FILE_TYPE t);
 
     void PrintOscillationSummary();
+    void PrintSuspectMeasurementSummary(std::ostream& os = std::cout,
+                                        size_t limit = 20) const;
     void CloseOutputFiles();
     void UpdateBinaryFiles();
 
@@ -416,6 +418,10 @@ class dna_adjust {
     int64_t lastBlockElapsedMs_;
 
     std::chrono::milliseconds total_time_;
+    bool profileTimings_;
+    std::atomic<uint64_t> profileUpdateNormalsNs_;
+    std::atomic<uint64_t> profileStageLoadNs_;
+    std::atomic<uint64_t> profileStageStoreNs_;
     _ADJUST_STATUS_ adjustStatus_;
     vstring statusMessages_;
     UINT32 currentIteration_;
@@ -465,6 +471,7 @@ class dna_adjust {
     void UpdateAdjustment(bool iterate);
     void ValidateandFinaliseAdjustment(cpu_timer& tot_time);
     void PrintAdjustmentTime(cpu_timer& time, _TIMER_TYPE_);
+    void PrintPerformanceProfile() const;
     void InitialiseAdjustment();
     void SetDefaultReferenceFrame();
     void LoadNetworkFiles();
@@ -916,11 +923,11 @@ class dna_adjust {
                                                bool printHeader);
     void ComputeAdjMsrBlockOnIteration(const UINT32& block);
 
-    void ComputeAdjustedMsrPrecisions();
+	void ComputeAdjustedMsrPrecisions();
 
-    void ComputeChiSquareNetwork();
-    void ComputeChiSquare(const UINT32& block);
-    void ComputeChiSquareSimultaneous();
+	void ComputeChiSquareNetwork();
+	void ComputeChiSquare(const UINT32& block);
+	void ComputeChiSquareSimultaneous();
     void ComputeChiSquarePhased(const UINT32& block);
 
     void ComputeTestStat(const double& dof, double& chiUpper, double& chiLower,
@@ -1261,39 +1268,8 @@ class dna_adjust {
     v_mat_2d v_corrections_;          // vector of residuals matrices
     v_mat_2d v_correctionsR_;         // vector of residuals matrices
 
-    // ----------------------------------------------
-    // Levenberg-Marquardt / Trust-Region state
-    double lm_lambda_;                         // current damping parameter
-    double chiSquaredPrev_;                    // chi-squared before step
-    v_mat_2d v_normalsBackup_;                 // pristine N per block (before lambda*D augmentation)
-    v_mat_2d v_gradient_;                      // g = AtV^-1 r per block
-    v_mat_2d v_estimatedStationsBackup_;       // x_k snapshot for rollback
-	std::vector<std::vector<double>> v_scaleDiag_;	// saved scaling vectors per block
-
-    void InitialiseLMState();
-    void SolveLM(bool COMPUTE_FACTOR, const UINT32& block, bool COMPUTE_INVERSE = false);
-    void SolveLMTry(bool COMPUTE_FACTOR, const UINT32& block, bool COMPUTE_INVERSE = false);
-    double ComputePredictedReduction(const UINT32& block);
-    double ComputeNetworkPredictedReduction();
-    void AdjustSimultaneousLM();
-    void AdjustPhasedLM();
-    void AdjustPhasedMultiThreadLM();
-
-    // ----------------------------------------------
-    // Anderson acceleration state
-    std::vector<std::vector<double>> aa_G_hist_;   // ring buffer of g_k (post-iteration coords)
-    std::vector<std::vector<double>> aa_F_hist_;   // ring buffer of f_k (residuals)
-    std::vector<double> aa_x_snapshot_;            // x_k saved before iteration
-    UINT32 aa_hist_count_;                         // entries stored so far
-    UINT32 aa_hist_pos_;                           // current write position in ring buffer
-
-    void InitialiseAndersonAcceleration();
-    void ExtractStationCoordinates(std::vector<double>& coords);
-    void ScatterStationCoordinates(const std::vector<double>& coords);
-    void ApplyAndersonAcceleration(UINT32 iteration);
-
-    // ----------------------------------------------
-    // Iteration diagnostics — oscillation detection
+	// ----------------------------------------------
+	// Iteration diagnostics — oscillation detection
     struct StationCorrRecord {
         double cx, cy, cz;         // Cartesian corrections
     };
@@ -1310,6 +1286,8 @@ class dna_adjust {
     std::map<UINT32, UINT32> stnOscCount_;            // keyed by BST station index
     std::map<UINT32, OscillationRecord> oscHistory_;  // keyed by BST station index
     void UpdateIterationDiagnostics();
+    bool MeasurementTouchesOscillatingStation(const UINT32& msrIndex) const;
+    std::string MeasurementStationNames(const UINT32& msrIndex) const;
 
     // ----------------------------------------------
     // Adjustment functions and variables for staged adjustment

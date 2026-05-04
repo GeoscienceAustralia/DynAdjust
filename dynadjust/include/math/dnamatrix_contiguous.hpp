@@ -234,6 +234,42 @@ class matrix_2d : public new_handler_support<matrix_2d> {
     inline UINT32 columns() const { return _cols; }
     inline double* getbuffer() const { return _buffer; }
 
+    inline double dense_get(const UINT32& row, const UINT32& column) const {
+        assert(_buffer != nullptr);
+        assert(!_packed && "dense_get(): matrix must not use packed storage");
+        assert(!_symmetric && "dense_get(): matrix must not use symmetric element redirection");
+        assert(row < _rows && "dense_get(): row out of bounds");
+        assert(column < _cols && "dense_get(): column out of bounds");
+        return _buffer[static_cast<std::size_t>(column) * _mem_rows + row];
+    }
+
+    inline void dense_put(const UINT32& row, const UINT32& column, const double& value) {
+        assert(_buffer != nullptr);
+        assert(!_packed && "dense_put(): matrix must not use packed storage");
+        assert(!_symmetric && "dense_put(): matrix must not use symmetric element redirection");
+        assert(row < _rows && "dense_put(): row out of bounds");
+        assert(column < _cols && "dense_put(): column out of bounds");
+        _buffer[static_cast<std::size_t>(column) * _mem_rows + row] = value;
+    }
+
+    inline void dense_add(const UINT32& row, const UINT32& column, const double& increment) {
+        assert(_buffer != nullptr);
+        assert(!_packed && "dense_add(): matrix must not use packed storage");
+        assert(!_symmetric && "dense_add(): matrix must not use symmetric element redirection");
+        assert(row < _rows && "dense_add(): row out of bounds");
+        assert(column < _cols && "dense_add(): column out of bounds");
+        _buffer[static_cast<std::size_t>(column) * _mem_rows + row] += increment;
+    }
+
+    inline double* dense_ptr(const UINT32& row, const UINT32& column) const {
+        assert(_buffer != nullptr);
+        assert(!_packed && "dense_ptr(): matrix must not use packed storage");
+        assert(!_symmetric && "dense_ptr(): matrix must not use symmetric element redirection");
+        assert(row < _rows && "dense_ptr(): row out of bounds");
+        assert(column < _cols && "dense_ptr(): column out of bounds");
+        return _buffer + static_cast<std::size_t>(column) * _mem_rows + row;
+    }
+
     // element retrieval
     // see DNAMATRIX_ROW_WISE
     inline double& get(const UINT32& row, const UINT32& column) const {
@@ -364,6 +400,21 @@ class matrix_2d : public new_handler_support<matrix_2d> {
         assert(row < _rows && column < _cols && "elementadd(): out of bounds");
         if (_packed && row < column) return;
         *getelementref(row, column) += increment;
+    }
+
+    inline void lower_add(const UINT32& row, const UINT32& column, const double& increment) {
+        assert(_buffer != nullptr);
+        assert(row < _rows && column < _cols && "lower_add(): out of bounds");
+        if (_packed) {
+            if (row < column) return;
+            _buffer[packed_index(_rows, row, column)] += increment;
+            return;
+        }
+        if (_symmetric && row < column) {
+            _buffer[static_cast<std::size_t>(row) * _mem_rows + column] += increment;
+            return;
+        }
+        _buffer[static_cast<std::size_t>(column) * _mem_rows + row] += increment;
     }
 
     inline void elementsubtract(const UINT32& row, const UINT32& column, const double& decrement) {

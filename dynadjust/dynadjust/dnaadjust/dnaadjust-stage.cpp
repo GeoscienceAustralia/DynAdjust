@@ -159,6 +159,8 @@ void dna_adjust::DeserialiseBlockFromMappedFile(const UINT32& block, const int f
 		return;
 	}
 
+	const auto profile_start = profileTimings_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+
 	va_list vlist;
 	va_start(vlist, file_count);
 	
@@ -232,6 +234,14 @@ void dna_adjust::DeserialiseBlockFromMappedFile(const UINT32& block, const int f
 		}
 	}
 	va_end(vlist);
+
+	if (profileTimings_)
+	{
+		const auto elapsed = std::chrono::steady_clock::now() - profile_start;
+		profileStageLoadNs_.fetch_add(
+			static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count()),
+			std::memory_order_relaxed);
+	}
 }
 
 void dna_adjust::SerialiseBlockToMappedFile(const UINT32& block, const int file_count, ...)
@@ -247,6 +257,8 @@ void dna_adjust::SerialiseBlockToMappedFile(const UINT32& block, const int file_
 			sf_rigorous_vars, sf_prec_adj_msrs, sf_corrections);
 		return;
 	}
+
+	const auto profile_start = profileTimings_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 
 	va_list vlist;
 	va_start(vlist, file_count);
@@ -308,6 +320,14 @@ void dna_adjust::SerialiseBlockToMappedFile(const UINT32& block, const int file_
 		}
 	}
 	va_end(vlist);
+
+	if (profileTimings_)
+	{
+		const auto elapsed = std::chrono::steady_clock::now() - profile_start;
+		profileStageStoreNs_.fetch_add(
+			static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count()),
+			std::memory_order_relaxed);
+	}
 }
 	
 
@@ -1049,4 +1069,3 @@ void dna_adjust::CloseStageFileStreams()
 
 }	// namespace networkadjust
 }	// namespace dynadjust
-

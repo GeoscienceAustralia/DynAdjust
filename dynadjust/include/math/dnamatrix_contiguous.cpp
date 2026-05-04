@@ -31,22 +31,11 @@
 namespace dynadjust {
 namespace math {
 
-// Maximum BLAS thread count, set via set_max_blas_threads().
+// BLAS thread count selected during application start-up.
 static int g_max_blas_threads = 0;
 
 void set_max_blas_threads(int n) { g_max_blas_threads = n; }
 int get_max_blas_threads() { return g_max_blas_threads; }
-
-// Compute BLAS thread count scaled proportionally to g_max_blas_threads.
-// Tiers: max, max/2, max/4, 1 — selected by matrix dimension n.
-static inline int blas_threads_for(lapack_int n) {
-    int max_t = g_max_blas_threads;
-    if (max_t <= 1) return 1;
-    if (n > 8000) return max_t;
-    if (n > 4000) return std::max(1, max_t / 2);
-    if (n > 2000) return std::max(1, max_t / 4);
-    return 1;
-}
 
 std::ostream& operator<<(std::ostream& os, const matrix_2d& rhs) {
     if (os.iword(0) == binary) {
@@ -980,13 +969,6 @@ matrix_2d matrix_2d::cholesky_inverse(bool LOWER_IS_CLEARED /*=false*/, bool mar
             for (UINT32 i = j; i < _rows; ++i)
                 full[static_cast<std::size_t>(j) * n + i] = _buffer[packed_index(_rows, i, j)];
 
-        int blas_threads = blas_threads_for(n);
-#if defined(USE_MKL) || defined(__MKL__)
-        mkl_set_num_threads(blas_threads);
-#elif !defined(__APPLE__)
-        openblas_set_num_threads(blas_threads);
-#endif
-
         char uplo = LOWER_TRIANGLE;
         lapack_int info, lda = n;
         LAPACK_FUNC(dpotrf)(&uplo, &n, full, &lda, &info);
@@ -1005,13 +987,6 @@ matrix_2d matrix_2d::cholesky_inverse(bool LOWER_IS_CLEARED /*=false*/, bool mar
 
     lapack_int info, n = _rows;
     lapack_int lda = _mem_rows;
-
-    int blas_threads = blas_threads_for(n);
-#if defined(USE_MKL) || defined(__MKL__)
-    mkl_set_num_threads(blas_threads);
-#elif !defined(__APPLE__)
-    openblas_set_num_threads(blas_threads);
-#endif
 
     // Perform Cholesky factorisation
     LAPACK_FUNC(dpotrf)(&uplo, &n, _buffer, &lda, &info);
@@ -1060,13 +1035,6 @@ matrix_2d matrix_2d::cholesky_factor(bool LOWER_IS_CLEARED /*=false*/) {
             for (UINT32 i = j; i < _rows; ++i)
                 full[static_cast<std::size_t>(j) * n + i] = _buffer[packed_index(_rows, i, j)];
 
-        int blas_threads = blas_threads_for(n);
-#if defined(USE_MKL) || defined(__MKL__)
-        mkl_set_num_threads(blas_threads);
-#elif !defined(__APPLE__)
-        openblas_set_num_threads(blas_threads);
-#endif
-
         char uplo = LOWER_TRIANGLE;
         lapack_int info, lda = n;
         LAPACK_FUNC(dpotrf)(&uplo, &n, full, &lda, &info);
@@ -1084,13 +1052,6 @@ matrix_2d matrix_2d::cholesky_factor(bool LOWER_IS_CLEARED /*=false*/) {
 
     lapack_int info, n = _rows;
     lapack_int lda = _mem_rows;
-
-    int blas_threads = blas_threads_for(n);
-#if defined(USE_MKL) || defined(__MKL__)
-    mkl_set_num_threads(blas_threads);
-#elif !defined(__APPLE__)
-    openblas_set_num_threads(blas_threads);
-#endif
 
     LAPACK_FUNC(dpotrf)(&uplo, &n, _buffer, &lda, &info);
 
