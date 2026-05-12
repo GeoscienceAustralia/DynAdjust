@@ -766,6 +766,8 @@ void dna_adjust::PrepareStationandVarianceMatrices(const UINT32& block)
 
 			if (projectSettings_.a.stage || projectSettings_.a.multi_thread)
 				v_rigorousVariances_.at(block).redim_packed(v_unknownsCount_.at(block));
+			else
+				v_rigorousVariances_.at(block).redim(v_unknownsCount_.at(block), v_unknownsCount_.at(block));
 
 			// resize junction variances
 			v_junctionVariances_.at(block).redim_packed(j);
@@ -6954,6 +6956,12 @@ void dna_adjust::ComputeAdjustedMsrPrecisions()
 			// Update measurement records and Pelzer's Global reliability
 			UpdateMsrRecords(block);
 
+			if (projectSettings_.a.stage)
+			{
+				// Persist final residuals/precisions before chi-square reloads staged matrices.
+				SerialiseBlockToMappedFile(block, 2, sf_meas_minus_comp, sf_prec_adj_msrs);
+			}
+
 			// For staged adjustments, unload all matrix data
 			if (projectSettings_.a.stage)
 				UnloadBlock(block);
@@ -7147,8 +7155,9 @@ void dna_adjust::ComputeandPrintAdjMsrOnIteration()
 	for (UINT32 block(0); block<blockCount_; ++block)
 	{
 		if (projectSettings_.a.stage)
-			DeserialiseBlockFromMappedFile(block, 4, sf_normals,
-				sf_meas_minus_comp, sf_design, sf_prec_adj_msrs);
+			DeserialiseBlockFromMappedFile(block, 5, sf_normals,
+				sf_meas_minus_comp, sf_design, sf_prec_adj_msrs,
+				sf_estimated_stns);
 
 		// send subvector of measurements from this block
 		end = begin + v_CML_.at(block).size();
@@ -7157,8 +7166,9 @@ void dna_adjust::ComputeandPrintAdjMsrOnIteration()
 		printHeader = false;
 
 		if (projectSettings_.a.stage)
-			UnloadBlock(block, 4, sf_normals,
-				sf_meas_minus_comp, sf_design, sf_prec_adj_msrs);
+			UnloadBlock(block, 5, sf_normals,
+				sf_meas_minus_comp, sf_design, sf_prec_adj_msrs,
+				sf_estimated_stns);
 	}
 }
 
@@ -7211,6 +7221,13 @@ void dna_adjust::ComputeandPrintAdjMsrBlockOnIteration(const UINT32& block, v_ui
 {
 	// Compute adjusted measurements
 	ComputeAdjMsrBlockOnIteration(block);
+
+	if (projectSettings_.a.stage)
+	{
+		// Alternate GNSS unit printing reloads adjusted measurement precisions
+		// from the staged file, so persist the per-iteration recomputation first.
+		SerialiseBlockToMappedFile(block, 1, sf_prec_adj_msrs);
+	}
 	
 	// Print adjusted measurements
 	printer_->PrintAdjMeasurements(msr_block, printHeader);

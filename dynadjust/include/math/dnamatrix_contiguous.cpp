@@ -298,6 +298,7 @@ void matrix_2d::ReadMappedFileRegion(void* addr) {
         if (!_buffer) throw NetMemoryException("Insufficient memory for packed matrix read.");
     } else {
         _packed = false;
+        _symmetric = false;
         allocate(_mem_rows, _mem_cols);
     }
 
@@ -345,14 +346,15 @@ void matrix_2d::ReadMappedFileRegion(void* addr) {
             std::size_t ps = packed_size(_mem_rows);
             memcpy(_buffer, data_d, ps * sizeof(double));
             data_d += ps;
+            _symmetric = true;
         } else {
             for (c = 0; c < _mem_cols; ++c) {
                 memcpy(getbuffer(c, c), data_d, (_mem_rows - c) * sizeof(double));
                 data_d += (_mem_rows - c);
             }
+            fillupper();
+            _symmetric = false;
         }
-
-        _symmetric = true;
         break;
     case mtx_full:
     default:
@@ -587,12 +589,16 @@ void matrix_2d::allocate() {
         }
         return;
     }
+    _packed = false;
+    _symmetric = false;
     allocate(_mem_rows, _mem_cols);
 }
 
 // creates memory for desired "memory size", not matrix dimensions
 void matrix_2d::allocate(const UINT32& rows, const UINT32& columns) {
     deallocate();
+    _packed = false;
+    _symmetric = false;
     buy(rows, columns, &_buffer);
 }
 
@@ -805,6 +811,8 @@ void matrix_2d::grow(const UINT32& rows, const UINT32& columns) {
 
 void matrix_2d::setsize(const UINT32& rows, const UINT32& columns) {
     deallocate();
+    _packed = false;
+    _symmetric = false;
     _rows = _mem_rows = rows;
     _cols = _mem_cols = columns;
 }

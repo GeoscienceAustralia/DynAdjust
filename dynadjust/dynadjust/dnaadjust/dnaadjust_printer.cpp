@@ -4502,7 +4502,10 @@ void DynAdjustPrinter::UpdateGNSSNstatsForAlternateUnits(const v_uint32_u32u32_p
             covariance_count = _it_msr->vectorCount2;
 
             // Load precision of adjusted measurements for staged adjustments
-            if (adjust_.projectSettings_.a.stage)
+            const bool loadedPrecAdjMsrs =
+                adjust_.projectSettings_.a.stage &&
+                adjust_.v_precAdjMsrsFull_.at(b_pam.first).getbuffer() == nullptr;
+            if (loadedPrecAdjMsrs)
                 adjust_.DeserialiseBlockFromMappedFile(b_pam.first, 1, sf_prec_adj_msrs);
 
             double lower_mtx_buffer[6];
@@ -4512,7 +4515,7 @@ void DynAdjustPrinter::UpdateGNSSNstatsForAlternateUnits(const v_uint32_u32u32_p
             matrix_2d var_adj_cart(3, 3, lower_mtx_buffer, 6, mtx_lower);
             var_adj_cart.fillupper();
 
-            if (adjust_.projectSettings_.a.stage)
+            if (loadedPrecAdjMsrs)
                 adjust_.UnloadBlock(b_pam.first, 1, sf_prec_adj_msrs);
 
             // Get X component
@@ -4674,7 +4677,10 @@ void DynAdjustPrinter::PrintAdjGNSSAlternateUnits(it_vmsr_t& _it_msr, const uint
     matrix_2d var_adj_local(3, 3), var_adj_polar(3, 3);
 
     // For staged adjustments, load precision of adjusted measurements
-    if (adjust_.projectSettings_.a.stage)
+    const bool loadedPrecAdjMsrs =
+        adjust_.projectSettings_.a.stage &&
+        adjust_.v_precAdjMsrsFull_.at(b_pam.first).getbuffer() == nullptr;
+    if (loadedPrecAdjMsrs)
         adjust_.DeserialiseBlockFromMappedFile(b_pam.first, 1, sf_prec_adj_msrs);
 
     // get precision of adjusted measurements
@@ -4683,7 +4689,7 @@ void DynAdjustPrinter::PrintAdjGNSSAlternateUnits(it_vmsr_t& _it_msr, const uint
     matrix_2d var_adj_cart(3, 3, lower_mtx_buffer, 6, mtx_lower);
     var_adj_cart.fillupper();
 
-    if (adjust_.projectSettings_.a.stage)
+    if (loadedPrecAdjMsrs)
         // For staged adjustments, unload precision of adjusted measurements
         adjust_.UnloadBlock(b_pam.first, 1, sf_prec_adj_msrs);
     
