@@ -966,6 +966,23 @@ jobs:
               -DCMAKE_TOOLCHAIN_FILE"=${{ env.VCPKG_INSTALLATION_ROOT }}/scripts/buildsystems/vcpkg.cmake" ^
               -G "Visual Studio 18 2026" -A x64 dynadjust
         cmake --build %cd% --config Release --parallel 2
+        cmake --build %cd% --config Release --target ^
+              test_matrix ^
+              test_msr_to_stn_sort ^
+              test_bst_file ^
+              test_asl_file ^
+              test_aml_file_loader ^
+              test_bms_file ^
+              test_network_data_loader ^
+              test_measurement_processor ^
+              test_dnaadjust_printer ^
+              test_gnss_nstat_sort ^
+              test_bst_file_loader ^
+              test_asl_file_loader ^
+              test_bms_file_loader ^
+              test_snx_file_writer ^
+              test_format_elapsed_time ^
+              --parallel 2
         dir bin\
 
     - name: Run tests
@@ -982,7 +999,11 @@ jobs:
           call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
         )
         if errorlevel 1 exit /b %errorlevel%
-        ctest --timeout 20 --output-on-failure -C Release 2>&1 | powershell -Command "$input | Tee-Object -FilePath ctest_output.log"
+        set "MKL_NUM_THREADS=1"
+        set "OMP_NUM_THREADS=1"
+        set "MKL_DYNAMIC=FALSE"
+        set "MKL_DOMAIN_NUM_THREADS=MKL_DOMAIN_ALL=1"
+        ctest --timeout 120 --output-on-failure --stop-on-failure -C Release 2>&1 | powershell -Command "$input | Tee-Object -FilePath ctest_output.log"
 
     - name: Upload test log on failure
       if: failure()
@@ -1489,7 +1510,7 @@ jobs:
             call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
           )
           if errorlevel 1 exit /b %errorlevel%
-          set PATH=..\bin;%PATH%
+          set PATH=..\bin;%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin;%PATH%
 
           :: Run the commands directly using the correct names
           ..\bin\import.exe -n gnss gnss-network.stn gnss-network.msr
@@ -1525,7 +1546,7 @@ jobs:
             call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
           )
           if errorlevel 1 exit /b %errorlevel%
-          set PATH=..\bin;%PATH%
+          set PATH=..\bin;%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin;%PATH%
 
           :: Run the commands directly using the correct names
           ..\bin\import.exe -n urban urban-network.stn urban-network.msr
