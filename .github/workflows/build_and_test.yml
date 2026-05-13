@@ -1519,7 +1519,9 @@ jobs:
             call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
           )
           if errorlevel 1 exit /b %errorlevel%
-          set PATH=..\bin;%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin;%PATH%
+          if not defined ONEAPI_ROOT set "ONEAPI_ROOT=C:\Program Files (x86)\Intel\oneAPI"
+          if not defined MKLROOT set "MKLROOT=%ONEAPI_ROOT%\mkl\latest"
+          set PATH=..\bin;%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin;%MKLROOT%\bin;%ONEAPI_ROOT%\compiler\latest\bin;%PATH%
 
           :: Run the commands directly using the correct names
           ..\bin\import.exe -n gnss gnss-network.stn gnss-network.msr
@@ -1555,7 +1557,9 @@ jobs:
             call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
           )
           if errorlevel 1 exit /b %errorlevel%
-          set PATH=..\bin;%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin;%PATH%
+          if not defined ONEAPI_ROOT set "ONEAPI_ROOT=C:\Program Files (x86)\Intel\oneAPI"
+          if not defined MKLROOT set "MKLROOT=%ONEAPI_ROOT%\mkl\latest"
+          set PATH=..\bin;%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin;%MKLROOT%\bin;%ONEAPI_ROOT%\compiler\latest\bin;%PATH%
 
           :: Run the commands directly using the correct names
           ..\bin\import.exe -n urban urban-network.stn urban-network.msr
