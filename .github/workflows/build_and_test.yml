@@ -12,7 +12,7 @@ on:
 env:
   LINUX_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/3b7a16b3-a7b0-460f-be16-de0d64fa6b1e/intel-oneapi-base-toolkit-2025.2.1.44_offline.sh
   WINDOWS_TOOLKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/bae85ab1-cfcd-4251-8d42-a0c27949ea33/intel-oneapi-toolkit-2026.0.0.193_offline.exe
-  WINDOWS_MKL_COMPONENTS: intel.oneapi.win.mkl.devel:intel.oneapi.win.tbb.devel:intel.oneapi.win.dpl
+  WINDOWS_MKL_COMPONENTS: intel.oneapi.win.cpp-dpcpp-common:intel.oneapi.win.mkl.devel:intel.oneapi.win.tbb.devel:intel.oneapi.win.dpl
   WINDOWS_ONEAPI_CACHE_NUMBER: 1
   ONEAPI_VS_VER: vs2026
 
@@ -412,6 +412,7 @@ jobs:
         path: |
           C:\Program Files (x86)\Intel\oneAPI\setvars.bat
           C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat
+          C:\Program Files (x86)\Intel\oneAPI\compiler
           C:\Program Files (x86)\Intel\oneAPI\mkl
           C:\Program Files (x86)\Intel\oneAPI\tbb
         key: intel-oneapi-windows-${{ env.WINDOWS_ONEAPI_CACHE_NUMBER }}-${{ env.WINDOWS_TOOLKIT_URL }}-${{ env.WINDOWS_MKL_COMPONENTS }}
@@ -890,6 +891,7 @@ jobs:
         path: |
           C:\Program Files (x86)\Intel\oneAPI\setvars.bat
           C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat
+          C:\Program Files (x86)\Intel\oneAPI\compiler
           C:\Program Files (x86)\Intel\oneAPI\mkl
           C:\Program Files (x86)\Intel\oneAPI\tbb
         key: intel-oneapi-windows-${{ env.WINDOWS_ONEAPI_CACHE_NUMBER }}-${{ env.WINDOWS_TOOLKIT_URL }}-${{ env.WINDOWS_MKL_COMPONENTS }}
@@ -1432,6 +1434,7 @@ jobs:
           path: |
             C:\Program Files (x86)\Intel\oneAPI\setvars.bat
             C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat
+            C:\Program Files (x86)\Intel\oneAPI\compiler
             C:\Program Files (x86)\Intel\oneAPI\mkl
             C:\Program Files (x86)\Intel\oneAPI\tbb
           key: intel-oneapi-windows-${{ env.WINDOWS_ONEAPI_CACHE_NUMBER }}-${{ env.WINDOWS_TOOLKIT_URL }}-${{ env.WINDOWS_MKL_COMPONENTS }}
