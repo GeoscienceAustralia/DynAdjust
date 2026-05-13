@@ -956,7 +956,8 @@ if (BUILD_TESTING)
         test_bst_file_loader test_asl_file_loader test_bms_file_loader
         test_snx_file_writer test_format_elapsed_time
     )
-    add_custom_target(unit_tests DEPENDS ${UNIT_TEST_TARGETS})
+    add_custom_target(unit_tests)
+    add_dependencies(unit_tests ${UNIT_TEST_TARGETS})
 
     # Register unit tests with CTest
     add_test(NAME unit-MatrixTest COMMAND $<TARGET_FILE:test_matrix>)
