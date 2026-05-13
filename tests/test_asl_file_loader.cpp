@@ -251,10 +251,12 @@ TEST_CASE("Write ASL text file", "[AslFileLoader][text]") {
     REQUIRE(std::filesystem::file_size(TEMP_ASL_TXT_FILE) > 0);
 
     // Read and verify basic content structure
-    std::ifstream txt_file(TEMP_ASL_TXT_FILE);
-    std::string first_line;
-    std::getline(txt_file, first_line);
-    REQUIRE(first_line.find("3 stations") != std::string::npos);
+    {
+        std::ifstream txt_file(TEMP_ASL_TXT_FILE);
+        std::string first_line;
+        std::getline(txt_file, first_line);
+        REQUIRE(first_line.find("3 stations") != std::string::npos);
+    }
 
     cleanup_temp_files();
 }
