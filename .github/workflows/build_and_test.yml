@@ -484,7 +484,9 @@ jobs:
           call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
         )
         if errorlevel 1 exit /b %errorlevel%
+        if not defined MKLROOT set "MKLROOT=C:\Program Files (x86)\Intel\oneAPI\mkl\latest"
         cmake -DUSE_MKL=ON ^
+              "-DMKL_DIR:PATH=%MKLROOT%\lib\cmake\mkl" ^
               -DVCPKG_MANIFEST_MODE=OFF ^
               -DCMAKE_TOOLCHAIN_FILE"=${{ env.VCPKG_INSTALLATION_ROOT }}/scripts/buildsystems/vcpkg.cmake" ^
               -DBUILD_TESTING=OFF ^
@@ -960,7 +962,9 @@ jobs:
           call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
         )
         if errorlevel 1 exit /b %errorlevel%
+        if not defined MKLROOT set "MKLROOT=C:\Program Files (x86)\Intel\oneAPI\mkl\latest"
         cmake -DUSE_MKL=ON ^
+              "-DMKL_DIR:PATH=%MKLROOT%\lib\cmake\mkl" ^
               -DBUILD_TESTING=ON ^
               -DVCPKG_MANIFEST_MODE=OFF ^
               -DCMAKE_TOOLCHAIN_FILE"=${{ env.VCPKG_INSTALLATION_ROOT }}/scripts/buildsystems/vcpkg.cmake" ^
