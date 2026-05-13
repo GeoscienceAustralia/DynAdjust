@@ -949,6 +949,15 @@ if (BUILD_TESTING)
     target_include_directories(test_format_elapsed_time PRIVATE ${UNIT_TEST_DIR} ${CMAKE_SOURCE_DIR}/include)
     target_compile_definitions(test_format_elapsed_time PRIVATE __BINARY_NAME__="test_format_elapsed_time" __BINARY_DESC__="Unit tests for FormatElapsedTime helper")
 
+    set(UNIT_TEST_TARGETS
+        test_matrix test_msr_to_stn_sort test_bst_file test_asl_file
+        test_aml_file_loader test_bms_file test_network_data_loader
+        test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort
+        test_bst_file_loader test_asl_file_loader test_bms_file_loader
+        test_snx_file_writer test_format_elapsed_time
+    )
+    add_custom_target(unit_tests DEPENDS ${UNIT_TEST_TARGETS})
+
     # Register unit tests with CTest
     add_test(NAME unit-MatrixTest COMMAND $<TARGET_FILE:test_matrix>)
     add_test(NAME unit-MsrToStnSortTest COMMAND $<TARGET_FILE:test_msr_to_stn_sort>)

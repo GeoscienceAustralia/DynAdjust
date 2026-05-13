@@ -974,23 +974,7 @@ jobs:
               -DCMAKE_TOOLCHAIN_FILE"=${{ env.VCPKG_INSTALLATION_ROOT }}/scripts/buildsystems/vcpkg.cmake" ^
               -G "Visual Studio 18 2026" -A x64 dynadjust
         cmake --build %cd% --config Release --parallel 2
-        cmake --build %cd% --config Release --target ^
-              test_matrix ^
-              test_msr_to_stn_sort ^
-              test_bst_file ^
-              test_asl_file ^
-              test_aml_file_loader ^
-              test_bms_file ^
-              test_network_data_loader ^
-              test_measurement_processor ^
-              test_dnaadjust_printer ^
-              test_gnss_nstat_sort ^
-              test_bst_file_loader ^
-              test_asl_file_loader ^
-              test_bms_file_loader ^
-              test_snx_file_writer ^
-              test_format_elapsed_time ^
-              --parallel 2
+        cmake --build %cd% --config Release --target unit_tests --parallel 2
         dir bin\
 
     - name: Run tests
