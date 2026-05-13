@@ -40,7 +40,7 @@ jobs:
 
       - name: Cache installed packages
         id: cache-apt
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/apt-install-cache
           key: apt-installed-${{ runner.os }}-${{ env.APT_HASH }}
@@ -67,7 +67,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
@@ -100,7 +100,7 @@ jobs:
 
       - name: Cache installed packages
         id: cache-apt
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/apt-install-cache
           key: apt-installed-${{ runner.os }}-${{ env.APT_HASH }}
@@ -125,7 +125,7 @@ jobs:
 
       - name: Cache Intel OneAPI
         id: cache-oneapi
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /opt/intel
           key: intel-oneapi-linux-${{ env.ONEAPI_HASH }}
@@ -142,7 +142,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
@@ -159,7 +159,7 @@ jobs:
           mkdir -p ./zip/dynadjust-linux-mkl
           mv ./bin/* ./zip/dynadjust-linux-mkl
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dynadjust-linux-mkl
           path: ./zip/
@@ -187,7 +187,7 @@ jobs:
 
       - name: Cache installed packages
         id: cache-apt
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/apt-install-cache
           key: apt-installed-${{ runner.os }}-${{ env.APT_HASH }}
@@ -214,13 +214,13 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
       - name: Cache static xerces
         id: cache-xerces
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             /usr/local/lib/libxerces-c*.a
@@ -254,7 +254,7 @@ jobs:
           mkdir -p ./zip/dynadjust-linux-static
           mv ./bin/* ./zip/dynadjust-linux-static
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dynadjust-linux-openblas-static
           path: ./zip/
@@ -277,7 +277,7 @@ jobs:
 
       - name: Cache Homebrew packages
         id: cache-brew
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             /opt/homebrew/Cellar/boost
@@ -304,7 +304,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
@@ -332,7 +332,7 @@ jobs:
 
       - name: Cache Homebrew packages
         id: cache-brew
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             /opt/homebrew/Cellar/boost
@@ -359,7 +359,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
@@ -369,7 +369,7 @@ jobs:
           make -j2 VERBOSE=1
           ls -la bin/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dynadjust-macos-static
           path: ./bin/
@@ -378,7 +378,7 @@ jobs:
 
   build_windows_dyn_mkl:
     name: Windows build (mkl)
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess xerces-c vcpkg-tool-ninja
@@ -396,7 +396,7 @@ jobs:
 
     - name: Cache vcpkg
       id: cache-vcpkg
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
         key: vcpkg-${{ runner.os }}-mkl-${{ env.VCPKG_HASH }}
@@ -406,7 +406,7 @@ jobs:
 
     - name: Cache Intel OneAPI
       id: cache-oneapi
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: C:\Program Files (x86)\Intel\oneAPI
         key: intel-oneapi-windows-${{ env.ONEAPI_HASH }}
@@ -460,7 +460,7 @@ jobs:
       shell: bash
       run: echo ${{ env.BRANCH_NAME }}
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         ref: ${{ env.BRANCH_NAME }}
         path: "./src"
@@ -516,7 +516,7 @@ jobs:
         cp -f ./src/bin/*.exe ./release/DynAdjust-Windows/ 2>/dev/null || true
         ls -la ./release/DynAdjust-Windows/
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: dynadjust-windows-mkl
         path: ./release/
@@ -525,7 +525,7 @@ jobs:
 
   build_windows_dyn_openblas:
     name: Windows build (openblas)
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess xerces-c vcpkg-tool-ninja openblas lapack-reference
@@ -541,7 +541,7 @@ jobs:
 
     - name: Cache vcpkg
       id: cache-vcpkg
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
         key: vcpkg-${{ runner.os }}-openblas-${{ env.VCPKG_HASH }}
@@ -568,7 +568,7 @@ jobs:
       shell: bash
       run: echo ${{ env.BRANCH_NAME }}
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         ref: ${{ env.BRANCH_NAME }}
         path: "./src"
@@ -609,7 +609,7 @@ jobs:
         cp -f ./src/bin/*.exe ./release/DynAdjust-Windows/ 2>/dev/null || true
         ls -la ./release/DynAdjust-Windows/
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: dynadjust-windows-openblas
         path: ./release/
@@ -646,7 +646,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
@@ -662,7 +662,7 @@ jobs:
 
       - name: Upload test log on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ctest-linux-openblas-log
           path: Testing/Temporary/LastTest.log
@@ -728,7 +728,7 @@ jobs:
 
       - name: Cache Intel OneAPI
         id: cache-oneapi
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /opt/intel
           key: intel-oneapi-linux-${{ env.ONEAPI_HASH }}
@@ -745,7 +745,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
@@ -767,7 +767,7 @@ jobs:
 
       - name: Upload test log on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ctest-linux-mkl-log
           path: Testing/Temporary/LastTest.log
@@ -863,7 +863,7 @@ jobs:
 
   ctest_windows_dyn_mkl:
     name: Build and run ctests on Windows (mkl)
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess boost-filesystem boost-timer boost-date-time boost-chrono xerces-c vcpkg-tool-ninja
@@ -887,7 +887,7 @@ jobs:
 
     - name: Cache vcpkg
       id: cache-vcpkg
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
         key: vcpkg-${{ runner.os }}-mkl-${{ env.VCPKG_HASH }}
@@ -897,7 +897,7 @@ jobs:
 
     - name: Cache Intel OneAPI
       id: cache-oneapi
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: C:\Program Files (x86)\Intel\oneAPI
         key: intel-oneapi-windows-${{ env.ONEAPI_HASH }}
@@ -951,7 +951,7 @@ jobs:
       shell: bash
       run: echo ${{ env.BRANCH_NAME }}
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         ref: ${{ env.BRANCH_NAME }}
         path: "./src"
@@ -1004,7 +1004,7 @@ jobs:
 
     - name: Upload test log on failure
       if: failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ctest-windows-mkl-log
         path: src/Testing/Temporary/LastTest.log
@@ -1084,7 +1084,7 @@ jobs:
 
       - name: Cache Intel OneAPI
         id: cache-oneapi
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /opt/intel
           key: intel-oneapi-linux-${{ env.ONEAPI_HASH }}
@@ -1101,7 +1101,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
@@ -1209,7 +1209,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
@@ -1309,7 +1309,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
@@ -1388,7 +1388,7 @@ jobs:
 
   test_windows_mkl_binaries:
     name: Test Windows MKL binaries
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     needs: [build_windows_dyn_mkl]
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
@@ -1412,7 +1412,7 @@ jobs:
 
       - name: Cache vcpkg
         id: cache-vcpkg
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
           key: vcpkg-${{ runner.os }}-mkl-${{ env.VCPKG_HASH }}
@@ -1422,7 +1422,7 @@ jobs:
 
       - name: Cache Intel OneAPI
         id: cache-oneapi
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: C:\Program Files (x86)\Intel\oneAPI
           key: intel-oneapi-windows-${{ env.ONEAPI_HASH }}
@@ -1482,7 +1482,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
@@ -1571,7 +1571,7 @@ jobs:
 
   test_windows_openblas_binaries:
     name: Test Windows OpenBLAS binaries
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     needs: [build_windows_dyn_openblas]
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
@@ -1593,7 +1593,7 @@ jobs:
 
       - name: Cache vcpkg
         id: cache-vcpkg
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
           key: vcpkg-${{ runner.os }}-openblas-${{ env.VCPKG_HASH }}
@@ -1616,7 +1616,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
