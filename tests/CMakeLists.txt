@@ -245,6 +245,29 @@ target_compile_definitions(test_dynadjust_file PRIVATE
     __BINARY_DESC__="Unit tests for DynadjustFile v1.1 back-compat (issue #325)"
 )
 
+set(UNIT_TEST_TARGETS
+    test_matrix
+    test_msr_to_stn_sort
+    test_bst_file
+    test_asl_file
+    test_aml_file_loader
+    test_bms_file
+    test_network_data_loader
+    test_measurement_processor
+    test_dnaadjust_printer
+    test_gnss_nstat_sort
+    test_format_elapsed_time
+    test_dynadjust_file
+)
+
+if(WIN32)
+    foreach(UNIT_TEST_TARGET IN LISTS UNIT_TEST_TARGETS)
+        # Standalone unit tests compile selected DynAdjust sources directly, so
+        # they must not import DNATYPE_API classes from the shared libraries.
+        target_compile_definitions(${UNIT_TEST_TARGET} PRIVATE BUILD_STATIC)
+    endforeach()
+endif()
+
 # Enable testing
 enable_testing()
 
@@ -265,12 +288,12 @@ add_test(NAME DynadjustFileTest COMMAND test_dynadjust_file)
 # Custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS test_matrix test_msr_to_stn_sort test_bst_file test_asl_file test_aml_file_loader test_bms_file test_network_data_loader test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort test_format_elapsed_time test_dynadjust_file
+    DEPENDS ${UNIT_TEST_TARGETS}
     COMMENT "Running all tests"
 )
 
 # Custom target equivalent to 'make all'
 add_custom_target(tests_all
-    DEPENDS test_matrix test_msr_to_stn_sort test_bst_file test_asl_file test_aml_file_loader test_bms_file test_network_data_loader test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort test_format_elapsed_time test_dynadjust_file
+    DEPENDS ${UNIT_TEST_TARGETS}
     COMMENT "Building all tests"
 )

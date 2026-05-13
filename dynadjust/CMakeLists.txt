@@ -956,6 +956,13 @@ if (BUILD_TESTING)
         test_bst_file_loader test_asl_file_loader test_bms_file_loader
         test_snx_file_writer test_format_elapsed_time
     )
+    if(WIN32)
+        foreach(UNIT_TEST_TARGET IN LISTS UNIT_TEST_TARGETS)
+            # Unit tests compile selected DynAdjust sources directly, so they
+            # must not import DNATYPE_API classes from the shared libraries.
+            target_compile_definitions(${UNIT_TEST_TARGET} PRIVATE BUILD_STATIC)
+        endforeach()
+    endif()
     add_custom_target(unit_tests)
     add_dependencies(unit_tests ${UNIT_TEST_TARGETS})
 
