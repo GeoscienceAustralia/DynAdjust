@@ -20,6 +20,7 @@
 #include <cstdlib>
 
 #include <dynadjust/dnaadjust/dnaadjust.hpp>
+#include <dynadjust/dnaadjust/dnaadjust_json_printer.hpp>
 #include <dynadjust/dnaadjust/dnaadjust-multi.cpp>
 
 namespace dynadjust {
@@ -143,7 +144,6 @@ dna_adjust::dna_adjust()
 		v_correctionsR_.clear();
 	}
 
-	// Initialize the printer
 	printer_ = std::make_unique<DynAdjustPrinter>(*this);
 }
 
@@ -269,9 +269,16 @@ void dna_adjust::PrepareAdjustment(const project_settings& projectSettings)
 			projectSettings_.a.multi_thread))
 		projectSettings_.a.stage = false;
 
-	// Load the bst/bms meta and set the default 
+	// Load the bst/bms meta and set the default
 	// reference frame (via binary station file)
 	SetDefaultReferenceFrame();
+
+	if (projectSettings_.o._output_json)
+	{
+		auto json_printer = std::make_unique<DynAdjustJsonPrinter>(*this);
+		json_printer->OpenStreams();
+		printer_ = std::move(json_printer);
+	}
 
 	// Open output files for printing adjustment results
 	OpenOutputFileStreams();
@@ -2196,8 +2203,7 @@ _ADJUST_STATUS_ dna_adjust::AdjustNetwork()
 	
 void dna_adjust::PrintAdjustedNetworkStations()
 {
-	networkadjust::DynAdjustPrinter printer(*this);
-	printer.PrintAdjustedNetworkStations();
+	printer_->PrintAdjustedNetworkStations();
 }
 	
 // First item in the file is a UINT32 value - the number of records in the file

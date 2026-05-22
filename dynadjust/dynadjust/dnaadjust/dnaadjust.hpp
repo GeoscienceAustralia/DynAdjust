@@ -212,6 +212,7 @@ class DNAADJUST_API dna_adjust {
 class dna_adjust {
 #endif
     friend class DynAdjustPrinter;
+    friend class DynAdjustJsonPrinter;
     
   public:
     dna_adjust();

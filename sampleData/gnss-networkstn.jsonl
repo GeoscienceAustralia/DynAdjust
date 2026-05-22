@@ -1,0 +1,44 @@
+{"DnaXmlFormat":{"type":"Station File","referenceframe":"GDA2020","epoch":"01.01.2020"}}
+{"DnaStation":{"Name":"211300470","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"211300470","XAxis":-36.3348253511,"YAxis":145.5741006918,"Height":172.1735},"Description":"BENALLA PM   47"}}
+{"DnaStation":{"Name":"211300940","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"211300940","XAxis":-36.3238821203,"YAxis":145.5821571078,"Height":167.5607},"Description":"BENALLA PM   94"}}
+{"DnaStation":{"Name":"211301000","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"211301000","XAxis":-36.33532816,"YAxis":145.582127866,"Height":171.4809},"Description":"BENALLA PM  100"}}
+{"DnaStation":{"Name":"211301080","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"211301080","XAxis":-36.3308068592,"YAxis":145.585462686,"Height":169.9381},"Description":"BENALLA PM  108"}}
+{"DnaStation":{"Name":"211301110","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"211301110","XAxis":-36.325931386,"YAxis":145.5932297935,"Height":170.2009},"Description":"BENALLA PM  111"}}
+{"DnaStation":{"Name":"211301630","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"211301630","XAxis":-36.3219294692,"YAxis":145.595813161,"Height":169.4131},"Description":"BENALLA PM  163"}}
+{"DnaStation":{"Name":"220700210","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"220700210","XAxis":-36.5740496664,"YAxis":145.4736891223,"Height":332.2819},"Description":"BORODOMANIN PM   21"}}
+{"DnaStation":{"Name":"222000390","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"222000390","XAxis":-36.4508400442,"YAxis":145.3332109089,"Height":171.9275},"Description":"BRANJEE PM   39"}}
+{"DnaStation":{"Name":"222701160","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"222701160","XAxis":-36.434283878,"YAxis":146.580797543,"Height":311.8949},"Description":"BRIGHT PM  116"}}
+{"DnaStation":{"Name":"222702010","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"222702010","XAxis":-36.4257720842,"YAxis":146.5823883952,"Height":640.1152},"Description":"BRIGHT PM  201"}}
+{"DnaStation":{"Name":"222702320","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"222702320","XAxis":-36.4436809426,"YAxis":146.5852816896,"Height":340.3811},"Description":"BRIGHT PM  232"}}
+{"DnaStation":{"Name":"222702940","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"222702940","XAxis":-36.4434808235,"YAxis":147.0049050659,"Height":339.7698},"Description":"222702940, ?, ?"}}
+{"DnaStation":{"Name":"253600210","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"253600210","XAxis":-37.013845371,"YAxis":145.5729502088,"Height":335.742},"Description":"DOOLAM PM   21"}}
+{"DnaStation":{"Name":"257700170","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"257700170","XAxis":-36.4809662585,"YAxis":146.25515005,"Height":268.8467},"Description":"EDI PM   17"}}
+{"DnaStation":{"Name":"260801010","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"260801010","XAxis":-36.4548855103,"YAxis":145.3434480622,"Height":177.6646},"Description":"EUROA PM  101"}}
+{"DnaStation":{"Name":"260801050","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"260801050","XAxis":-36.451861004,"YAxis":145.3501252523,"Height":176.7759},"Description":"EUROA PM  105"}}
+{"DnaStation":{"Name":"260801120","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"260801120","XAxis":-36.4427281796,"YAxis":145.3353959502,"Height":171.5002},"Description":"EUROA PM  112"}}
+{"DnaStation":{"Name":"260801700","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"260801700","XAxis":-36.4518778808,"YAxis":145.3404844754,"Height":174.0624},"Description":"EUROA PM  170"}}
+{"DnaStation":{"Name":"261000380","Constraints":"FFF","Type":"XYZ","StationCoord":{"Name":"261000380","XAxis":-4286411.6817,"YAxis":2832531.3526,"Height":-3767089.7082},"Description":""}}
+{"DnaStation":{"Name":"305600730","Constraints":"FFF","Type":"XYZ","StationCoord":{"Name":"305600730","XAxis":-4229799.2969,"YAxis":2843568.0889,"Height":-3822207.4542},"Description":""}}
+{"DnaStation":{"Name":"309800190","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"309800190","XAxis":-36.5838453748,"YAxis":145.4240764208,"Height":336.3503},"Description":"309800190, ?, ?"}}
+{"DnaStation":{"Name":"324900360","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"324900360","XAxis":-36.3330289906,"YAxis":146.4322017064,"Height":208.3086},"Description":"324900360, ?, ?"}}
+{"DnaStation":{"Name":"324900930","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"324900930","XAxis":-36.3257397589,"YAxis":146.434102305,"Height":226.5738},"Description":"MYRTLEFORD PM   93"}}
+{"DnaStation":{"Name":"324901090","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"324901090","XAxis":-36.3329677497,"YAxis":146.4312255092,"Height":207.3438},"Description":"MYRTLEFORD PM  109"}}
+{"DnaStation":{"Name":"324901200","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"324901200","XAxis":-36.3324225079,"YAxis":146.4342692604,"Height":224.2215},"Description":"MYRTLEFORD PM  120"}}
+{"DnaStation":{"Name":"324901240","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"324901240","XAxis":-36.3355290834,"YAxis":146.4411677544,"Height":383.3658},"Description":"MYRTLEFORD PM  124"}}
+{"DnaStation":{"Name":"341301360","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"341301360","XAxis":-36.4338208982,"YAxis":146.5644085036,"Height":316.678},"Description":"341301360, ?, ?"}}
+{"DnaStation":{"Name":"341301380","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"341301380","XAxis":-36.4344464433,"YAxis":146.5640813454,"Height":333.2243},"Description":"341301380, ?, ?"}}
+{"DnaStation":{"Name":"349800490","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"349800490","XAxis":-36.2704890586,"YAxis":146.4809871586,"Height":1049.6453},"Description":"STANLEY"}}
+{"DnaStation":{"Name":"356000780","Constraints":"FFF","Type":"XYZ","StationCoord":{"Name":"356000780","XAxis":-4283949.9939,"YAxis":2841259.3921,"Height":-3763295.2417},"Description":""}}
+{"DnaStation":{"Name":"380700500","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"380700500","XAxis":-36.4557116945,"YAxis":146.2453114085,"Height":245.6121},"Description":"WHITFIELD PM   50"}}
+{"DnaStation":{"Name":"384300430","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"384300430","XAxis":-36.3124531719,"YAxis":146.0327668401,"Height":172.0214},"Description":"WINTON PM   43"}}
+{"DnaStation":{"Name":"384300490","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"384300490","XAxis":-36.3044794353,"YAxis":146.0501640563,"Height":174.5938},"Description":"WINTON PM   49"}}
+{"DnaStation":{"Name":"385900240","Constraints":"FFF","Type":"XYZ","StationCoord":{"Name":"385900240","XAxis":-4220571.7137,"YAxis":2881971.9439,"Height":-3804524.1681},"Description":""}}
+{"DnaStation":{"Name":"BEEC","Constraints":"FFF","Type":"XYZ","StationCoord":{"Name":"BEEC","XAxis":-4297030.4381,"YAxis":2827160.2309,"Height":-3759485.1829},"Description":"BEEC"}}
+{"DnaStation":{"Name":"BNLA","Constraints":"FFF","Type":"XYZ","StationCoord":{"Name":"BNLA","XAxis":-4253632.2844,"YAxis":2868465.8326,"Height":-3776956.3212},"Description":"BNLA"}}
+{"DnaStation":{"Name":"EURA","Constraints":"FFF","Type":"XYZ","StationCoord":{"Name":"EURA","XAxis":-4220394.7475,"YAxis":2892703.1823,"Height":-3795598.7892},"Description":"EURA"}}
+{"DnaStation":{"Name":"HOTH","Constraints":"FFF","Type":"XYZ","StationCoord":{"Name":"HOTH","XAxis":-4286274.1603,"YAxis":2768476.3135,"Height":-3816870.3376},"Description":"HOTH"}}
+{"DnaStation":{"Name":"MNSF","Constraints":"FFF","Type":"XYZ","StationCoord":{"Name":"MNSF","XAxis":-4228988.8767,"YAxis":2843212.849,"Height":-3823409.5598},"Description":"MNSF"}}
+{"DnaStation":{"Name":"MYRT","Constraints":"FFF","Type":"XYZ","StationCoord":{"Name":"MYRT","XAxis":-4288403.6055,"YAxis":2814576.3244,"Height":-3778237.8015},"Description":"MYRT"}}
+{"DnaStation":{"Name":"211302450","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"211302450","XAxis":-36.3310314683,"YAxis":145.5857072987,"Height":167.3013},"Description":"211302450, ?, ?"}}
+{"DnaStation":{"Name":"320500750","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"320500750","XAxis":-36.3636779636,"YAxis":146.2341565543,"Height":181.8212},"Description":"320500750, ?, ?"}}
+{"DnaStation":{"Name":"380800400","Constraints":"FFF","Type":"LLH","StationCoord":{"Name":"380800400","XAxis":-36.5158459374,"YAxis":146.2148531785,"Height":348.8055},"Description":"380800400, ?, ?"}}

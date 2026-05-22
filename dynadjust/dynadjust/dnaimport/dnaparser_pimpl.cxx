@@ -8,11 +8,13 @@
 #include <include/exception/dnaexception.hpp>
 #include <include/parameters/dnaepsg.hpp>
 #include <dynadjust/dnaimport/dnaparser_pimpl.hxx>
+#include <dynadjust/dnaimport/dnaparser_validators.hpp>
 #include <include/measurement_types/dnastntally.hpp>
 
 using namespace dynadjust::measurements;
 using namespace dynadjust::epsg;
 using namespace dynadjust::exception;
+using namespace dynadjust::import;
 
 extern MsrTally g_parsemsr_tally;
 extern StnTally g_parsestn_tally;
@@ -167,39 +169,24 @@ void Directions_pimpl::post_Directions(const UINT32& total)
 {
 	if (!_parent_dnaDirectionSet)
 		return;
-	
-	// Is the parent ignored? Add it to the ignored set
-	if (_parent_dnaDirectionSet->GetIgnore())
-	{
-		_parent_dnaDirectionSet->AddDirection(_dnaDirection.get());
-		return;
-	}
 
-	// Is the parent not ignored, and the direction not ignored? Add it to the set
+	// Always add the direction to the set
+	_parent_dnaDirectionSet->AddDirection(_dnaDirection.get());
+
+	// If the parent is ignored, nothing more to check
+	if (_parent_dnaDirectionSet->GetIgnore())
+		return;
+
+	// Count non-ignored directions for the tally
 	if (_dnaDirection->NotIgnored())
 	{
-		_parent_dnaDirectionSet->AddDirection(_dnaDirection.get());
-        g_parsemsr_tally.D++;
+		g_parsemsr_tally.D++;
 		return;
 	}
 
-	// At this point, the parent is not ignored, but a sub direction is.
-	// Test if this ignored sub direction will lead to a false direction
-	UINT32 t = _parent_dnaDirectionSet->GetTotal() - 1;
-
-	if (t == 0)
-	{
-		std::stringstream ss, ss2;
-		ss << 
-			"<Directions>...</Directions>',  total of " << total << " element(s)" << std::endl <<
-			"  - found 0 <Directions>, or there aren't any non-ignored directions in the set. '";
-		ss2 << " ~ <Total>" << total << "</Total>";
-		throw ::xsd::cxx::parser::expected_element< char >(
-			ss.str(), ss2.str());
-	}
-
-	_parent_dnaDirectionSet->AddDirection(_dnaDirection.get());
-	
+	// Direction is ignored — validate this doesn't leave the set empty
+	ValidateDirectionInSet(_parent_dnaDirectionSet,
+		true, total);
 }
 
 // DnaMeasurement_pimpl
@@ -217,8 +204,7 @@ void DnaMeasurement_pimpl::pre()
 
 void DnaMeasurement_pimpl::Type(const ::std::string& Type)
 {
-	if (Type.empty())
-		throw XMLInteropException("\"Type\" element cannot be empty.", 0);
+	char cType = ValidateMeasurementType(Type);
 
 	std::string frame, epoch;
 
@@ -232,104 +218,8 @@ void DnaMeasurement_pimpl::Type(const ::std::string& Type)
 	else
 		epoch = _fileEpoch;
 
-	char cType = (Type.c_str())[0];
-	switch (cType) {
-	case 'A': // Horizontal angle
-		g_parsemsr_tally.A++;
-		*(_pMeasurementCount) += 1;
-		_dnaCurrentMsr.reset(new CDnaAngle);
-		break;
-	case 'B': // Geodetic azimuth
-		g_parsemsr_tally.B++;
-		*(_pMeasurementCount) += 1;
-		_dnaCurrentMsr.reset(new CDnaAzimuth);
-		break;
-	case 'C': // Chord dist
-		g_parsemsr_tally.C++;
-		*(_pMeasurementCount) += 1;
-		_dnaCurrentMsr.reset(new CDnaDistance);
-		break;
-	case 'D': // Direction set
-		//g_parsemsr_tally.D++;  See post_Directions()
-		_dnaCurrentMsr.reset(new CDnaDirectionSet(++(*(_pclusterID))));
-		break;
-	case 'E': // Ellipsoid arc
-		g_parsemsr_tally.E++;
-		*(_pMeasurementCount) += 1;
-		_dnaCurrentMsr.reset(new CDnaDistance);
-		break;
-	case 'G': // GPS Baseline (treat as single-baseline cluster)
-	case 'X': // GPS Baseline cluster
-		_dnaCurrentMsr.reset(new CDnaGpsBaselineCluster(++(*(_pclusterID)), frame, epoch));
-		break;
-	case 'H': // Orthometric height
-		g_parsemsr_tally.H++;
-		*(_pMeasurementCount) += 1;
-		_dnaCurrentMsr.reset(new CDnaHeight);
-		break;
-	case 'I': // Astronomic latitude
-		g_parsemsr_tally.I++;
-		*(_pMeasurementCount) += 1;
-		_dnaCurrentMsr.reset(new CDnaCoordinate);
-		break;
-	case 'J': // Astronomic longitude
-		g_parsemsr_tally.J++;
-		*(_pMeasurementCount) += 1;
-		_dnaCurrentMsr.reset(new CDnaCoordinate);
-		break;
-	case 'K': // Astronomic azimuth
-		g_parsemsr_tally.K++;
-		*(_pMeasurementCount) += 1;
-		_dnaCurrentMsr.reset(new CDnaAzimuth);
-		break;
-	case 'L': // Level difference
-		g_parsemsr_tally.L++;
-		*(_pMeasurementCount) += 1;
-		_dnaCurrentMsr.reset(new CDnaHeightDifference);
-		break;
-	case 'M': // MSL arc
-		g_parsemsr_tally.M++;
-		*(_pMeasurementCount) += 1;
-		_dnaCurrentMsr.reset(new CDnaDistance);
-		break;
-	case 'P': // Geodetic latitude
-		g_parsemsr_tally.P++;
-		*(_pMeasurementCount) += 1;
-		_dnaCurrentMsr.reset(new CDnaCoordinate);
-		break;
-	case 'Q': // Geodetic longitude
-		g_parsemsr_tally.Q++;
-		*(_pMeasurementCount) += 1;
-		_dnaCurrentMsr.reset(new CDnaCoordinate);
-		break;
-	case 'R': // Ellipsoidal height
-		g_parsemsr_tally.R++;
-		*(_pMeasurementCount) += 1;
-		_dnaCurrentMsr.reset(new CDnaHeight);
-		break;
-	case 'S': // Slope distance
-		g_parsemsr_tally.S++;
-		*(_pMeasurementCount) += 1;
-		_dnaCurrentMsr.reset(new CDnaDistance);
-		break;
-	case 'V': // Zenith distance
-		g_parsemsr_tally.V++;
-		*(_pMeasurementCount) += 1;
-		_dnaCurrentMsr.reset(new CDnaDirection);
-		break;
-	case 'Y': // GPS point cluster
-		_dnaCurrentMsr.reset(new CDnaGpsPointCluster(++(*(_pclusterID)), _referenceframe, _epoch));
-		break;
-	case 'Z': // Vertical angle
-		g_parsemsr_tally.Z++;
-		*(_pMeasurementCount) += 1;
-		_dnaCurrentMsr.reset(new CDnaDirection);
-		break;
-	default:
-		std::stringstream ss;
-		ss << "Unknown measurement type: " << Type;
-		throw XMLInteropException(ss.str(), 0);
-	}
+	_dnaCurrentMsr = CreateMeasurement(cType, _pclusterID,
+		*(_pMeasurementCount), g_parsemsr_tally, frame, epoch);
 	_dnaCurrentMsr->SetType(Type);
 }
 
@@ -352,39 +242,18 @@ void DnaMeasurement_pimpl::First(const ::std::string& First)
 	if (!_dnaCurrentMsr)
 		throw XMLInteropException("\"Type\" element must be the first element within \"DnaMeasurement\".", 0);
 
-	if (First.empty())
-		throw XMLInteropException("\"First\" element cannot be empty.", 0);
+	ValidateFirst(First);
 	_dnaCurrentMsr->SetFirst(First);
 }
 
-void DnaMeasurement_pimpl::Second(const ::std::string& Second) 
+void DnaMeasurement_pimpl::Second(const ::std::string& Second)
 {
 	if (!_dnaCurrentMsr)
 		throw XMLInteropException("\"Type\" element must be the first element within \"DnaMeasurement\".", 0);
 
-	switch (_dnaCurrentMsr->GetTypeC()) {
-	case 'A': // Horizontal angle
-	case 'B': // Geodetic azimuth
-	case 'K': // Astronomic azimuth
-	case 'C': // Chord dist
-	case 'E': // Ellipsoid arc
-	case 'M': // MSL arc
-	case 'S': // Slope distance
-	case 'D': // Direction set
-	case 'G': // GPS Baseline
-	case 'L': // Level difference
-	case 'V': // Zenith distance
-	case 'Z': // Vertical angle
-	case 'X': // GPS Baseline cluster
-		if (Second.empty())
-		{
-			std::stringstream ss;
-			ss << "\"Second\" element cannot be empty for measurement type " << _dnaCurrentMsr->GetTypeC() << 
-				" (first station: " << _dnaCurrentMsr->GetFirst() << ").";
-			throw XMLInteropException(ss.str(), 0);
-		}
+	ValidateSecond(Second, _dnaCurrentMsr->GetTypeC(), _dnaCurrentMsr->GetFirst());
+	if (TypeRequiresSecond(_dnaCurrentMsr->GetTypeC()))
 		_dnaCurrentMsr->SetTarget(Second);
-	}
 }
 
 void DnaMeasurement_pimpl::Third(const ::std::string& Third)
@@ -392,17 +261,7 @@ void DnaMeasurement_pimpl::Third(const ::std::string& Third)
 	if (!_dnaCurrentMsr)
 		throw XMLInteropException("\"Type\" element must be the first element within \"DnaMeasurement\".", 0);
 
-	switch (_dnaCurrentMsr->GetTypeC()) {
-	case 'A': // Horizontal angle
-		if (Third.empty())
-		{
-			std::stringstream ss;
-			ss << "\"Third\" element cannot be empty for measurement type " << _dnaCurrentMsr->GetTypeC() << 
-				" (first station: " << _dnaCurrentMsr->GetFirst() << ").";
-			throw XMLInteropException(ss.str(), 0);
-		}
-	}
-
+	ValidateThird(Third, _dnaCurrentMsr->GetTypeC(), _dnaCurrentMsr->GetFirst());
 	_dnaCurrentMsr->SetTarget2(Third);
 }
 
@@ -411,33 +270,7 @@ void DnaMeasurement_pimpl::Value(const ::std::string& Value)
 	if (!_dnaCurrentMsr)
 		throw XMLInteropException("\"Type\" element must be the first element within \"DnaMeasurement\".", 0);
 
-	switch (_dnaCurrentMsr->GetTypeC()) {
-	case 'A': // Horizontal angle
-	case 'B': // Geodetic azimuth
-	case 'K': // Astronomic azimuth
-	case 'C': // Chord dist
-	case 'E': // Ellipsoid arc
-	case 'M': // MSL arc
-	case 'S': // Slope distance
-	case 'D': // Direction set
-	case 'H': // Orthometric height
-	case 'R': // Ellipsoidal height
-	case 'I': // Astronomic latitude
-	case 'J': // Astronomic longitude
-	case 'P': // Geodetic latitude
-	case 'Q': // Geodetic longitude
-	case 'L': // Level difference
-	case 'V': // Zenith distance
-	case 'Z': // Vertical angle
-		if (Value.empty())
-		{
-			std::stringstream ss;
-			ss << "\"Value\" element cannot be empty for measurement type " << _dnaCurrentMsr->GetTypeC() << 
-				" (first station: " << _dnaCurrentMsr->GetFirst() << ").";
-			throw XMLInteropException(ss.str(), 0);
-		}
-	}
-
+	ValidateValue(Value, _dnaCurrentMsr->GetTypeC(), _dnaCurrentMsr->GetFirst());
 	_dnaCurrentMsr->SetValue(Value);
 }
 
@@ -446,41 +279,8 @@ void DnaMeasurement_pimpl::StdDev(const ::std::string& StdDev)
 	if (!_dnaCurrentMsr)
 		throw XMLInteropException("\"Type\" element must be the first element within \"DnaMeasurement\".", 0);
 
-	switch (_dnaCurrentMsr->GetTypeC()) {
-	case 'A': // Horizontal angle
-	case 'B': // Geodetic azimuth
-	case 'K': // Astronomic azimuth
-	case 'C': // Chord dist
-	case 'E': // Ellipsoid arc
-	case 'M': // MSL arc
-	case 'S': // Slope distance
-	case 'D': // Direction set
-	case 'H': // Orthometric height
-	case 'R': // Ellipsoidal height
-	case 'I': // Astronomic latitude
-	case 'J': // Astronomic longitude
-	case 'P': // Geodetic latitude
-	case 'Q': // Geodetic longitude
-	case 'L': // Level difference
-	case 'V': // Zenith distance
-	case 'Z': // Vertical angle
-		if (StdDev.empty())
-		{
-			std::stringstream ss;
-			ss << "\"StdDev\" element cannot be empty for " << _dnaCurrentMsr->GetTypeC() << " measurements (first station: " << _dnaCurrentMsr->GetFirst() << ").";
-			throw XMLInteropException(ss.str(), 0);
-		}
-
-		if (DoubleFromString<double>(StdDev) < PRECISION_1E25)
-		{
-			std::stringstream ss;
-			ss << "\"StdDev\" element cannot contain a zero or negative value for " << _dnaCurrentMsr->GetTypeC() << " measurements (first station: " << _dnaCurrentMsr->GetFirst() << ").";
-			throw XMLInteropException(ss.str(), 0);
-		}
-	}
-
+	ValidateStdDev(StdDev, _dnaCurrentMsr->GetTypeC(), _dnaCurrentMsr->GetFirst());
 	_dnaCurrentMsr->SetStdDev(StdDev);
-
 }
 
 void DnaMeasurement_pimpl::InstHeight(const ::std::string& InstHeight)
@@ -522,27 +322,9 @@ void DnaMeasurement_pimpl::Total(const ::std::string& Total)
 	if (!_dnaCurrentMsr)
 		throw XMLInteropException("\"Type\" element must be the first element within \"DnaMeasurement\".", 0);
 
-	switch (_dnaCurrentMsr->GetTypeC()) {
-	case 'D': // Direction set
-	case 'G': // Single Baseline (treat as a single-baseline cluster)
-	case 'X': // GPS Baseline cluster
-	case 'Y': // GPS point cluster
-		if (Total.empty())
-			throw XMLInteropException("\"Total\" element cannot be empty.", 0);
-	}
-
+	ValidateTotal(Total, _dnaCurrentMsr->GetTypeC());
 	_dnaCurrentMsr->SetTotal(Total);
-
-	const UINT32 measCount(LongFromString<UINT32>(Total));
-	_total = measCount;
-
-	switch (_dnaCurrentMsr->GetTypeC()) 
-	{
-	case 'X': // GPS Baseline cluster
-		if (measCount < 2)
-			if (_preferSingleXasG)
-				_dnaCurrentMsr->SetType("G");
-	}
+	_total = LongFromString<UINT32>(Total);
 }
 
 void DnaMeasurement_pimpl::Directions()
@@ -554,10 +336,7 @@ void DnaMeasurement_pimpl::Vscale(const ::std::string& Vscale)
 	if (!_dnaCurrentMsr)
 		throw XMLInteropException("\"Type\" element must be the first element within \"DnaMeasurement\".", 0);
 
-	if (Vscale.empty())
-		_dnaCurrentMsr->SetVscale("1");
-	else
-		_dnaCurrentMsr->SetVscale(Vscale);
+	_dnaCurrentMsr->SetVscale(DefaultScale(Vscale));
 }
 
 void DnaMeasurement_pimpl::Epoch(const ::std::string& Epoch)
@@ -666,10 +445,7 @@ void DnaMeasurement_pimpl::Hscale(const ::std::string& Hscale)
 	if (!_dnaCurrentMsr)
 		throw XMLInteropException("\"Type\" element must be the first element within \"DnaMeasurement\".", 0);
 
-	if (Hscale.empty())
-		_dnaCurrentMsr->SetHscale("1");
-	else
-		_dnaCurrentMsr->SetHscale(Hscale);
+	_dnaCurrentMsr->SetHscale(DefaultScale(Hscale));
 }
 
 
@@ -678,10 +454,7 @@ void DnaMeasurement_pimpl::Lscale(const ::std::string& Lscale)
 	if (!_dnaCurrentMsr)
 		throw XMLInteropException("\"Type\" element must be the first element within \"DnaMeasurement\".", 0);
 
-	if (Lscale.empty())
-		_dnaCurrentMsr->SetLscale("1");
-	else
-		_dnaCurrentMsr->SetLscale(Lscale);
+	_dnaCurrentMsr->SetLscale(DefaultScale(Lscale));
 }
 
 
@@ -690,10 +463,7 @@ void DnaMeasurement_pimpl::Pscale(const ::std::string& Pscale)
 	if (!_dnaCurrentMsr)
 		throw XMLInteropException("\"Type\" element must be the first element within \"DnaMeasurement\".", 0);
 
-	if (Pscale.empty())
-		_dnaCurrentMsr->SetPscale("1");
-	else
-		_dnaCurrentMsr->SetPscale(Pscale);
+	_dnaCurrentMsr->SetPscale(DefaultScale(Pscale));
 }
 
 
@@ -751,140 +521,13 @@ void DnaMeasurement_pimpl::post_DnaMeasurement()
 	if (!_dnaCurrentMsr)
 		throw XMLInteropException("\"Type\" element must be the first element within \"DnaMeasurement\".", 0);
 
-	UINT32 total, found;
+	// Ignored empty direction set — skip silently
+	if (_dnaCurrentMsr->GetTypeC() == 'D' &&
+		_dnaCurrentMsr->GetTotal() == 0 && _dnaCurrentMsr->GetIgnore())
+		return;
 
-	// Is the direction set empty and ignored?
-	// If so, do nothing (an invalid measurement).
-	switch (_dnaCurrentMsr->GetTypeC())
-	{
-	case 'D':
-		total = _dnaCurrentMsr->GetTotal();
-		if (total == 0 && _dnaCurrentMsr->GetIgnore())
-			return;
-		break;
-	}
-
-	// Now that the measurement has completed, capture all essential elements
 	_vParentMsrs->push_back(_dnaCurrentMsr);
-
-	// set "First" to be that of the first in the set
-	switch (_dnaCurrentMsr->GetTypeC())
-	{
-	case 'D':
-	
-		total = _dnaCurrentMsr->GetTotal();
-		found = static_cast<UINT32>(_dnaCurrentMsr->GetDirections_ptr()->size());
-		if (total != found)
-		{
-			std::stringstream ss, ss2;
-			ss <<
-				"<Directions>...</Directions>',  total of " << total << " element(s)" << std::endl <<
-				"  - found " << found << " <Directions> in the set. '";
-			ss2 << " ~ <Total>" << total << "</Total>";
-			throw ::xsd::cxx::parser::expected_element< char >(
-				ss.str(), ss2.str());
-		}
-
-		found = 0;
-
-		// Test for non-ignored measurements
-		for_each(_dnaCurrentMsr->GetDirections_ptr()->begin(),
-			_dnaCurrentMsr->GetDirections_ptr()->end(),
-			[this, &found](CDnaDirection& d) {
-				if (d.NotIgnored())
-					found++;
-			});
-
-		if (found == 0 && _dnaCurrentMsr->NotIgnored())
-		{
-			std::stringstream ss, ss2;
-			ss <<
-				"<Directions>...</Directions>',  total of " << total << " element(s)" << std::endl <<
-				"  - There aren't any non-ignored directions in the set. ";
-			ss2 << " ~ <Total>" << total << "</Total>";
-			throw ::xsd::cxx::parser::expected_element< char >(
-				ss.str(), ss2.str());
-		}
-
-		_dnaCurrentMsr->SetNonIgnoredDirns(found);
-		
-		// Okay, capture all the elements for this direction set
-		for_each(_dnaCurrentMsr->GetDirections_ptr()->begin(),
-			_dnaCurrentMsr->GetDirections_ptr()->end(),
-			[this](CDnaDirection& d) {
-				d.SetType(_dnaCurrentMsr->GetType());
-				d.SetFirst(_dnaCurrentMsr->GetFirst());
-				// This is a target direction, so set zero recorded total so as to
-				// distinguish this direction from the RO, for which the recorded
-				// total will be the number of target directions
-				d.SetRecordedTotal(0);
-			});
-
-		break;
-	
-	case 'G':
-	case 'X':
-	
-		total = _dnaCurrentMsr->GetTotal();
-		found = static_cast<UINT32>(_dnaCurrentMsr->GetBaselines_ptr()->size());
-		if (total != found)
-		{
-			std::stringstream ss, ss2;
-			ss <<
-				"<GPSBaseline>...</GPSBaseline>',  total of " << total << " element(s)" << std::endl <<
-				"  - found " << found << " <GPSBaseline> in the set. '";
-			ss2 << " ~ <Total>" << total << "</Total>";
-			throw ::xsd::cxx::parser::expected_element< char >(
-				ss.str(), ss2.str());
-		}
-
-		// Okay, capture all the elements for this baseline (cluster)
-		for_each(_dnaCurrentMsr->GetBaselines_ptr()->begin(),
-			_dnaCurrentMsr->GetBaselines_ptr()->end(),
-			[this](CDnaGpsBaseline& b) {
-				b.SetIgnore(_dnaCurrentMsr->GetIgnore());
-				b.SetRecordedTotal(_dnaCurrentMsr->GetTotal());
-
-				b.SetPscale(_dnaCurrentMsr->GetPscale());
-				b.SetLscale(_dnaCurrentMsr->GetLscale());
-				b.SetHscale(_dnaCurrentMsr->GetHscale());
-				b.SetVscale(_dnaCurrentMsr->GetVscale());
-			});
-
-		break;
-	
-	case 'Y':
-	
-		total = _dnaCurrentMsr->GetTotal();
-		found = static_cast<UINT32>(_dnaCurrentMsr->GetPoints_ptr()->size());
-		if (total != found)
-		{
-			std::stringstream ss, ss2;
-			ss <<
-				"<Clusterpoint>...</Clusterpoint>',  total of " << total << " element(s)" << std::endl <<
-				"  - found " << found << " <Clusterpoint> in the set. '";
-			ss2 << " ~ <Total>" << total << "</Total>";
-			throw ::xsd::cxx::parser::expected_element< char >(
-				ss.str(), ss2.str());
-		}
-
-		// Okay, capture all the elements for this point cluster
-		for_each(_dnaCurrentMsr->GetPoints_ptr()->begin(),
-			_dnaCurrentMsr->GetPoints_ptr()->end(),
-			[this](CDnaGpsPoint& p) {
-				p.SetIgnore(_dnaCurrentMsr->GetIgnore());
-				p.SetCoordType(_dnaCurrentMsr->GetCoordType());
-				p.SetRecordedTotal(_dnaCurrentMsr->GetTotal());
-
-				p.SetPscale(_dnaCurrentMsr->GetPscale());
-				p.SetLscale(_dnaCurrentMsr->GetLscale());
-				p.SetHscale(_dnaCurrentMsr->GetHscale());
-				p.SetVscale(_dnaCurrentMsr->GetVscale());
-			});
-		break;
-	
-	}
-
+	FinaliseMeasurement(_dnaCurrentMsr, _preferSingleXasG);
 }
 
 // DnaStation_pimpl
@@ -910,19 +553,16 @@ void DnaStation_pimpl::pre()
 
 void DnaStation_pimpl::Name(const ::std::string& Name)
 {
-	if (Name.empty())
-		throw XMLInteropException("DnaStation \"Name\" element cannot be empty.", 0);
+	ValidateStationName(Name);
 	_dnaCurrentStn->SetName(Name);
 }
 
 
 void DnaStation_pimpl::Constraints(const ::std::string& Constraints)
 {
-	if (Constraints.empty())	
-		_dnaCurrentStn->SetConstraints("FFF");
-	else
-		_dnaCurrentStn->SetConstraints(Constraints);
-	g_parsestn_tally.addstation(Constraints);
+	std::string c = DefaultConstraints(Constraints);
+	_dnaCurrentStn->SetConstraints(c);
+	g_parsestn_tally.addstation(c);
 }
 
 
@@ -937,8 +577,7 @@ void DnaStation_pimpl::StationCoord()
 
 void DnaStation_pimpl::Description(const ::std::string& Description)
 {
-	_dnaCurrentStn->SetDescription(
-		findandreplace((const ::std::string&)Description, (const ::std::string&)"&", (const ::std::string&)"and"));
+	_dnaCurrentStn->SetDescription(SanitiseDescription(Description));
 }
 
 void DnaStation_pimpl::post_DnaStation()

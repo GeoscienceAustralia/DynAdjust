@@ -538,18 +538,18 @@ void DynAdjustPrinter::PrintAdjustedNetworkStations() {
 
     switch (adjust_.projectSettings_.a.adjust_mode) {
     case SimultaneousMode:
-        PrintAdjStations(adjust_.adj_file, 0, &adjust_.v_estimatedStations_.at(0), &adjust_.v_rigorousVariances_.at(0), false, true, true, printHeader, true);
-        PrintAdjStations(adjust_.xyz_file, 0, &adjust_.v_estimatedStations_.at(0), &adjust_.v_rigorousVariances_.at(0), false, false, false, printHeader, false);
+        PrintAdjStations(ReportKind::kAdj, adjust_.adj_file, 0, &adjust_.v_estimatedStations_.at(0), &adjust_.v_rigorousVariances_.at(0), false, true, true, printHeader, true);
+        PrintAdjStations(ReportKind::kXyz, adjust_.xyz_file, 0, &adjust_.v_estimatedStations_.at(0), &adjust_.v_rigorousVariances_.at(0), false, false, false, printHeader, false);
         break;
     case PhasedMode:
     case Phased_Block_1Mode:
         // Output phased blocks as a single block?
         if (!adjust_.projectSettings_.o._output_stn_blocks) {
-            PrintAdjStationsUniqueList(adjust_.adj_file,
+            PrintAdjStationsUniqueList(ReportKind::kAdj, adjust_.adj_file,
                 &adjust_.v_rigorousStations_,
                 &adjust_.v_rigorousVariances_,
                 true, true, true);
-            PrintAdjStationsUniqueList(adjust_.xyz_file,
+            PrintAdjStationsUniqueList(ReportKind::kXyz, adjust_.xyz_file,
                 &adjust_.v_rigorousStations_,
                 &adjust_.v_rigorousVariances_,
                 true, true, false);
@@ -564,8 +564,8 @@ void DynAdjustPrinter::PrintAdjustedNetworkStations() {
                         adjust_.DeserialiseBlockFromMappedFile(block, 1, sf_original_stns);
 
                     // Print using original detailed function for staging compatibility
-                    PrintAdjStations(adjust_.adj_file, block, &adjust_.v_rigorousStations_.at(block), &adjust_.v_rigorousVariances_.at(block), true, true, true, printHeader, true);
-                    PrintAdjStations(adjust_.xyz_file, block, &adjust_.v_rigorousStations_.at(block), &adjust_.v_rigorousVariances_.at(block), true, false, false, printHeader, false);
+                    PrintAdjStations(ReportKind::kAdj, adjust_.adj_file, block, &adjust_.v_rigorousStations_.at(block), &adjust_.v_rigorousVariances_.at(block), true, true, true, printHeader, true);
+                    PrintAdjStations(ReportKind::kXyz, adjust_.xyz_file, block, &adjust_.v_rigorousStations_.at(block), &adjust_.v_rigorousVariances_.at(block), true, false, false, printHeader, false);
                     printHeader = false;
 
                     // Release block from memory
@@ -580,8 +580,8 @@ void DynAdjustPrinter::PrintAdjustedNetworkStations() {
             } else {
                 // Print stations for each block without staging
                 for (UINT32 block = 0; block < adjust_.blockCount_; ++block) {
-                    PrintAdjStations(adjust_.adj_file, block, &adjust_.v_estimatedStations_.at(block), &adjust_.v_rigorousVariances_.at(block), true, true, true, printHeader, true);
-                    PrintAdjStations(adjust_.xyz_file, block, &adjust_.v_estimatedStations_.at(block), &adjust_.v_rigorousVariances_.at(block), true, false, false, printHeader, false);
+                    PrintAdjStations(ReportKind::kAdj, adjust_.adj_file, block, &adjust_.v_estimatedStations_.at(block), &adjust_.v_rigorousVariances_.at(block), true, true, true, printHeader, true);
+                    PrintAdjStations(ReportKind::kXyz, adjust_.xyz_file, block, &adjust_.v_estimatedStations_.at(block), &adjust_.v_rigorousVariances_.at(block), true, false, false, printHeader, false);
                     printHeader = false;
                     
                     // Exit if block-1 mode
@@ -713,6 +713,8 @@ void DynAdjustPrinter::PrintStatistics(bool printPelzer) {
         ss << " ***";
     }
     adjust_.adj_file << std::setw(PASS_FAIL) << std::right << ss.str() << std::endl << std::endl;
+
+    OnStatistics();
 }
 
 void DynAdjustPrinter::PrintMeasurementsToStation() {
@@ -767,8 +769,11 @@ void DynAdjustPrinter::PrintMeasurementsToStation() {
     }
 
     // Print measurements to each station and the total count for each station
-    for (_it_stn=vStationList.begin(); _it_stn != vStationList.end(); ++_it_stn)
+    for (_it_stn=vStationList.begin(); _it_stn != vStationList.end(); ++_it_stn) {
         adjust_.v_stnmsrTally_.at(*_it_stn).coutSummaryMsrToStn(adjust_.adj_file, adjust_.bstBinaryRecords_.at(*_it_stn).stationName);
+        it_vstn_t stn_it = adjust_.bstBinaryRecords_.begin() + *_it_stn;
+        OnM2SRecord(stn_it, adjust_.v_stnmsrTally_.at(*_it_stn));
+    }
     
     // Print "the bottom line"
     MsrToStnSummaryHeaderLine(adjust_.adj_file);
@@ -862,9 +867,10 @@ void DynAdjustPrinter::PrintAdjMeasurements_A(it_vmsr_t& _it_msr) {
     adjust_.adj_file << std::left << std::setw(STATION) << adjust_.bstBinaryRecords_.at(_it_msr->station1).stationName;
     adjust_.adj_file << std::left << std::setw(STATION) << adjust_.bstBinaryRecords_.at(_it_msr->station2).stationName;
     adjust_.adj_file << std::left << std::setw(STATION) << adjust_.bstBinaryRecords_.at(_it_msr->station3).stationName;
-    // Print angular measurement, taking care of user requirements for 
+    // Print angular measurement, taking care of user requirements for
     // type, format and precision
     PrintAdjMeasurementsAngular(' ', _it_msr);
+    OnAdjustedMeasurement(_it_msr);
 }
 
 void DynAdjustPrinter::PrintAdjMeasurements_BKVZ(it_vmsr_t& _it_msr) {
@@ -872,9 +878,10 @@ void DynAdjustPrinter::PrintAdjMeasurements_BKVZ(it_vmsr_t& _it_msr) {
     adjust_.adj_file << std::left << std::setw(STATION) << adjust_.bstBinaryRecords_.at(_it_msr->station1).stationName;
     adjust_.adj_file << std::left << std::setw(STATION) << adjust_.bstBinaryRecords_.at(_it_msr->station2).stationName;
     adjust_.adj_file << std::left << std::setw(STATION) << " ";
-    // Print angular measurement, taking care of user requirements for 
+    // Print angular measurement, taking care of user requirements for
     // type, format and precision
     PrintAdjMeasurementsAngular(' ', _it_msr);
+    OnAdjustedMeasurement(_it_msr);
 }
 
 void DynAdjustPrinter::PrintAdjMeasurements_CELMS(it_vmsr_t& _it_msr) {
@@ -883,6 +890,7 @@ void DynAdjustPrinter::PrintAdjMeasurements_CELMS(it_vmsr_t& _it_msr) {
     adjust_.adj_file << std::left << std::setw(STATION) << adjust_.bstBinaryRecords_.at(_it_msr->station2).stationName;
     adjust_.adj_file << std::left << std::setw(STATION) << " ";
     PrintAdjMeasurementsLinear(' ', _it_msr);
+    OnAdjustedMeasurement(_it_msr);
 }
 
 void DynAdjustPrinter::PrintAdjMeasurements_HR(it_vmsr_t& _it_msr) {
@@ -892,6 +900,7 @@ void DynAdjustPrinter::PrintAdjMeasurements_HR(it_vmsr_t& _it_msr) {
     adjust_.adj_file << std::left << std::setw(STATION) << " ";
 
     PrintAdjMeasurementsLinear(' ', _it_msr);
+    OnAdjustedMeasurement(_it_msr);
 }
 
 void DynAdjustPrinter::PrintAdjMeasurements_IJPQ(it_vmsr_t& _it_msr) {
@@ -899,12 +908,15 @@ void DynAdjustPrinter::PrintAdjMeasurements_IJPQ(it_vmsr_t& _it_msr) {
     adjust_.adj_file << std::left << std::setw(STATION) << adjust_.bstBinaryRecords_.at(_it_msr->station1).stationName;
     adjust_.adj_file << std::left << std::setw(STATION) << " ";
     adjust_.adj_file << std::left << std::setw(STATION) << " ";
-    // Print angular measurement, taking care of user requirements for 
+    // Print angular measurement, taking care of user requirements for
     // type, format and precision
     PrintAdjMeasurementsAngular(' ', _it_msr);
+    OnAdjustedMeasurement(_it_msr);
 }
 
 void DynAdjustPrinter::PrintAdjMeasurements_D(it_vmsr_t& _it_msr) {
+    const it_vmsr_t direction_set_start = _it_msr;
+
     // normal format
     adjust_.adj_file << std::left << std::setw(STATION) << adjust_.bstBinaryRecords_.at(_it_msr->station1).stationName;
     adjust_.adj_file << std::left << std::setw(STATION) << adjust_.bstBinaryRecords_.at(_it_msr->station2).stationName;
@@ -950,14 +962,16 @@ void DynAdjustPrinter::PrintAdjMeasurements_D(it_vmsr_t& _it_msr) {
         adjust_.adj_file << std::left << std::setw(PAD2) << " ";                        // measurement type
         adjust_.adj_file << std::left << std::setw(STATION) << " ";                    // station1    (Instrument)
         adjust_.adj_file << std::left << std::setw(STATION) << " ";                    // station2 (RO)
-        adjust_.adj_file << std::left << std::setw(STATION) << 
+        adjust_.adj_file << std::left << std::setw(STATION) <<
             adjust_.bstBinaryRecords_.at(_it_msr->station2).stationName;    // target
 
-        // Print angular measurement, taking care of user requirements for 
-        // type, format and precision    
+        // Print angular measurement, taking care of user requirements for
+        // type, format and precision
         PrintAdjMeasurementsAngular(' ', _it_msr);
         _it_msr++;
     }
+
+    OnAdjustedMeasurement(direction_set_start);
 }
 
 void DynAdjustPrinter::PrintCompMeasurements_YLLH(it_vmsr_t& _it_msr, UINT32& design_row) {
@@ -1417,7 +1431,7 @@ void DynAdjustPrinter::PrintUniqueStationsList(std::ostream& os,
     os << "Unique stations list printed using existing detailed implementation." << std::endl;
 }
 
-void DynAdjustPrinter::PrintAdjStationsUniqueList(std::ostream& os,
+void DynAdjustPrinter::PrintAdjStationsUniqueList(ReportKind kind, std::ostream& os,
                                                            const v_mat_2d* stationEstimates, v_mat_2d* stationVariances,
                                                            bool recomputeGeographicCoords, bool updateGeographicCoords,
                                                            bool reapplyTypeBUncertainties) {
@@ -1467,9 +1481,9 @@ void DynAdjustPrinter::PrintAdjStationsUniqueList(std::ostream& os,
         mat_index = _it_bsmu->first.second * 3;
 
         // Use the refactored PrintAdjStation through the main class
-        PrintAdjStation(*outstream, 
-                               block, stn, mat_index, 
-                               &stationEstimates->at(block), &stationVariances->at(block), 
+        PrintAdjStation(kind, *outstream,
+                               block, stn, mat_index,
+                               &stationEstimates->at(block), &stationVariances->at(block),
                                recomputeGeographicCoords, updateGeographicCoords,
                                reapplyTypeBUncertainties);
 
@@ -1561,7 +1575,7 @@ void DynAdjustPrinter::PrintStationAdjustmentResults(std::ostream& os, const UIN
     
     // Delegate to existing implementation for complex coordinate transformations
     // and uncertainty calculations while using our new coordinate formatters
-    PrintAdjStation(os, block, stn, mat_idx, estimates, variances, true, false, true);
+    PrintAdjStation(ReportKind::kAdj, os, block, stn, mat_idx, estimates, variances, true, false, true);
 }
 
 // Enhanced coordinate transformation utilities for PrintAdjStation refactoring
@@ -2005,14 +2019,16 @@ void DynAdjustPrinter::PrintCompMeasurements(const UINT32& block, const std::str
     adjust_.adj_file << std::endl << std::endl;
 }
 
-// Helper function that consolidates measurement printing logic
+// Helper function that consolidates measurement printing logic.  JSON
+// hooks fire from the leaf PrintAdjMeasurements_* methods (not here), so
+// cluster records emit one JSONL record per component.
 void DynAdjustPrinter::PrintMeasurementRecords(const v_uint32_u32u32_pair& msr_block, bool adjustedMeasurements) {
     it_vmsr_t _it_msr;
     UINT32 clusterID(MAX_UINT32_VALUE);
 
     for (auto _it_block_msr = msr_block.begin(); _it_block_msr != msr_block.end(); ++_it_block_msr) {
         _it_msr = adjust_.bmsBinaryRecords_.begin() + (_it_block_msr->first);
-        
+
         // Skip non-measurement elements (Y, Z, covariance components)
         if (_it_msr->measStart != xMeas)
             continue;
@@ -2623,22 +2639,27 @@ void DynAdjustPrinter::PrintAdjMeasurements_YLLH(it_vmsr_t& _it_msr)
         // Print height
         _it_y_msr++;
         switch (_it_msr->station3)
-        { 
-        case LLh_type_i: 
+        {
+        case LLh_type_i:
             PrintAdjMeasurementsLinear('h', _it_y_msr);
             break;
         case LLH_type_i:
         default:
             PrintAdjMeasurementsLinear('H', _it_y_msr);
             break;
-        }        
+        }
 
         // skip covariances until next point
         _it_y_msr += covariance_count * 3;
-        
+
         if (covariance_count > 0)
             _it_y_msr++;
     }
+
+    // Emit the JSONL side-channel once for the whole Y cluster. The temporary
+    // y_msr vector above is only for text output; JSONL preserves the input
+    // grammar by walking the original binary cluster, including covariances.
+    OnAdjustedMeasurement(_it_msr_begin);
 }
 
 void DynAdjustPrinter::PrintPositionalUncertainty()
@@ -3392,14 +3413,15 @@ void DynAdjustPrinter::PrintBlockStations(std::ostream& os, const UINT32& block,
     
     UINT32 mat_idx, stn;
 
-    // Print stations according to the user-defined sort order
+    // PrintBlockStations is only called against adj_file, so route the
+    // JSON hook to the .adj sibling.
     for (UINT32 i(0); i<adjust_.v_blockStationsMap_.at(block).size(); ++i)
     {
         stn = v_blockStations.at(i);
         mat_idx = adjust_.v_blockStationsMap_.at(block)[stn] * 3;
 
-        PrintAdjStation(os, block, stn, mat_idx,
-            stationEstimates, stationVariances, 
+        PrintAdjStation(ReportKind::kAdj, os, block, stn, mat_idx,
+            stationEstimates, stationVariances,
             recomputeGeographicCoords, updateGeographicCoords,
             reapplyTypeBUncertainties);
     }
@@ -3763,9 +3785,9 @@ void DynAdjustPrinter::PrintStationsUniqueList(std::ostream& os,
         stn = _it_bsmu->first.first;
         mat_index = _it_bsmu->first.second * 3;
 
-        PrintAdjStation(*outstream,
+        PrintAdjStation(ReportKind::kAdj, *outstream,
             block, stn, mat_index,
-                &estimates->at(block), &stationVariances->at(block), 
+                &estimates->at(block), &stationVariances->at(block),
                 recomputeGeographicCoords, updateGeographicCoords,
                 reapplyTypeBUncertainties);
 
@@ -3892,7 +3914,7 @@ bool DynAdjustPrinter::IgnoredMeasurementContainsInvalidStation(pit_vmsr_t _it_m
     return true;
 }
 
-void DynAdjustPrinter::PrintAdjStation(std::ostream& os, 
+void DynAdjustPrinter::PrintAdjStation(ReportKind kind, std::ostream& os,
     const UINT32& block, const UINT32& stn, const UINT32& mat_idx,
     const matrix_2d* stationEstimates, matrix_2d* stationVariances,
     bool recomputeGeographicCoords, bool updateGeographicCoords,
@@ -4041,6 +4063,10 @@ void DynAdjustPrinter::PrintAdjStation(std::ostream& os,
     // description
     os << std::setw(PAD2) << " " << std::left << stn_it->description;
     os << std::endl;
+
+    AdjustedStationContext ctx{
+        estLatitude, estLongitude, estHeight, var_cart, var_local};
+    OnAdjustedStation(kind, stn_it, stationEstimates, stationVariances, mat_idx, ctx);
 }
 
 void DynAdjustPrinter::PrintAdjMeasurements_GXY(it_vmsr_t& _it_msr, const uint32_uint32_pair& b_pam)
@@ -4057,6 +4083,7 @@ void DynAdjustPrinter::PrintAdjMeasurements_GXY(it_vmsr_t& _it_msr, const uint32
         }
     }
 
+    const it_vmsr_t cluster_start = _it_msr;
     UINT32 cluster_msr, cluster_count(_it_msr->vectorCount1), covariance_count;
     bool nextElement(false);
 
@@ -4071,7 +4098,7 @@ void DynAdjustPrinter::PrintAdjMeasurements_GXY(it_vmsr_t& _it_msr, const uint32
 
         // first station
         adjust_.adj_file << std::left << std::setw(STATION) << adjust_.bstBinaryRecords_.at(_it_msr->station1).stationName;
-    
+
         // Print second station?
         switch (_it_msr->measType)
         {
@@ -4085,7 +4112,7 @@ void DynAdjustPrinter::PrintAdjMeasurements_GXY(it_vmsr_t& _it_msr, const uint32
 
         // third station
         adjust_.adj_file << std::left << std::setw(STATION) << " ";
-        
+
         // Print adjusted GNSS baseline measurements in alternate units?
         if (adjust_.projectSettings_.o._adj_gnss_units != XYZ_adj_gnss_ui &&
             _it_msr->measType != 'Y')
@@ -4094,22 +4121,26 @@ void DynAdjustPrinter::PrintAdjMeasurements_GXY(it_vmsr_t& _it_msr, const uint32
         {
             // Print X
             PrintAdjMeasurementsLinear('X', _it_msr);
-    
+
             // Print Y
-            _it_msr++;	
+            _it_msr++;
             PrintAdjMeasurementsLinear('Y', _it_msr);
 
             // Print Z
-            _it_msr++;	
+            _it_msr++;
             PrintAdjMeasurementsLinear('Z', _it_msr);
         }
 
         // skip covariances until next baseline
         _it_msr += covariance_count * 3;
-        
+
         if (covariance_count > 0)
             _it_msr++;
     }
+
+    // Emit the JSONL side-channel once for the whole GNSS cluster, not once per
+    // baseline. This preserves Total and all cross-covariance records.
+    OnAdjustedMeasurement(cluster_start);
 }
 
 void DynAdjustPrinter::PrintCorStation(std::ostream& os, 
@@ -4185,15 +4216,19 @@ void DynAdjustPrinter::PrintCorStation(std::ostream& os,
         std::setw(MSR) << std::setprecision(adjust_.PRECISION_MTR_STN) << std::fixed << std::right << horiz_distance;
 
     if (adjust_.isAdjustmentQuestionable_)
-        os << 
-            StringFromTW(local_12e, HEIGHT, adjust_.PRECISION_MTR_STN) << 
-            StringFromTW(local_12n, HEIGHT, adjust_.PRECISION_MTR_STN) << 
+        os <<
+            StringFromTW(local_12e, HEIGHT, adjust_.PRECISION_MTR_STN) <<
+            StringFromTW(local_12n, HEIGHT, adjust_.PRECISION_MTR_STN) <<
             StringFromTW(local_12up, HEIGHT, adjust_.PRECISION_MTR_STN) << std::endl;
     else
-        os << 
-            std::setw(HEIGHT) << std::setprecision(adjust_.PRECISION_MTR_STN) << std::fixed << std::right << local_12e << 
-            std::setw(HEIGHT) << std::setprecision(adjust_.PRECISION_MTR_STN) << std::fixed << std::right << local_12n << 
+        os <<
+            std::setw(HEIGHT) << std::setprecision(adjust_.PRECISION_MTR_STN) << std::fixed << std::right << local_12e <<
+            std::setw(HEIGHT) << std::setprecision(adjust_.PRECISION_MTR_STN) << std::fixed << std::right << local_12n <<
             std::setw(HEIGHT) << std::setprecision(adjust_.PRECISION_MTR_STN) << std::fixed << std::right << local_12up << std::endl;
+
+    it_vstn_t stn_it = adjust_.bstBinaryRecords_.begin() + stn;
+    StationCorrectionContext ctx{local_12e, local_12n, local_12up};
+    OnStationCorrection(block, stn_it, stationEstimates, mat_index, ctx);
 }
 
 void DynAdjustPrinter::PrintCorStations(std::ostream& cor_file, const UINT32& block)
@@ -4390,7 +4425,20 @@ void DynAdjustPrinter::PrintPosUncertainty(std::ostream& os, const UINT32& block
     else
         os <<
             std::setprecision(PRECISION_UNCERTAINTY) << std::setw(MSR) << variances->get(2, 2) << std::endl;		// up
-    
+
+    {
+        it_vstn_t stn_it = adjust_.bstBinaryRecords_.begin() + stn;
+        PositionalUncertaintyContext ctx{
+            stn_it->currentLatitude,
+            stn_it->currentLongitude,
+            stn_it->currentHeight,
+            variances_cart,
+            variances_local,
+            semimajor, semiminor, azimuth,
+            hzPosU, vtPosU};
+        OnPositionalUncertainty(stn_it, stationVariances, mat_idx, ctx);
+    }
+
     if (!adjust_.projectSettings_.o._output_pu_covariances)
         return;
 
@@ -5209,7 +5257,7 @@ void DynAdjustPrinter::PrintCorStationsUniqueList(std::ostream& cor_file)
     );
 }
 
-void DynAdjustPrinter::PrintAdjStations(std::ostream& os, const UINT32& block,
+void DynAdjustPrinter::PrintAdjStations(ReportKind kind, std::ostream& os, const UINT32& block,
                       const matrix_2d* stationEstimates,
                       matrix_2d* stationVariances, bool printBlockID,
                       bool recomputeGeographicCoords,
@@ -5272,13 +5320,13 @@ void DynAdjustPrinter::PrintAdjStations(std::ostream& os, const UINT32& block,
     {
         stn = v_blockStations.at(i);
         mat_idx = adjust_.v_blockStationsMap_.at(block)[stn] * 3;
-        PrintAdjStation(os, block, stn, mat_idx,
-            stationEstimates, stationVariances, 
+        PrintAdjStation(kind, os, block, stn, mat_idx,
+            stationEstimates, stationVariances,
             recomputeGeographicCoords, updateGeographicCoords,
             reapplyTypeBUncertainties);
     }
     os << std::endl;
-    
+
     // return sort order to alpha-numeric
     if (adjust_.projectSettings_.o._sort_stn_file_order)
         adjust_.SortStationsbyID(v_blockStations);

@@ -38,6 +38,8 @@ add_library (${PROJECT_NAME} SHARED
              ${CMAKE_SOURCE_DIR}/include/measurement_types/dnastntally.cpp
              dnaparser_pskel.cxx
              dnaparser_pimpl.cxx
+             dnaparser_validators.cpp
+             dnaparser_jsonl.cpp
              dnainterop.cpp
              ${CMAKE_SOURCE_DIR}/dynadjust.rc)
 
@@ -48,9 +50,10 @@ set_source_files_properties(
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
 )
 
-# Also exclude the interop file which uses the parsers heavily
+# Also exclude the interop and JSONL parser files from unity builds
 set_source_files_properties(
     dnainterop.cpp
+    dnaparser_jsonl.cpp
     PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
 )
 

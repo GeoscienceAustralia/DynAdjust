@@ -20,6 +20,7 @@
 //============================================================================
 
 #include <dynadjust/dnaimport/dnainterop.hpp>
+#include <dynadjust/dnaimport/dnaparser_jsonl.hpp>
 
 using namespace dynadjust::epsg;
 
@@ -384,9 +385,30 @@ _PARSE_STATUS_ dna_import::ParseInputFile(const std::string& fileName, vdnaStnPt
 
 		SignalComplete();
 	}
+	// JSONL
+	else if (
+		first_chars[0] == '{' ||				// JSON object on first line
+		icontains(fileName, ".jsonl"))			// .jsonl extension
+	{
+		// Set the file type
+		input_file_meta->filetype = jsonl;
+		m_ift = jsonl;
+
+		// Parse the JSONL file
+		ParseJSONL(fileName, vStations, stnCount, vMeasurements, msrCount, clusterID, fileEpsg, fileEpoch, firstFile, success_msg);
+
+		if (fileEpsg.empty())
+			fileEpsg = m_strProjectDefaultEpsg;
+
+		// record the file's default reference frame
+        snprintf(input_file_meta->epsgCode, sizeof(input_file_meta->epsgCode), "%s", fileEpsg.substr(0, STN_EPSG_WIDTH).c_str());
+        snprintf(input_file_meta->epoch, sizeof(input_file_meta->epoch), "%s", fileEpoch.substr(0, STN_EPOCH_WIDTH).c_str());
+
+		SignalComplete();
+	}
 	// STN or MSR
 	else if (
-		// use boost::algorithm::ifind_first, which is a case insensitive implementation of the find first algorithm. 
+		// use boost::algorithm::ifind_first, which is a case insensitive implementation of the find first algorithm.
 		strncmp(first_chars, "!#=DNA", 6) == 0 ||	// dna file?
 		icontains(fileName, ".stn") ||			// dna station file
 		icontains(fileName, ".msr"))				// dna measurement file
@@ -1127,8 +1149,104 @@ void dna_import::ApplyDiscontinuitiesMeasurements_D(std::vector<CDnaDirection>* 
 }
 	
 
-void dna_import::ParseDNA(const std::string& fileName, vdnaStnPtr* vStations, PUINT32 stnCount, 
-							   vdnaMsrPtr* vMeasurements, PUINT32 msrCount, PUINT32 clusterID, 
+void dna_import::ParseJSONL(const std::string& fileName, vdnaStnPtr* vStations, PUINT32 stnCount,
+							   vdnaMsrPtr* vMeasurements, PUINT32 msrCount, PUINT32 clusterID,
+							   std::string& fileEpsg, std::string& fileEpoch, bool firstFile, std::string* success_msg)
+{
+	parseStatus_ = PARSE_SUCCESS;
+	_filespecifiedreferenceframe = false;
+	_filespecifiedepoch = false;
+
+	try
+	{
+		import::JsonlParseContext ctx;
+		ctx.default_frame = datum_.GetName();
+		ctx.default_epoch = datum_.GetEpoch_s();
+		ctx.first_file = firstFile;
+		ctx.user_supplied_frame = (projectSettings_.i.user_supplied_frame == 1);
+		ctx.user_supplied_epoch = (projectSettings_.i.user_supplied_epoch == 1);
+		ctx.override_input_frame = (projectSettings_.i.override_input_rfame == 1);
+		ctx.prefer_single_x_as_g = (projectSettings_.i.prefer_single_x_as_g == TRUE);
+		ctx.cluster_id = *clusterID;
+
+		import::ParseJsonlFile(fileName, vStations, vMeasurements, ctx);
+
+		*clusterID = ctx.cluster_id;
+		*stnCount = ctx.stn_count;
+		*msrCount = ctx.msr_count;
+		*success_msg = ctx.message + "\n";
+		_filespecifiedreferenceframe = ctx.file_specified_frame;
+		_filespecifiedepoch = ctx.file_specified_epoch;
+
+		// Reference frame / epoch resolution (replicated from ParseXML)
+		try
+		{
+			fileEpsg = ctx.file_epsg;
+			if (fileEpsg.empty())
+				fileEpsg = datum_.GetEpsgCode_s();
+
+			fileEpoch = ctx.file_epoch;
+			if (fileEpoch.empty() || isEpsgDatumStatic(LongFromString<UINT32>(fileEpsg)))
+				fileEpoch = referenceepochFromEpsgString<std::string>(fileEpsg);
+
+			if (projectSettings_.i.user_supplied_frame)
+			{
+				if (!projectSettings_.i.user_supplied_epoch)
+				{
+					if (firstFile)
+					{
+						projectSettings_.i.epoch = fileEpoch;
+						projectSettings_.r.epoch = fileEpoch;
+						m_strProjectDefaultEpoch = fileEpoch;
+						datum_.SetEpoch(fileEpoch);
+					}
+				}
+			}
+			else
+			{
+				if (firstFile)
+				{
+					projectSettings_.i.reference_frame = datumFromEpsgString<std::string>(fileEpsg);
+					projectSettings_.r.reference_frame = projectSettings_.i.reference_frame;
+					m_strProjectDefaultEpsg = fileEpsg;
+
+					projectSettings_.i.epoch = fileEpoch;
+					projectSettings_.r.epoch = fileEpoch;
+					m_strProjectDefaultEpoch = fileEpoch;
+				}
+			}
+		}
+		catch (...)
+		{
+			std::stringstream ss;
+			ss << "The default JSONL input file reference frame is not recognised.";
+			SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
+		}
+
+		if (!vStations->empty() && !vMeasurements->empty())
+			m_idt = stn_msr_data;
+		else if (!vStations->empty())
+			m_idt = stn_data;
+		else if (!vMeasurements->empty())
+			m_idt = msr_data;
+
+	}
+	catch (const XMLInteropException&)
+	{
+		throw;  // re-throw
+	}
+	catch (const std::exception& e)
+	{
+		std::stringstream ss;
+		ss << "ParseJSONL(): An exception was encountered while parsing " << fileName << "." << std::endl;
+		ss << "  " << e.what() << std::endl;
+		SignalExceptionParse(ss.str(), 0);
+	}
+}
+
+
+void dna_import::ParseDNA(const std::string& fileName, vdnaStnPtr* vStations, PUINT32 stnCount,
+							   vdnaMsrPtr* vMeasurements, PUINT32 msrCount, PUINT32 clusterID,
 							   std::string& fileEpsg, std::string& fileEpoch, bool firstFile)
 {
 	parseStatus_ = PARSE_SUCCESS;
