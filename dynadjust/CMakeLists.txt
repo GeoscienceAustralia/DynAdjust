@@ -785,6 +785,31 @@ if (BUILD_TESTING)
         ${CMAKE_SOURCE_DIR}/include/measurement_types/dnastation.cpp
     )
 
+    set(JSONL_PARSER_TEST_SOURCES
+        ${CMAKE_SOURCE_DIR}/dynadjust/dnaimport/dnaparser_jsonl.cpp
+        ${CMAKE_SOURCE_DIR}/dynadjust/dnaimport/dnaparser_validators.cpp
+        ${CMAKE_SOURCE_DIR}/include/functions/dnastringfuncs.cpp
+        ${CMAKE_SOURCE_DIR}/include/functions/template_instantiations.cpp
+        ${CMAKE_SOURCE_DIR}/include/math/dnamatrix_contiguous.cpp
+        ${CMAKE_SOURCE_DIR}/include/ide/trace.cpp
+        ${CMAKE_SOURCE_DIR}/include/parameters/dnadatum.cpp
+        ${CMAKE_SOURCE_DIR}/include/parameters/dnaellipsoid.cpp
+        ${CMAKE_SOURCE_DIR}/include/parameters/dnaprojection.cpp
+        ${CMAKE_SOURCE_DIR}/include/measurement_types/dnaangle.cpp
+        ${CMAKE_SOURCE_DIR}/include/measurement_types/dnacoordinate.cpp
+        ${CMAKE_SOURCE_DIR}/include/measurement_types/dnadirection.cpp
+        ${CMAKE_SOURCE_DIR}/include/measurement_types/dnadirectionset.cpp
+        ${CMAKE_SOURCE_DIR}/include/measurement_types/dnadistance.cpp
+        ${CMAKE_SOURCE_DIR}/include/measurement_types/dnagpsbaseline.cpp
+        ${CMAKE_SOURCE_DIR}/include/measurement_types/dnagpspoint.cpp
+        ${CMAKE_SOURCE_DIR}/include/measurement_types/dnaheight.cpp
+        ${CMAKE_SOURCE_DIR}/include/measurement_types/dnaheightdifference.cpp
+        ${CMAKE_SOURCE_DIR}/include/measurement_types/dnameasurement.cpp
+        ${CMAKE_SOURCE_DIR}/include/measurement_types/dnastation.cpp
+        ${CMAKE_SOURCE_DIR}/include/measurement_types/dnamsrtally.cpp
+        ${CMAKE_SOURCE_DIR}/include/measurement_types/dnastntally.cpp
+    )
+
     # Test: test_matrix
     add_executable(test_matrix
         ${UNIT_TEST_DIR}/test_matrix.cpp
@@ -893,6 +918,15 @@ if (BUILD_TESTING)
     target_link_libraries(test_gnss_nstat_sort PRIVATE ${DNA_LIBRARIES})
     target_compile_definitions(test_gnss_nstat_sort PRIVATE __BINARY_NAME__="test_gnss_nstat_sort" __BINARY_DESC__="Unit tests for GNSS n-stat sort in alternate units")
 
+    # Test: test_dnaparser_jsonl
+    add_executable(test_dnaparser_jsonl
+        ${UNIT_TEST_DIR}/test_dnaparser_jsonl.cpp
+        ${JSONL_PARSER_TEST_SOURCES}
+    )
+    target_include_directories(test_dnaparser_jsonl PRIVATE ${UNIT_TEST_DIR} ${CMAKE_SOURCE_DIR}/include)
+    target_link_libraries(test_dnaparser_jsonl PRIVATE ${DNA_LIBRARIES})
+    target_compile_definitions(test_dnaparser_jsonl PRIVATE __BINARY_NAME__="test_dnaparser_jsonl" __BINARY_DESC__="Regression tests for JSONL parser")
+
     # Test: test_bst_file_loader (new)
     add_executable(test_bst_file_loader
         ${UNIT_TEST_DIR}/test_bst_file_loader.cpp
@@ -953,7 +987,7 @@ if (BUILD_TESTING)
         test_matrix test_msr_to_stn_sort test_bst_file test_asl_file
         test_aml_file_loader test_bms_file test_network_data_loader
         test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort
-        test_bst_file_loader test_asl_file_loader test_bms_file_loader
+        test_dnaparser_jsonl test_bst_file_loader test_asl_file_loader test_bms_file_loader
         test_snx_file_writer test_format_elapsed_time
     )
     if(WIN32)
@@ -977,6 +1011,7 @@ if (BUILD_TESTING)
     add_test(NAME unit-MeasurementProcessorTest COMMAND $<TARGET_FILE:test_measurement_processor>)
     add_test(NAME unit-DynAdjustPrinterTest COMMAND $<TARGET_FILE:test_dnaadjust_printer>)
     add_test(NAME unit-GNSSNstatSortTest COMMAND $<TARGET_FILE:test_gnss_nstat_sort>)
+    add_test(NAME unit-DnaParserJsonlTest COMMAND $<TARGET_FILE:test_dnaparser_jsonl>)
     add_test(NAME unit-BstFileLoaderTest COMMAND $<TARGET_FILE:test_bst_file_loader>)
     add_test(NAME unit-AslFileLoaderTest COMMAND $<TARGET_FILE:test_asl_file_loader>)
     add_test(NAME unit-BmsFileLoaderTest COMMAND $<TARGET_FILE:test_bms_file_loader>)
@@ -998,7 +1033,10 @@ if (BUILD_TESTING)
     add_test(NAME test-gnss-network
         COMMAND $<TARGET_FILE:${DNADIFF_TARGET}> gnss.simult.adj gnss.simult.adj.expected --skip-headers 52 -t 0.001)
 
-    add_test (NAME import-gnss-network-similar COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n gnss_similar gnss-network.stn gnss-network.msr -r itrf2008 --override-input-ref-frame --search-similar-gnss-msr --quiet) 
+    # 1a. gnss network JSONL import
+    add_test (NAME import-gnss-network-jsonl COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n gnss_jsonl gnss-networkstn.jsonl gnss-networkmsr.jsonl -r GDA2020 --flag-unused-stations)
+
+    add_test (NAME import-gnss-network-similar COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n gnss_similar gnss-network.stn gnss-network.msr -r itrf2008 --override-input-ref-frame --search-similar-gnss-msr --quiet)
     add_test (NAME import-gnss-network-exclude COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n gnss_excl gnss-network.stn gnss-network.msr --exclude-stns-assoc-msrs "BEEC,261000380,356000780,349800490" --split) 
     add_test (NAME import-gnss-network-scaled COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n gnss_scaled gnss-network.stn gnss-network.msr --baseline-scalar-file gnss-network.scalars -r GDA94) 
     add_test (NAME import-gnss-network-block1 COMMAND $<TARGET_FILE:${DNAIMPORT_TARGET}> -n gnss_b1 gnss-network.stn gnss-network.msr --export-dna --export-xml --single-xml-file --export-asl --export-aml --export-map --output-msr-to-stn --test-integrity -r GDA94 --flag-unused-stations) 

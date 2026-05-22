@@ -738,6 +738,19 @@ int ParseCommandLineOptions(const int& argc, char* argv[], const boost::program_
 	if (vm.count(OUTPUT_STN_COR_FILE))
 		p.o._cor_file += ".cor";
 
+	if (vm.count(OUTPUT_JSON))
+	{
+		p.o._output_json = 1;
+		p.o._adj_json_file = p.o._adj_file + ".jsonl";
+		p.o._xyz_json_file = p.o._xyz_file + ".jsonl";
+		if (vm.count(OUTPUT_POS_UNCERTAINTY))
+			p.o._apu_json_file = p.o._apu_file + ".jsonl";
+		if (vm.count(OUTPUT_STN_COR_FILE))
+			p.o._cor_json_file = p.o._cor_file + ".jsonl";
+		if (vm.count(OUTPUT_MSR_TO_STN) && !p.o._m2s_file.empty())
+			p.o._m2s_json_file = p.o._m2s_file + ".jsonl";
+	}
+
 	if (vm.count(OUTPUT_STN_COR_FILE))
 		p.o._init_stn_corrections = 1;
 
@@ -994,6 +1007,8 @@ int main(int argc, char* argv[])
 				"Export estimated station coordinates and uncertainties to DNA measurement file as a GNSS Y cluster.")
 			(EXPORT_SNX_FILE,
 				"Export estimated station coordinates and full variance matrix to SINEX file. Note: station names will be truncated to four characters as per the SINEX standard.")
+			(OUTPUT_JSON,
+				"Also emit adjustment reports as JSONL files alongside the text reports (one JSON object per line, same schema as JSONL import).")
 			;
 
 		// Declare a group of options that will be 

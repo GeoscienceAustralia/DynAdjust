@@ -216,6 +216,7 @@ const char* const EXPORT_GEO_FILE = "export-dna-geo-file";
 const char* const EXPORT_NTV2_ASCII_FILE = "export-ntv2-asc-file";
 const char* const EXPORT_NTV2_BINARY_FILE = "export-ntv2-gsb-file";
 const char* const EXPORT_SNX_FILE = "export-sinex-file";
+const char* const OUTPUT_JSON = "output-json";
 const char* const IMPORT_GEO_FILE = "geo-file";
 const char* const IMPORT_GEO_FILE_G = "geo-file,g";
 const char* const EXPORT_ASL_FILE = "export-asl-file";

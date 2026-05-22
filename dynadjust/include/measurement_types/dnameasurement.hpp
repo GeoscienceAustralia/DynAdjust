@@ -522,21 +522,21 @@ public:
 	UINT32 TotalCount();
 	void coutSummary(std::ostream &os, const std::string& title);
 	UINT32 MeasurementCount(const char& msrType);
-	
+
 	void CreateTally(const vdnaMsrPtr& vMeasurements);
 	void CreateTally(const vmsr_t& vMeasurements, const vUINT32& CML);
 	UINT32 CreateTally(const vmsr_t& vMeasurements, bool countValidOnly=false);
-	
+
 	void IncrementMsrType(const char& msrType, const UINT32& count=1);
-	
+
 	void coutSummaryMsrToStn(std::ostream &os, const std::string& station);
 	void coutSummaryMsrToStn_Compressed(std::ostream &os, const std::string& station);
 
-	//bool GPSOnly();	
+	//bool GPSOnly();
 	inline bool ContainsNonGPS() { return containsNonGPS; }
 
 	static _MEASUREMENT_STATIONS_ Stations(const char& measType);
-	
+
 	bool containsNonGPS;
 
 	UINT32 A, B, C, D, E, G, H, I, J, K, L, M, P, Q, R, S, V, X, Y, Z;

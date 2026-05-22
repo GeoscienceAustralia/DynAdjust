@@ -207,10 +207,15 @@ private:
 	void ParseSNX(const std::string& fileName, vdnaStnPtr* vStations, PUINT32 stnCount, 
 							   vdnaMsrPtr* vMeasurements, PUINT32 msrCount, PUINT32 clusterID);
 	
+	// JSONL files
+	void ParseJSONL(const std::string& fileName, vdnaStnPtr* vStations, PUINT32 stnCount,
+							   vdnaMsrPtr* vMeasurements, PUINT32 msrCount, PUINT32 clusterID,
+							   std::string& fileEpsg, std::string& fileEpoch, bool firstFile, std::string* success_msg);
+
 	// DNA Ascii files
 	//void ParseDNAVersion(const INPUT_DATA_TYPE& idt);
-	void ParseDNA(const std::string& fileName, vdnaStnPtr* vStations, PUINT32 stnCount, 
-							   vdnaMsrPtr* vMeasurements, PUINT32 msrCount, PUINT32 clusterID, 
+	void ParseDNA(const std::string& fileName, vdnaStnPtr* vStations, PUINT32 stnCount,
+							   vdnaMsrPtr* vMeasurements, PUINT32 msrCount, PUINT32 clusterID,
 							   std::string& fileEpsg, std::string& fileEpoch, bool firstFile);
 	void ParseDNASTN(vdnaStnPtr* vStations, PUINT32 stnCount,
 								const std::string& fileEpsg, const std::string& fileEpoch);

@@ -498,13 +498,15 @@ public:
 	output_settings()
 		: _m2s_file(""), _adj_file(""), _xyz_file("")
 		, _snx_file(""), _xml_file(""), _cor_file(""), _apu_file("")
+		, _adj_json_file(""), _xyz_json_file(""), _apu_json_file("")
+		, _cor_json_file(""), _m2s_json_file("")
 		, _adj_stn_iteration(0), _adj_msr_iteration(0), _cmp_msr_iteration(0), _adj_stat_iteration(0)
 		, _adj_msr_final(0), _adj_msr_tstat(0), _database_ids(0), _print_ignored_msrs(0), _adj_gnss_units(0)
 		, _output_stn_blocks(0), _output_msr_blocks(0), _sort_stn_file_order(0), _sort_adj_msr(0), _sort_msr_to_stn(0)
 		, _init_stn_corrections(0), _msr_to_stn(0), _stn_corr(0), _positional_uncertainty(0)
 		, _apu_vcv_units(0), _output_pu_covariances(0)
 		, _export_xml_stn_file(0), _export_xml_msr_file(0), _export_dna_stn_file(0), _export_dna_msr_file(0)
-		, _export_snx_file(0)
+		, _export_snx_file(0), _output_json(0)
 		, _hz_corr_threshold(0.0), _vt_corr_threshold(0.0)
 		, _stn_coord_types("PLHhXYZ"), _angular_type_stn(DMS)
 		, _precision_seconds_stn(5), _precision_metres_stn(4), _precision_seconds_msr(4), _precision_metres_msr(4)
@@ -554,6 +556,11 @@ public:
 	std::string			_xml_file;				// Estimated station coordinates and full variance matrix in DynaML (DynAdjust XML) format. Uses Y cluster.
 	std::string			_cor_file;				// Corrections to intial stations output
 	std::string			_apu_file;				// Adjusted positional uncertainty output
+	std::string			_adj_json_file;			// Optional JSONL sibling of _adj_file
+	std::string			_xyz_json_file;			// Optional JSONL sibling of _xyz_file
+	std::string			_apu_json_file;			// Optional JSONL sibling of _apu_file
+	std::string			_cor_json_file;			// Optional JSONL sibling of _cor_file
+	std::string			_m2s_json_file;			// Optional JSONL sibling of _m2s_file
 	UINT16			_adj_stn_iteration;		// Outputs adjusted stations for each block within each iteration
 	UINT16			_adj_msr_iteration;		// Outputs adjusted measurements for each block within each iteration
 	UINT16			_cmp_msr_iteration;		// Outputs computed measurements for each block within each iteration
@@ -579,6 +586,7 @@ public:
 	UINT16			_export_dna_stn_file;	// Create a DNA stn file
 	UINT16			_export_dna_msr_file;	// Create a DNA msr file
 	UINT16			_export_snx_file;		// Create a sinex file from the adjustment
+	UINT16			_output_json;			// Also emit adjustment reports as JSONL alongside text reports
 	double			_hz_corr_threshold;		// Minimum horizontal threshold for station corrections
 	double			_vt_corr_threshold;		// Minimum vertical threshold for station corrections
 	std::string			_stn_coord_types;		// String defining the cooridnate types to be printed for each station

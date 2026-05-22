@@ -33,7 +33,16 @@ add_library (${PROJECT_NAME} SHARED
              dnaadjust-stage.cpp
              dnaadjust.cpp
              dnaadjust_printer.cpp
+             dnaadjust_json_printer.cpp
              ${CMAKE_SOURCE_DIR}/dynadjust.rc)
+
+# The JSON printer pulls in the nlohmann/json single header which is
+# expensive to compile; exclude it from the unity/jumbo build so it is
+# compiled in isolation.
+set_source_files_properties(
+    dnaadjust_json_printer.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
+)
 
 target_precompile_headers (${PROJECT_NAME} PUBLIC precompile.h)
 

@@ -87,6 +87,16 @@ enum class UncertaintyMode {
     Both
 };
 
+// Identifies which top-level report a station record is being written to.
+// Threaded through PrintAdjStation / PrintAdjStations / PrintAdjStationsUniqueList
+// so the JSONL side-channel can route records to the correct sibling file
+// without comparing ostream addresses (which breaks under staged-mode, where
+// the target is a stringstream flushed to the real file later).
+enum class ReportKind {
+    kAdj,  // adjustment report (.adj)
+    kXyz   // coordinate-only report (.xyz)
+};
+
 // Type traits for measurement classification
 template <typename T> struct IsAngularMeasurement : std::false_type {};
 
@@ -99,6 +109,7 @@ class DNAADJUST_API DynAdjustPrinter {
   public:
     // Constructor taking dna_adjust reference for direct access to members
     explicit DynAdjustPrinter(dna_adjust& adjust_instance);
+    virtual ~DynAdjustPrinter() = default;
 
     // Template-based measurement printing
     template <typename MeasurementType>
@@ -214,7 +225,7 @@ class DNAADJUST_API DynAdjustPrinter {
                                 const std::string& stn_coord_types, const UINT16& printStationCorrections);
                                 
     // Enhanced unique stations list processing
-    void PrintAdjStationsUniqueList(std::ostream& os,
+    void PrintAdjStationsUniqueList(ReportKind kind, std::ostream& os,
                                               const v_mat_2d* stationEstimates, v_mat_2d* stationVariances,
                                               bool recomputeGeographicCoords, bool updateGeographicCoords,
                                               bool reapplyTypeBUncertainties);
@@ -232,7 +243,7 @@ class DNAADJUST_API DynAdjustPrinter {
     bool IgnoredMeasurementContainsInvalidStation(pit_vmsr_t _it_msr);
     
     // Enhanced station formatting
-    void PrintAdjStation(std::ostream& os, const UINT32& block, const UINT32& stn, const UINT32& mat_idx,
+    void PrintAdjStation(ReportKind kind, std::ostream& os, const UINT32& block, const UINT32& stn, const UINT32& mat_idx,
                         const matrix_2d* stationEstimates, matrix_2d* stationVariances,
                         bool recomputeGeographicCoords, bool updateGeographicCoords, bool reapplyTypeBUncertainties);
     
@@ -244,7 +255,7 @@ class DNAADJUST_API DynAdjustPrinter {
                         const matrix_2d* stationEstimates);
     void PrintCorStations(std::ostream& cor_file, const UINT32& block);
     void PrintCorStationsUniqueList(std::ostream& cor_file);
-    void PrintAdjStations(std::ostream& os, const UINT32& block,
+    void PrintAdjStations(ReportKind kind, std::ostream& os, const UINT32& block,
                           const matrix_2d* stationEstimates,
                           matrix_2d* stationVariances, bool printBlockID,
                           bool recomputeGeographicCoords,
@@ -272,8 +283,76 @@ class DNAADJUST_API DynAdjustPrinter {
     void ProcessBlockStaging(_it_u32u32_uint32_pair _it_bsmu, UINT32& block);
     void FinalizeBlockStaging(UINT32 block, v_uint32_string_pair& stationsOutput, std::ostream& os);
 
-  private:
+    // Precomputed values threaded to OnAdjustedStation. Populated by
+    // PrintAdjStation after its own computations so subclass overrides do
+    // not repeat CartToGeo / var_local rotation / geoid application. The
+    // matrix references are to locals in PrintAdjStation and are valid
+    // for the synchronous duration of the hook call.
+    struct AdjustedStationContext {
+      double lat;                  // radians
+      double lon;                  // radians
+      double height;               // metres (ellipsoidal)
+      const matrix_2d& var_cart;   // 3x3
+      const matrix_2d& var_local;  // 3x3, geoid variance already in (2,2)
+    };
+
+    // Precomputed values threaded to OnPositionalUncertainty. These
+    // match the text .apu output exactly: var_local has NOT had the
+    // geoid variance added, and ellipse/PU are computed from that
+    // var_local. Subclasses that want geoid-included values add it
+    // themselves (the JSON override does this to preserve .apu.jsonl
+    // numeric output).
+    struct PositionalUncertaintyContext {
+      double lat;
+      double lon;
+      double height;
+      const matrix_2d& var_cart;
+      const matrix_2d& var_local;  // NO geoid added
+      double semimajor;
+      double semiminor;
+      double azimuth;
+      double hz_pos_u;
+      double vt_pos_u;
+    };
+
+    // Precomputed station-correction values threaded to OnStationCorrection.
+    // Populated only after PrintCorStation's vt/hz threshold gates pass, so
+    // overrides do not need to re-check thresholds.
+    struct StationCorrectionContext {
+      double cor_e;
+      double cor_n;
+      double cor_up;
+    };
+
+  protected:
+    // Virtual hooks for alternate output representations (e.g. JSONL).
+    // Default implementations are no-ops. ReportKind + block are passed
+    // explicitly because the target ostream may be a staging stringstream
+    // rather than the real sibling file.
+
+    virtual void OnAdjustedStation(ReportKind kind,
+                                   const it_vstn_t& stn_it,
+                                   const matrix_2d* estimates,
+                                   const matrix_2d* variances,
+                                   const UINT32& mat_idx,
+                                   const AdjustedStationContext& ctx) {}
+    virtual void OnAdjustedMeasurement(const it_vmsr_t& it_msr) {}
+    virtual void OnPositionalUncertainty(const it_vstn_t& stn_it,
+                                         const matrix_2d* variances,
+                                         const UINT32& mat_idx,
+                                         const PositionalUncertaintyContext& ctx) {}
+    virtual void OnStationCorrection(const UINT32& block,
+                                     const it_vstn_t& stn_it,
+                                     const matrix_2d* estimates,
+                                     const UINT32& mat_idx,
+                                     const StationCorrectionContext& ctx) {}
+    virtual void OnM2SRecord(const it_vstn_t& stn_it,
+                             MsrTally& stn_msr_tally) {}
+    virtual void OnStatistics() {}
+
     dna_adjust& adjust_;
+
+  private:
 
     // Helper functions
     constexpr int GetStationCount(char measurement_type) const;
