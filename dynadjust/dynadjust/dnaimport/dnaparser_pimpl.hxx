@@ -91,6 +91,7 @@ public:
 	virtual void Directions ();
 	virtual void Vscale (const ::std::string&);
 	virtual void Epoch (const ::std::string&);
+	virtual void EpochOfObservation (const ::std::string&);
 	virtual void ReferenceFrame (const ::std::string&);
 	virtual void GPSBaseline ();
 	virtual void Hscale (const ::std::string&);

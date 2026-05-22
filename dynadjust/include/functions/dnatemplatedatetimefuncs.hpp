@@ -37,6 +37,7 @@
 
 #include <include/functions/dnastrmanipfuncs.hpp>
 #include <include/functions/dnastrutils.hpp>
+#include <include/functions/dnatimer.hpp>
 
 const UINT32 TIME_IMMEMORIAL = 1900;
 
@@ -548,7 +549,7 @@ T formattedDateTimeString()
 {
 	std::stringstream datetime_ss, stream;
 	boost::posix_time::time_facet* p_time_output = new boost::posix_time::time_facet;
-	std::locale special_locale (std::locale(""), p_time_output);
+	std::locale special_locale (std::locale::classic(), p_time_output);
 	
 	// special_locale takes ownership of the p_time_output facet
 	datetime_ss.imbue (special_locale);
@@ -562,39 +563,8 @@ T formattedDateTimeString()
 template <typename S>
 S formatedElapsedTime(boost::posix_time::milliseconds* elapsed_time, S app_message)
 {
-	std::ostringstream ss_time;
-	boost::posix_time::ptime pt(boost::posix_time::ptime(boost::gregorian::day_clock::local_day(), *elapsed_time));
-
-	if (*elapsed_time < boost::posix_time::seconds(3))
-	{
-		boost::posix_time::time_facet* facet(new boost::posix_time::time_facet("%s"));
-		ss_time.imbue(std::locale(ss_time.getloc(), facet));
-		ss_time.str("");
-		ss_time << pt << "s";			
-	}
-	else if (*elapsed_time < boost::posix_time::seconds(61))
-	{		
-		boost::posix_time::time_facet* facet(new boost::posix_time::time_facet("%S"));
-		ss_time.imbue(std::locale(ss_time.getloc(), facet));
-		ss_time.str("");
-		ss_time << pt << "s";
-	}
-	else
-		ss_time << boost::posix_time::seconds(static_cast<long>(elapsed_time->total_seconds()));
-
-	size_t pos = std::string::npos;
-	std::string time_message = ss_time.str();
-	while ((pos = time_message.find("0s")) != std::string::npos)
-		time_message = time_message.substr(0, pos) + "s";
-
-	time_message = app_message + time_message + "."; 
-
-	if ((pos = time_message.find(" 00.")) != std::string::npos)
-		time_message = time_message.replace(pos, 4, " 0.");
-	if ((pos = time_message.find(" 0.s")) != std::string::npos)
-		time_message = time_message.replace(pos, 4, " 0s");
-
-	return time_message;
+	double seconds = static_cast<double>(elapsed_time->total_milliseconds()) / 1000.0;
+	return app_message + dynadjust::FormatElapsedTime(seconds) + ".";
 }
 
 

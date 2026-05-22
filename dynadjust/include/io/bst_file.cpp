@@ -128,6 +128,14 @@ std::uint64_t BstFile::LoadFile(const std::string& bst_filename,
     ReadFileInfo(bst_file);
     ReadFileMetadata(bst_file, bst_meta);
 
+    // station_t grew by observation_epoch in v1.2; bulk I/O requires a v1.2 layout.
+    if (!versionAtLeast(1, 2)) {
+      std::ostringstream os;
+      os << "BST file version " << GetVersion()
+         << " predates observation_epoch support (v1.2); please re-run dnaimport.";
+      throw std::runtime_error(os.str());
+    }
+
     vbinary_stn->resize(bst_meta.binCount);
     static_assert(std::is_trivially_copyable_v<station_t>,
                   "station_t must be trivially copyable for bulk I/O");

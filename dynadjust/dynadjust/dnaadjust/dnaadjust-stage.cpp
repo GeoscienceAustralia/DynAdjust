@@ -159,6 +159,8 @@ void dna_adjust::DeserialiseBlockFromMappedFile(const UINT32& block, const int f
 		return;
 	}
 
+	const auto profile_start = profileTimings_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+
 	va_list vlist;
 	va_start(vlist, file_count);
 	
@@ -173,7 +175,7 @@ void dna_adjust::DeserialiseBlockFromMappedFile(const UINT32& block, const int f
 			break;
 		case sf_normals_r:
 			addr = normalsR_map_.GetBlockRegionAddr(block);
-			v_normalsR_.at(block).ReadMappedFileRegion(addr);
+			v_normalsR_.at(block).AttachMappedFileRegion(addr);
 			break;
 		case sf_atvinv:
 			v_AtVinv_.at(block).allocate();
@@ -183,47 +185,47 @@ void dna_adjust::DeserialiseBlockFromMappedFile(const UINT32& block, const int f
 			break;
 		case sf_meas_minus_comp:
 			addr = measMinusComp_map_.GetBlockRegionAddr(block);
-			v_measMinusComp_.at(block).ReadMappedFileRegion(addr);
+			v_measMinusComp_.at(block).AttachMappedFileRegion(addr);
 			break;
 		case sf_estimated_stns:
 			addr = estimatedStations_map_.GetBlockRegionAddr(block);
-			v_estimatedStations_.at(block).ReadMappedFileRegion(addr);
+			v_estimatedStations_.at(block).AttachMappedFileRegion(addr);
 			break;
 		case sf_original_stns:
 			addr = originalStations_map_.GetBlockRegionAddr(block);
-			v_originalStations_.at(block).ReadMappedFileRegion(addr);
+			v_originalStations_.at(block).AttachMappedFileRegion(addr);
 			break;
 		case sf_rigorous_stns:
 			addr = rigorousStations_map_.GetBlockRegionAddr(block);
-			v_rigorousStations_.at(block).ReadMappedFileRegion(addr);
+			v_rigorousStations_.at(block).AttachMappedFileRegion(addr);
 			break;
 		case sf_junction_vars:
 			addr = junctionVariances_map_.GetBlockRegionAddr(block);
-			v_junctionVariances_.at(block).ReadMappedFileRegion(addr);
+			v_junctionVariances_.at(block).AttachMappedFileRegion(addr);
 			break;
 		case sf_junction_vars_f:
 			addr = junctionVariancesFwd_map_.GetBlockRegionAddr(block);
-			v_junctionVariancesFwd_.at(block).ReadMappedFileRegion(addr);
+			v_junctionVariancesFwd_.at(block).AttachMappedFileRegion(addr);
 			break;
 		case sf_junction_ests_f:
 			addr = junctionEstimatesFwd_map_.GetBlockRegionAddr(block);
-			v_junctionEstimatesFwd_.at(block).ReadMappedFileRegion(addr);
+			v_junctionEstimatesFwd_.at(block).AttachMappedFileRegion(addr);
 			break;
 		case sf_junction_ests_r:
 			addr = junctionEstimatesRev_map_.GetBlockRegionAddr(block);
-			v_junctionEstimatesRev_.at(block).ReadMappedFileRegion(addr);
+			v_junctionEstimatesRev_.at(block).AttachMappedFileRegion(addr);
 			break;
 		case sf_rigorous_vars:
 			addr = rigorousVariances_map_.GetBlockRegionAddr(block);
-			v_rigorousVariances_.at(block).ReadMappedFileRegion(addr);
+			v_rigorousVariances_.at(block).AttachMappedFileRegion(addr);
 			break;
 		case sf_prec_adj_msrs:
 			addr = precAdjMsrs_map_.GetBlockRegionAddr(block);
-			v_precAdjMsrsFull_.at(block).ReadMappedFileRegion(addr);
+			v_precAdjMsrsFull_.at(block).AttachMappedFileRegion(addr);
 			break;
 		case sf_corrections:
 			addr = corrections_map_.GetBlockRegionAddr(block);
-			v_corrections_.at(block).ReadMappedFileRegion(addr);
+			v_corrections_.at(block).AttachMappedFileRegion(addr);
 
 			if (v_blockMeta_.at(block)._blockLast)
 				v_correctionsR_.at(block).allocate();
@@ -232,6 +234,14 @@ void dna_adjust::DeserialiseBlockFromMappedFile(const UINT32& block, const int f
 		}
 	}
 	va_end(vlist);
+
+	if (profileTimings_)
+	{
+		const auto elapsed = std::chrono::steady_clock::now() - profile_start;
+		profileStageLoadNs_.fetch_add(
+			static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count()),
+			std::memory_order_relaxed);
+	}
 }
 
 void dna_adjust::SerialiseBlockToMappedFile(const UINT32& block, const int file_count, ...)
@@ -240,13 +250,15 @@ void dna_adjust::SerialiseBlockToMappedFile(const UINT32& block, const int file_
 	{
 		// serialise all.  That is, call this function again, but with 
 		// arguments for all files
-		SerialiseBlockToMappedFile(block, 16, 
-			sf_normals, sf_normals_r, sf_atvinv, sf_design, sf_meas_minus_comp,
+		SerialiseBlockToMappedFile(block, 12,
+			sf_normals_r, sf_meas_minus_comp,
 			sf_estimated_stns, sf_original_stns, sf_rigorous_stns,
 			sf_junction_vars, sf_junction_vars_f, sf_junction_ests_f, sf_junction_ests_r,
 			sf_rigorous_vars, sf_prec_adj_msrs, sf_corrections);
 		return;
 	}
+
+	const auto profile_start = profileTimings_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 
 	va_list vlist;
 	va_start(vlist, file_count);
@@ -257,15 +269,9 @@ void dna_adjust::SerialiseBlockToMappedFile(const UINT32& block, const int file_
 	{
 		switch (va_arg(vlist, int))
 		{
-		case sf_normals:
-			break;
 		case sf_normals_r:
 			addr = normalsR_map_.GetBlockRegionAddr(block);
 			v_normalsR_.at(block).WriteMappedFileRegion(addr);
-			break;
-		case sf_atvinv:
-			break;
-		case sf_design:
 			break;
 		case sf_meas_minus_comp:
 			addr = measMinusComp_map_.GetBlockRegionAddr(block);
@@ -314,6 +320,14 @@ void dna_adjust::SerialiseBlockToMappedFile(const UINT32& block, const int file_
 		}
 	}
 	va_end(vlist);
+
+	if (profileTimings_)
+	{
+		const auto elapsed = std::chrono::steady_clock::now() - profile_start;
+		profileStageStoreNs_.fetch_add(
+			static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count()),
+			std::memory_order_relaxed);
+	}
 }
 	
 
@@ -395,7 +409,11 @@ void dna_adjust::OpenStageFileStreams(const int file_count, ...)
 	}
 
 	std::stringstream ss;
-	ss << projectSettings_.g.output_folder << FOLDER_SLASH << projectSettings_.g.network_name << "-";
+	if (projectSettings_.a.stage_path.empty())
+		ss << projectSettings_.g.output_folder;
+	else
+		ss << projectSettings_.a.stage_path;
+	ss << FOLDER_SLASH << projectSettings_.g.network_name << "-";
 	std::string filePath(ss.str());
 
 	v_stageFileStreams_.clear();
@@ -851,6 +869,46 @@ void dna_adjust::OffloadBlockToMappedFile(const UINT32& block)
 
 	// Unload block matrix data from memory
 	UnloadBlock(block);
+
+	// Advise kernel that mapped pages for this block are no longer needed,
+	// freeing page cache for upcoming blocks
+	AdviseBlockDontNeed(block);
+}
+
+
+void dna_adjust::AdviseBlockDontNeed(const UINT32& block)
+{
+	using advice = boost::interprocess::mapped_region::advice_types;
+	normalsR_map_.AdviseRegion(block, advice::advice_dontneed);
+	measMinusComp_map_.AdviseRegion(block, advice::advice_dontneed);
+	estimatedStations_map_.AdviseRegion(block, advice::advice_dontneed);
+	originalStations_map_.AdviseRegion(block, advice::advice_dontneed);
+	rigorousStations_map_.AdviseRegion(block, advice::advice_dontneed);
+	junctionVariances_map_.AdviseRegion(block, advice::advice_dontneed);
+	junctionVariancesFwd_map_.AdviseRegion(block, advice::advice_dontneed);
+	junctionEstimatesFwd_map_.AdviseRegion(block, advice::advice_dontneed);
+	junctionEstimatesRev_map_.AdviseRegion(block, advice::advice_dontneed);
+	rigorousVariances_map_.AdviseRegion(block, advice::advice_dontneed);
+	precAdjMsrs_map_.AdviseRegion(block, advice::advice_dontneed);
+	corrections_map_.AdviseRegion(block, advice::advice_dontneed);
+}
+
+
+void dna_adjust::AdviseBlockWillNeed(const UINT32& block)
+{
+	using advice = boost::interprocess::mapped_region::advice_types;
+	normalsR_map_.AdviseRegion(block, advice::advice_willneed);
+	measMinusComp_map_.AdviseRegion(block, advice::advice_willneed);
+	estimatedStations_map_.AdviseRegion(block, advice::advice_willneed);
+	originalStations_map_.AdviseRegion(block, advice::advice_willneed);
+	rigorousStations_map_.AdviseRegion(block, advice::advice_willneed);
+	junctionVariances_map_.AdviseRegion(block, advice::advice_willneed);
+	junctionVariancesFwd_map_.AdviseRegion(block, advice::advice_willneed);
+	junctionEstimatesFwd_map_.AdviseRegion(block, advice::advice_willneed);
+	junctionEstimatesRev_map_.AdviseRegion(block, advice::advice_willneed);
+	rigorousVariances_map_.AdviseRegion(block, advice::advice_willneed);
+	precAdjMsrs_map_.AdviseRegion(block, advice::advice_willneed);
+	corrections_map_.AdviseRegion(block, advice::advice_willneed);
 }
 	
 
@@ -896,7 +954,7 @@ void dna_adjust::UnloadBlock(const UINT32& block, const int file_count, ...)
 	if (file_count == 0)
 	{
 		// deserialise all
-		UnloadBlock(block, 16, 
+		UnloadBlock(block, 15,
 			sf_normals, sf_normals_r, sf_atvinv, sf_design, sf_meas_minus_comp,
 			sf_estimated_stns, sf_original_stns, sf_rigorous_stns,
 			sf_junction_vars, sf_junction_vars_f, sf_junction_ests_f, sf_junction_ests_r,
@@ -907,58 +965,60 @@ void dna_adjust::UnloadBlock(const UINT32& block, const int file_count, ...)
 	va_list vlist;
 	va_start(vlist, file_count);
 
-	// Unload block matrix data from memory
+	// Unload block matrix data from memory by freeing buffers.
+	// Use deallocate() instead of explicit destructor calls to keep
+	// the matrix objects in a valid state for later reuse.
 	for (UINT16 file(0); file<file_count; ++file)
 	{
 		switch (va_arg(vlist, int))
 		{
 		case sf_normals:
-			v_normals_.at(block).~matrix_2d();
+			v_normals_.at(block).deallocate();
 			break;
 		case sf_normals_r:
-			v_normalsR_.at(block).~matrix_2d();
+			v_normalsR_.at(block).deallocate();
 			break;
 		case sf_atvinv:
-			v_AtVinv_.at(block).~matrix_2d();
+			v_AtVinv_.at(block).deallocate();
 			break;
 		case sf_design:
-			v_design_.at(block).~matrix_2d();
+			v_design_.at(block).deallocate();
 			break;
 		case sf_meas_minus_comp:
-			v_measMinusComp_.at(block).~matrix_2d();
+			v_measMinusComp_.at(block).deallocate();
 			break;
 		case sf_estimated_stns:
-			v_estimatedStations_.at(block).~matrix_2d();
+			v_estimatedStations_.at(block).deallocate();
 			break;
 		case sf_original_stns:
-			v_originalStations_.at(block).~matrix_2d();
+			v_originalStations_.at(block).deallocate();
 			break;
 		case sf_rigorous_stns:
-			v_rigorousStations_.at(block).~matrix_2d();
+			v_rigorousStations_.at(block).deallocate();
 			break;
 		case sf_junction_vars:
-			v_junctionVariances_.at(block).~matrix_2d();
+			v_junctionVariances_.at(block).deallocate();
 			break;
 		case sf_junction_vars_f:
-			v_junctionVariancesFwd_.at(block).~matrix_2d();
+			v_junctionVariancesFwd_.at(block).deallocate();
 			break;
 		case sf_junction_ests_f:
-			v_junctionEstimatesFwd_.at(block).~matrix_2d();
+			v_junctionEstimatesFwd_.at(block).deallocate();
 			break;
 		case sf_junction_ests_r:
-			v_junctionEstimatesRev_.at(block).~matrix_2d();
+			v_junctionEstimatesRev_.at(block).deallocate();
 			break;
 		case sf_rigorous_vars:
-			v_rigorousVariances_.at(block).~matrix_2d();
+			v_rigorousVariances_.at(block).deallocate();
 			break;
 		case sf_prec_adj_msrs:
-			v_precAdjMsrsFull_.at(block).~matrix_2d();
+			v_precAdjMsrsFull_.at(block).deallocate();
 			break;
 		case sf_corrections:
-			v_corrections_.at(block).~matrix_2d();
+			v_corrections_.at(block).deallocate();
 
 			if (v_blockMeta_.at(block)._blockLast)
-				v_correctionsR_.at(block).~matrix_2d();
+				v_correctionsR_.at(block).deallocate();
 			break;
 		}
 	}
@@ -1009,4 +1069,3 @@ void dna_adjust::CloseStageFileStreams()
 
 }	// namespace networkadjust
 }	// namespace dynadjust
-

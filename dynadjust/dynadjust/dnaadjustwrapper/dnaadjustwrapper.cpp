@@ -30,6 +30,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <csignal>
 #include <thread>
 #include <vector>
 #include <boost/program_options/options_description.hpp>
@@ -38,6 +39,7 @@
 /// \endcond
 
 #include <include/config/dnaoptions-interface.hpp>
+#include <include/math/dnamatrix_contiguous.hpp>
 #include <include/config/dnaprojectfile.hpp>
 #include <include/config/dnatypes-gui.hpp>
 #include <include/functions/dnafilepathfuncs.hpp>
@@ -59,6 +61,14 @@ using namespace dynadjust::iostreams;
 
 extern bool running;
 extern std::mutex cout_mutex;
+
+static dna_adjust* g_netAdjust = nullptr;
+
+void sigint_handler(int)
+{
+	if (g_netAdjust)
+		g_netAdjust->CancelAdjustment();
+}
 
 using namespace dynadjust;
 using namespace dynadjust::epsg;
@@ -86,8 +96,9 @@ void PrintSummaryMessage(dna_adjust* netAdjust, const project_settings* p, boost
 			break;
 		std::stringstream ss("");
 		ss << "  Iteration " << std::right << std::setw(2) << std::fixed << std::setprecision(0) << currentIteration;
-		ss << ", max station corr: " << std::right << std::setw(12) << netAdjust->GetMaxCorrection(currentIteration) << std::endl;
-		std::cout << PROGRESS_BACKSPACE_28 << std::setw(28) << std::left << ss.str();
+		ss << ", max station corr: " << std::right << std::setw(12) << netAdjust->GetMaxCorrection(currentIteration);
+		ss << ", time: " << netAdjust->GetIterationTime(currentIteration) << std::endl;
+		std::cout << PROGRESS_BACKSPACE_28 << std::left << ss.str();
 	}
 
 	if (p->a.report_mode)
@@ -198,75 +209,75 @@ void DeserialiseVarianceMatrices(dna_adjust* netAdjust, const project_settings* 
 void GenerateStatistics(dna_adjust* netAdjust, const project_settings* p)
 {
 	// Generate statistics
-	// Don't produce statistics only for block 1 only adjustments
-	if (p->a.adjust_mode != Phased_Block_1Mode)
+	if (!p->g.quiet)
 	{
-		if (!p->g.quiet)
+		std::cout << "+ Generating statistics...";
+		std::cout.flush();
+	}
+	netAdjust->GenerateStatistics();
+	if (!p->g.quiet)
+	{
+		std::cout << " done." << std::endl;
+
+		// Don't print detailed statistics for block 1 only adjustments
+		if (p->a.adjust_mode == Phased_Block_1Mode)
+			return;
+
+		std::cout << "+ Adjustment results:" << std::endl << std::endl;
+		std::cout << "+" << OUTPUTLINE << std::endl;
+		std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Number of unknown parameters" << std::fixed << std::setprecision(0) << netAdjust->GetUnknownsCount();
+		if (netAdjust->GetAllFixed())
+			std::cout << "  (All stations held constrained)";
+		std::cout << std::endl;
+
+		std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Number of measurements" << std::fixed << std::setprecision(0) << netAdjust->GetMeasurementCount();
+
+		if (netAdjust->GetPotentialOutlierCount() > 0)
 		{
-			std::cout << "+ Generating statistics...";
-			std::cout.flush();
+			std::cout << "  (" << netAdjust->GetPotentialOutlierCount() << " potential outlier";
+			if (netAdjust->GetPotentialOutlierCount() > 1)
+				std::cout << "s";
+			std::cout << ")";
 		}
-		netAdjust->GenerateStatistics();
-		if (!p->g.quiet)
+		std::cout << std::endl;
+		std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Degrees of freedom" << std::fixed << std::setprecision(0) << netAdjust->GetDegreesOfFreedom() << std::endl;
+		std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Chi squared" << std::fixed << std::setprecision(2) << netAdjust->GetChiSquared() << std::endl;
+		std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Rigorous sigma zero" << std::fixed << std::setprecision(3) << netAdjust->GetSigmaZero() << std::endl;
+		std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Global (Pelzer) Reliability" << std::fixed << std::setw(8) << std::setprecision(3) << netAdjust->GetGlobalPelzerRel() << "(excludes non redundant measurements)" << std::endl << std::endl;
+
+		std::stringstream ss("");
+		ss << std::left << "  Chi-Square test (" << std::setprecision(1) << std::fixed << p->a.confidence_interval << "%)";
+		std::cout << std::setw(PRINT_VAR_PAD) << std::left << ss.str();
+		ss.str("");
+		ss << std::fixed << std::setprecision(3) <<
+			netAdjust->GetChiSquaredLowerLimit() << " < " <<
+			netAdjust->GetSigmaZero() << " < " <<
+			netAdjust->GetChiSquaredUpperLimit();
+		std::cout << std::setw(CHISQRLIMITS) << std::left << ss.str();
+		ss.str("");
+
+		if (netAdjust->GetDegreesOfFreedom() < 1)
+			ss << "NO REDUNDANCY";
+		else
 		{
-			std::cout << " done." << std::endl;
-
-			std::cout << "+ Adjustment results:" << std::endl << std::endl;
-			std::cout << "+" << OUTPUTLINE << std::endl;
-			std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Number of unknown parameters" << std::fixed << std::setprecision(0) << netAdjust->GetUnknownsCount();
-			if (netAdjust->GetAllFixed())
-				std::cout << "  (All stations held constrained)";
-			std::cout << std::endl;
-
-			std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Number of measurements" << std::fixed << std::setprecision(0) << netAdjust->GetMeasurementCount();
-			
-			if (netAdjust->GetPotentialOutlierCount() > 0)
+			ss << "*** ";
+			switch (netAdjust->GetTestResult())
 			{
-				std::cout << "  (" << netAdjust->GetPotentialOutlierCount() << " potential outlier";
-				if (netAdjust->GetPotentialOutlierCount() > 1)
-					std::cout << "s";
-				std::cout << ")";
+			case test_stat_pass:
+				ss << "PASSED";		// within upper and lower
+				break;
+			case test_stat_warning:
+				ss << "WARNING";	// less than lower limit
+				break;
+			case test_stat_fail:
+				ss << "FAILED";		// greater than upper limit
+				break;
 			}
-			std::cout << std::endl;
-			std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Degrees of freedom" << std::fixed << std::setprecision(0) << netAdjust->GetDegreesOfFreedom() << std::endl;
-			std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Chi squared" << std::fixed << std::setprecision(2) << netAdjust->GetChiSquared() << std::endl;
-			std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Rigorous sigma zero" << std::fixed << std::setprecision(3) << netAdjust->GetSigmaZero() << std::endl;
-			std::cout << std::setw(PRINT_VAR_PAD) << std::left << "  Global (Pelzer) Reliability" << std::fixed << std::setw(8) << std::setprecision(3) << netAdjust->GetGlobalPelzerRel() << "(excludes non redundant measurements)" << std::endl << std::endl;
-		
-			std::stringstream ss("");
-			ss << std::left << "  Chi-Square test (" << std::setprecision(1) << std::fixed << p->a.confidence_interval << "%)";
-			std::cout << std::setw(PRINT_VAR_PAD) << std::left << ss.str();
-			ss.str("");
-			ss << std::fixed << std::setprecision(3) << 
-				netAdjust->GetChiSquaredLowerLimit() << " < " << 
-				netAdjust->GetSigmaZero() << " < " <<
-				netAdjust->GetChiSquaredUpperLimit();
-			std::cout << std::setw(CHISQRLIMITS) << std::left << ss.str();
-			ss.str("");
-
-			if (netAdjust->GetDegreesOfFreedom() < 1)
-				ss << "NO REDUNDANCY";
-			else
-			{
-				ss << "*** ";
-				switch (netAdjust->GetTestResult())
-				{
-				case test_stat_pass: 
-					ss << "PASSED";		// within upper and lower
-					break;
-				case test_stat_warning:
-					ss << "WARNING";	// less than lower limit
-					break;
-				case test_stat_fail:
-					ss << "FAILED";		// greater than upper limit
-					break;
-				}
-				ss << " ***";
-			}
-
-			std::cout << std::setw(PASS_FAIL) << std::right << ss.str() << std::endl;	
-			std::cout << "+" << OUTPUTLINE << std::endl << std::endl;
+			ss << " ***";
 		}
+
+		std::cout << std::setw(PASS_FAIL) << std::right << ss.str() << std::endl;
+		std::cout << "+" << OUTPUTLINE << std::endl << std::endl;
 	}
 	else
 		std::cout << std::endl;
@@ -727,6 +738,19 @@ int ParseCommandLineOptions(const int& argc, char* argv[], const boost::program_
 	if (vm.count(OUTPUT_STN_COR_FILE))
 		p.o._cor_file += ".cor";
 
+	if (vm.count(OUTPUT_JSON))
+	{
+		p.o._output_json = 1;
+		p.o._adj_json_file = p.o._adj_file + ".jsonl";
+		p.o._xyz_json_file = p.o._xyz_file + ".jsonl";
+		if (vm.count(OUTPUT_POS_UNCERTAINTY))
+			p.o._apu_json_file = p.o._apu_file + ".jsonl";
+		if (vm.count(OUTPUT_STN_COR_FILE))
+			p.o._cor_json_file = p.o._cor_file + ".jsonl";
+		if (vm.count(OUTPUT_MSR_TO_STN) && !p.o._m2s_file.empty())
+			p.o._m2s_json_file = p.o._m2s_file + ".jsonl";
+	}
+
 	if (vm.count(OUTPUT_STN_COR_FILE))
 		p.o._init_stn_corrections = 1;
 
@@ -867,6 +891,10 @@ int main(int argc, char* argv[])
 				"Recreate memory mapped files.")
 			(PURGE_STAGE_FILES,
 				"Purge memory mapped files from disk upon adjustment completion.")
+			(STAGE_PATH, boost::program_options::value<std::string>(&p.a.stage_path),
+				"Directory for memory mapped stage files. Default is the output folder.")
+			(MAX_THREADS, boost::program_options::value<int>(&p.a.max_threads),
+				"Maximum number of BLAS threads for linear algebra operations. Default is 0 (auto).")
 			;
 
 		output_options.add_options()
@@ -979,6 +1007,8 @@ int main(int argc, char* argv[])
 				"Export estimated station coordinates and uncertainties to DNA measurement file as a GNSS Y cluster.")
 			(EXPORT_SNX_FILE,
 				"Export estimated station coordinates and full variance matrix to SINEX file. Note: station names will be truncated to four characters as per the SINEX standard.")
+			(OUTPUT_JSON,
+				"Also emit adjustment reports as JSONL files alongside the text reports (one JSON object per line, same schema as JSONL import).")
 			;
 
 		// Declare a group of options that will be 
@@ -1327,7 +1357,12 @@ int main(int argc, char* argv[])
 	try {
 		running = true;
 
-        int nthreads_la = init_linear_algebra_threads();
+		// Install SIGINT handler for graceful cancellation
+		g_netAdjust = &netAdjust;
+		std::signal(SIGINT, sigint_handler);
+
+        int nthreads_la = init_linear_algebra_threads(p.a.max_threads);
+        dna_adjust::SetMaxBlasThreads(nthreads_la);
         std::thread progress(dna_adjust_progress_thread(&netAdjust, &p));
 
         // Do adjustment using linear algebra threads
@@ -1354,7 +1389,10 @@ int main(int argc, char* argv[])
 		PrintSummaryMessage(&netAdjust, &p, &elapsed_time);
 
 		if (netAdjust.GetStatus() > ADJUST_THRESHOLD_EXCEEDED)
+		{
+			netAdjust.PrintOscillationSummary();
 			return ADJUST_SUCCESS;
+		}
 
 		// Generate statistics
 		GenerateStatistics(&netAdjust, &p);
@@ -1401,6 +1439,9 @@ int main(int argc, char* argv[])
 		return EXIT_FAILURE;
 	}
 
+	netAdjust.PrintOscillationSummary();
+	netAdjust.PrintSuspectMeasurementSummary(std::cout);
+
 	if (!p.g.quiet)
 		std::cout << std::endl << "+ Open " << leafStr<std::string>(p.o._adj_file) << " to view the adjustment details." << std::endl << std::endl;
 	
@@ -1424,4 +1465,3 @@ int main(int argc, char* argv[])
 
 	return ADJUST_SUCCESS;
 }
-

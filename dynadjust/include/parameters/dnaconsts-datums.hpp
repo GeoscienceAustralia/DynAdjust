@@ -104,9 +104,15 @@ const UINT16 NAD83_CSRS_V6_i_xyz =	8250; // XYZ
 const UINT16 NAD83_CSRS_V7_i =		8254; //LatLonEht
 const UINT16 NAD83_CSRS_V7_i_xyz =	8253; // XYZ
 const UINT16 NAD83_CSRS_V8_i =     10413; // LatLonEht
-const UINT16 NAD83_CSRS_V8_i_xyz = 10412;  // XYZ
+const UINT16 NAD83_CSRS_V8_i_xyz = 10412; // XYZ
 
-
+const UINT16 YACARE_ROUUSAMS_i = 4309;	 // LatLon (2D) only
+const UINT16 SIRGAS_ROU98_i_xyz = 5379;  // XYZ
+const UINT16 SIRGAS_ROU98_i = 5380;		 // LatLonEht
+const UINT16 SIRGAS_1995_i_xyz = 4974;   // XYZ
+const UINT16 SIRGAS_1995_i = 4975;       // LatLonEht
+const UINT16 SIRGAS_2000_i_xyz = 4988;   // XYZ
+const UINT16 SIRGAS_2000_i = 4989;       // LatLonEht
 
 const char* const AGD66_c =			"4202";
 const char* const AGD84_c =			"4203";
@@ -154,7 +160,13 @@ const char* const NAD83_CSRS_v6_c =  "8250";
 const char* const NAD83_CSRS_v7_c =  "8253";
 const char* const NAD83_CSRS_v8_c = "10412";
 
-const char* const AGD66_epoch =		"01.01.1966";
+const char* const YACARE_ROUUSAMS_c = "4309";
+// epsg strings for SIRGAS provide XYZ definition only
+const char* const SIRGAS_ROU98_c = "5379";
+const char* const SIRGAS_1995_c = "4974";
+const char* const SIRGAS_2000_c = "4988";
+
+const char* const AGD66_epoch = "01.01.1966";
 const char* const AGD84_epoch =		"01.01.1984";
 const char* const GDA94_epoch =		"01.01.1994";
 const char* const GDA2020_epoch =	"01.01.2020";
@@ -192,6 +204,11 @@ const char* const NAD83_CSRS_V5_epoch = "01.01.2006";
 const char* const NAD83_CSRS_V6_epoch = "01.01.2010";
 const char* const NAD83_CSRS_V7_epoch = "01.01.2010";
 const char* const NAD83_CSRS_V8_epoch = "01.01.2010";
+
+const char* const YACARE_ROUUSAMS_epoch = "01.01.1963";	// Yacare ROU by U.S. Army Map Service was established in 1963.
+const char* const SIRGAS_ROU98_epoch = "03.07.1995";	// 1995.5
+const char* const SIRGAS_1995_epoch = "01.04.1995";		// 1995.4
+const char* const SIRGAS_2000_epoch = "01.04.2000";		// 2000.4
 
 const char* const AGD66_s =			"AGD66";
 const char* const AGD84_s =			"AGD84";
@@ -279,6 +296,16 @@ const char* const NAD83_CSRS_V8_s =        "NAD83(CSRS)v8";
 const char* const NAD83_CSRS_V8_alias1_s = "NAD83 (CSRS) v8";
 const char* const NAD83_CSRS_V8_alias2_s = "NAD83(CSRS)V8";
 const char* const NAD83_CSRS_V8_alias3_s = "NAD83 (CSRS) V8";
+
+const char* const YACARE_ROUUSAMS_s = "YACARE ROUUSAMS";  // Yacare ROU by U.S. Army Map Service was established in 1963.
+const char* const YACARE_ROUUSAMS_alias_s = "YACARE-ROUUSAMS";
+const char* const SIRGAS_ROU98_s = "SIRGAS ROU98";
+const char* const SIRGAS_ROU98_alias_s = "SIRGAS-ROU98";
+const char* const SIRGAS_1995_s = "SIRGAS95";
+const char* const SIRGAS_1995_alias1_s = "SIRGAS 95";
+const char* const SIRGAS_1995_alias2_s = "SIRGAS 1995";
+const char* const SIRGAS_2000_s = "SIRGAS2000";
+const char* const SIRGAS_2000_alias_s = "SIRGAS 2000";
 
 
 #endif  // DNACONSTS_DATUMS_HPP

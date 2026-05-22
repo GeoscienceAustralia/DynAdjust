@@ -144,15 +144,20 @@ typedef struct msr_t {
 			memset(epsgCode, '\0', sizeof(epsgCode));
 			snprintf(epsgCode, sizeof(epsgCode), DEFAULT_EPSG_S);
 			memset(epoch, '\0', sizeof(epoch));
+			memset(observation_epoch, '\0', sizeof(observation_epoch));
 	}
 
 	char	measType;				// 'A', 'S', 'X', ... , etc.
 	char	measStart;				// Start of a measurement (0=start or X, 1=Y, 2=Z, 3=covX, 4=covY, 5=covZ)
 	char	measurementStations;	// One-, two- or three-station measurement
 	char	epsgCode[7];			// epsg ID, i.e. NNNNN (where NNNNN is in the range 0-32767)
-	char	epoch[12];				// date, i.e. "DD.MM.YYYY" (10 chars)
-									// if datum is dynamic, Epoch is YYYY MM DD
-									// if datum is static, Epoch is ignored
+	char	epoch[STN_EPOCH_WIDTH];	// Epoch of Reference Frame, i.e. "DD.MM.YYYY" (10 chars)
+									// Mutable via dnareftran.
+									// If datum is static, Epoch is ignored.
+	char	observation_epoch[STN_EPOCH_WIDTH];	// Epoch of Observation, i.e. "DD.MM.YYYY" (10 chars)
+									// Immutable under reftran. Timestamp at which the measurement
+									// was observed. Used for discontinuity station-instance
+									// allocation. Empty if not supplied.
 	char	coordType[4];			// "LLH", "UTM", ... , etc.
 	bool	ignore;
 	UINT32	station1;        		// stations 1, 2 and 3 are indices to
@@ -221,7 +226,7 @@ public:
 	inline bool GetIgnore() const { return m_bIgnore; }
 
 	inline virtual UINT32 CalcBinaryRecordCount() const { return 3; }
-	void WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex, const std::string& epsgCode, const std::string& epoch) const;
+	void WriteBinaryMsr(std::ofstream* binary_stream, PUINT32 msrIndex, const std::string& epsgCode, const std::string& epoch, const std::string& observation_epoch) const;
 	virtual UINT32 SetMeasurementRec(const vstn_t& binaryStn, it_vmsr_t& it_msr);
 	virtual void WriteDynaMLMsr(std::ofstream* dynaml_stream) const;
 	virtual void WriteDNAMsr(std::ofstream* dna_stream, 
@@ -374,6 +379,7 @@ public:
 
 	virtual inline std::string GetReferenceFrame() const { return ""; }
 	inline std::string GetEpoch() const { return m_epoch; }
+	inline std::string GetObservationEpoch() const { return m_observation_epoch; }
 	
 	virtual inline std::vector<CDnaGpsBaseline>* GetBaselines_ptr() { return 0; }
 	virtual inline std::vector<CDnaDirection>* GetDirections_ptr() { return 0; }
@@ -402,6 +408,7 @@ public:
 	
 	virtual void SetReferenceFrame(const std::string&) {}
 	void SetEpoch(const std::string& epoch);
+	void SetObservationEpoch(const std::string& observation_epoch);
 	
 	virtual void SetLscale(const std::string&) {}
 	virtual void SetLscale(const double&) {}
@@ -485,7 +492,8 @@ protected:
 	UINT32		m_sourceFileIndex;
 
 	std::string	m_epoch;
-	
+	std::string	m_observation_epoch;
+
 	msr_database_id_map		m_msr_db_map;
 
 	bool	m_bInsufficient;
@@ -514,21 +522,21 @@ public:
 	UINT32 TotalCount();
 	void coutSummary(std::ostream &os, const std::string& title);
 	UINT32 MeasurementCount(const char& msrType);
-	
+
 	void CreateTally(const vdnaMsrPtr& vMeasurements);
 	void CreateTally(const vmsr_t& vMeasurements, const vUINT32& CML);
 	UINT32 CreateTally(const vmsr_t& vMeasurements, bool countValidOnly=false);
-	
+
 	void IncrementMsrType(const char& msrType, const UINT32& count=1);
-	
+
 	void coutSummaryMsrToStn(std::ostream &os, const std::string& station);
 	void coutSummaryMsrToStn_Compressed(std::ostream &os, const std::string& station);
 
-	//bool GPSOnly();	
+	//bool GPSOnly();
 	inline bool ContainsNonGPS() { return containsNonGPS; }
 
 	static _MEASUREMENT_STATIONS_ Stations(const char& measType);
-	
+
 	bool containsNonGPS;
 
 	UINT32 A, B, C, D, E, G, H, I, J, K, L, M, P, Q, R, S, V, X, Y, Z;

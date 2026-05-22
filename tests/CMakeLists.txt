@@ -42,6 +42,31 @@ set(IO_COMMON_SOURCES
     ../dynadjust/include/measurement_types/dnastation.cpp
 )
 
+set(JSONL_PARSER_TEST_SOURCES
+    ../dynadjust/dynadjust/dnaimport/dnaparser_jsonl.cpp
+    ../dynadjust/dynadjust/dnaimport/dnaparser_validators.cpp
+    ../dynadjust/include/functions/dnastringfuncs.cpp
+    ../dynadjust/include/functions/template_instantiations.cpp
+    ../dynadjust/include/math/dnamatrix_contiguous.cpp
+    ../dynadjust/include/ide/trace.cpp
+    ../dynadjust/include/parameters/dnadatum.cpp
+    ../dynadjust/include/parameters/dnaellipsoid.cpp
+    ../dynadjust/include/parameters/dnaprojection.cpp
+    ../dynadjust/include/measurement_types/dnaangle.cpp
+    ../dynadjust/include/measurement_types/dnacoordinate.cpp
+    ../dynadjust/include/measurement_types/dnadirection.cpp
+    ../dynadjust/include/measurement_types/dnadirectionset.cpp
+    ../dynadjust/include/measurement_types/dnadistance.cpp
+    ../dynadjust/include/measurement_types/dnagpsbaseline.cpp
+    ../dynadjust/include/measurement_types/dnagpspoint.cpp
+    ../dynadjust/include/measurement_types/dnaheight.cpp
+    ../dynadjust/include/measurement_types/dnaheightdifference.cpp
+    ../dynadjust/include/measurement_types/dnameasurement.cpp
+    ../dynadjust/include/measurement_types/dnastation.cpp
+    ../dynadjust/include/measurement_types/dnamsrtally.cpp
+    ../dynadjust/include/measurement_types/dnastntally.cpp
+)
+
 # Test 1: Matrix test
 add_executable(test_matrix
     test_matrix.cpp
@@ -219,6 +244,89 @@ target_compile_definitions(test_gnss_nstat_sort PRIVATE
     __BINARY_DESC__="Unit tests for GNSS n-stat sort in alternate units"
 )
 
+# Test 11: FormatElapsedTime helper (issue #351)
+add_executable(test_format_elapsed_time
+    test_format_elapsed_time.cpp
+)
+
+target_compile_definitions(test_format_elapsed_time PRIVATE
+    __BINARY_NAME__="test_format_elapsed_time"
+    __BINARY_DESC__="Unit tests for FormatElapsedTime helper (issue #351)"
+)
+
+# Test 12: DynadjustFile v1.1 back-compat test (issue #325)
+add_executable(test_dynadjust_file
+    test_dynadjust_file.cpp
+    ${IO_COMMON_SOURCES}
+)
+
+target_link_libraries(test_dynadjust_file
+    ${PLATFORM_LIBS}
+    ${Boost_LIBRARIES}
+)
+
+target_compile_definitions(test_dynadjust_file PRIVATE
+    __BINARY_NAME__="test_dynadjust_file"
+    __BINARY_DESC__="Unit tests for DynadjustFile v1.1 back-compat (issue #325)"
+)
+
+# Test 13: JSONL adjustment output schema contract + hook-context threading
+add_executable(test_dnaadjust_json_printer
+    test_dnaadjust_json_printer.cpp
+    ../dynadjust/include/math/dnamatrix_contiguous.cpp
+    ../dynadjust/include/ide/trace.cpp
+)
+
+target_link_libraries(test_dnaadjust_json_printer
+    ${PLATFORM_LIBS}
+)
+
+target_compile_definitions(test_dnaadjust_json_printer PRIVATE
+    __BINARY_NAME__="test_dnaadjust_json_printer"
+    __BINARY_DESC__="Schema contract tests for JSONL adjustment output"
+)
+
+# Test 14: JSONL parser adjustment-report metadata compatibility
+add_executable(test_dnaparser_jsonl
+    test_dnaparser_jsonl.cpp
+    ${JSONL_PARSER_TEST_SOURCES}
+)
+
+target_link_libraries(test_dnaparser_jsonl
+    ${PLATFORM_LIBS}
+    ${Boost_LIBRARIES}
+)
+
+target_compile_definitions(test_dnaparser_jsonl PRIVATE
+    __BINARY_NAME__="test_dnaparser_jsonl"
+    __BINARY_DESC__="Regression tests for JSONL parser"
+)
+
+set(UNIT_TEST_TARGETS
+    test_matrix
+    test_msr_to_stn_sort
+    test_bst_file
+    test_asl_file
+    test_aml_file_loader
+    test_bms_file
+    test_network_data_loader
+    test_measurement_processor
+    test_dnaadjust_printer
+    test_gnss_nstat_sort
+    test_format_elapsed_time
+    test_dynadjust_file
+    test_dnaadjust_json_printer
+    test_dnaparser_jsonl
+)
+
+if(WIN32)
+    foreach(UNIT_TEST_TARGET IN LISTS UNIT_TEST_TARGETS)
+        # Standalone unit tests compile selected DynAdjust sources directly, so
+        # they must not import DNATYPE_API classes from the shared libraries.
+        target_compile_definitions(${UNIT_TEST_TARGET} PRIVATE BUILD_STATIC)
+    endforeach()
+endif()
+
 # Enable testing
 enable_testing()
 
@@ -233,16 +341,20 @@ add_test(NAME NetworkDataLoaderTest COMMAND test_network_data_loader)
 add_test(NAME MeasurementProcessorTest COMMAND test_measurement_processor)
 add_test(NAME DynAdjustPrinterTest COMMAND test_dnaadjust_printer)
 add_test(NAME GNSSNstatSortTest COMMAND test_gnss_nstat_sort)
+add_test(NAME FormatElapsedTimeTest COMMAND test_format_elapsed_time)
+add_test(NAME DynadjustFileTest COMMAND test_dynadjust_file)
+add_test(NAME DynAdjustJsonPrinterTest COMMAND test_dnaadjust_json_printer)
+add_test(NAME DnaParserJsonlTest COMMAND test_dnaparser_jsonl)
 
 # Custom target to run all tests
 add_custom_target(run_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS test_matrix test_msr_to_stn_sort test_bst_file test_asl_file test_aml_file_loader test_bms_file test_network_data_loader test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort
+    DEPENDS ${UNIT_TEST_TARGETS}
     COMMENT "Running all tests"
 )
 
 # Custom target equivalent to 'make all'
 add_custom_target(tests_all
-    DEPENDS test_matrix test_msr_to_stn_sort test_bst_file test_asl_file test_aml_file_loader test_bms_file test_network_data_loader test_measurement_processor test_dnaadjust_printer test_gnss_nstat_sort
+    DEPENDS ${UNIT_TEST_TARGETS}
     COMMENT "Building all tests"
 )

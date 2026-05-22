@@ -21,7 +21,9 @@
 
 #include "network_data_loader.hpp"
 
+#include <filesystem>
 #include <sstream>
+#include <system_error>
 #include <include/functions/dnatemplatefuncs.hpp>
 #include <include/functions/dnastrmanipfuncs.hpp>
 #include <include/functions/dnatemplatestnmsrfuncs.hpp>
@@ -29,6 +31,20 @@
 
 namespace dynadjust {
 namespace networkadjust {
+
+namespace {
+
+bool FileExists(const std::string& filename) {
+    if (filename.empty()) {
+        return false;
+    }
+
+    std::error_code ec;
+    const bool exists = std::filesystem::exists(filename, ec);
+    return !ec && exists;
+}
+
+}  // namespace
 
 NetworkDataLoader::NetworkDataLoader(const project_settings &settings)
     : settings_(settings),
@@ -117,6 +133,10 @@ bool NetworkDataLoader::LoadForSimultaneous(
 }
 
 bool NetworkDataLoader::LoadStations(vstn_t *bstBinaryRecords, binary_file_meta_t &bst_meta, UINT32 &bstn_count) {
+    if (!FileExists(settings_.a.bst_file)) {
+        throw StationLoadException("Failed to load binary station file: " + settings_.a.bst_file);
+    }
+
     auto result = bst_loader_->LoadWithOptional(settings_.a.bst_file, bstBinaryRecords, bst_meta);
     if (!result) { throw StationLoadException("Failed to load binary station file: " + settings_.a.bst_file); }
     bstn_count = static_cast<UINT32>(*result);
@@ -124,6 +144,10 @@ bool NetworkDataLoader::LoadStations(vstn_t *bstBinaryRecords, binary_file_meta_
 }
 
 bool NetworkDataLoader::LoadAssociatedStations(vASL *vAssocStnList, vUINT32 &v_ISLTemp, UINT32 &asl_count) {
+    if (!FileExists(settings_.s.asl_file)) {
+        throw StationLoadException("Failed to load associated station list file: " + settings_.s.asl_file);
+    }
+
     dynadjust::iostreams::AslFile asl_loader(settings_.s.asl_file);
     auto result = asl_loader.TryLoad();
     if (!result) { throw StationLoadException("Failed to load associated station list file: " + settings_.s.asl_file); }
@@ -136,6 +160,10 @@ bool NetworkDataLoader::LoadAssociatedStations(vASL *vAssocStnList, vUINT32 &v_I
 }
 
 bool NetworkDataLoader::LoadMeasurements(vmsr_t *bmsBinaryRecords, binary_file_meta_t &bms_meta, UINT32 &bmsr_count) {
+    if (!FileExists(settings_.a.bms_file)) {
+        throw MeasurementLoadException("Failed to load binary measurement file: " + settings_.a.bms_file);
+    }
+
     auto result = bms_loader_->LoadWithOptional(settings_.a.bms_file, bmsBinaryRecords, bms_meta);
     if (!result) { throw MeasurementLoadException("Failed to load binary measurement file: " + settings_.a.bms_file); }
     bmsr_count = static_cast<UINT32>(*result);

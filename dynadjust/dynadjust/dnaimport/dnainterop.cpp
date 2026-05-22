@@ -20,8 +20,7 @@
 //============================================================================
 
 #include <dynadjust/dnaimport/dnainterop.hpp>
-
-//#include <include/io/DynaML-schema.hxx>
+#include <dynadjust/dnaimport/dnaparser_jsonl.hpp>
 
 using namespace dynadjust::epsg;
 
@@ -176,7 +175,8 @@ void dna_import::BuildExtractStationsList(const std::string& stnList, pvstring v
 }
 	
 
-void dna_import::InitialiseDatum(const std::string& reference_frame, const std::string epoch)
+void dna_import::InitialiseDatum(const std::string& reference_frame, const std::string epoch,
+	const std::string observation_epoch)
 {
 	try {
 		// Take the default reference frame, set either by the user or
@@ -198,11 +198,13 @@ void dna_import::InitialiseDatum(const std::string& reference_frame, const std::
 	if (datum_.GetEpoch() == timeImmemorial<boost::gregorian::date>())
 		m_strProjectDefaultEpoch = "";
 
+	m_strProjectObservationEpoch = observation_epoch;
+
 	// Update binary file meta
 	// Note: the following rule applies each time a set of files is loaded via import:
 	//	* This method (InitialiseDatum) is called (from dnaimportwrapper) before any files are loaded.
 	//    By default, the bst & bms meta are initialised with the reference frame and reference epoch.
-	//  * The datum and epoch within the first file (if present) is used to set the default project 
+	//  * The datum and epoch within the first file (if present) is used to set the default project
 	//    datum. If a datum isn't provided in the first input file, e.g. SINEX file, the default datum
 	//    (GDA2020) is used. As each subsequent file is loaded, the default frame and epoch are assumed.
 	//  * After all files have been loaded, InitialiseDatum is called again to set the metadata.
@@ -212,6 +214,56 @@ void dna_import::InitialiseDatum(const std::string& reference_frame, const std::
     snprintf(bms_meta_.epsgCode, sizeof(bms_meta_.epsgCode), "%s", m_strProjectDefaultEpsg.substr(0, STN_EPSG_WIDTH).c_str());
     snprintf(bst_meta_.epoch, sizeof(bst_meta_.epoch), "%s", m_strProjectDefaultEpoch.substr(0, STN_EPOCH_WIDTH).c_str());
     snprintf(bms_meta_.epoch, sizeof(bms_meta_.epoch), "%s", m_strProjectDefaultEpoch.substr(0, STN_EPOCH_WIDTH).c_str());
+    // observation_epoch is immutable; record the CLI-supplied project-level value (empty if not supplied).
+    snprintf(bst_meta_.observation_epoch, sizeof(bst_meta_.observation_epoch), "%s", m_strProjectObservationEpoch.substr(0, STN_EPOCH_WIDTH).c_str());
+    snprintf(bms_meta_.observation_epoch, sizeof(bms_meta_.observation_epoch), "%s", m_strProjectObservationEpoch.substr(0, STN_EPOCH_WIDTH).c_str());
+}
+
+
+void dna_import::ApplyProjectObservationEpoch(vdnaMsrPtr* vMeasurements)
+{
+	if (m_strProjectObservationEpoch.empty() || vMeasurements == nullptr)
+		return;
+
+	const std::string& obsEpoch = m_strProjectObservationEpoch;
+
+	// A measurement's observation_epoch is treated as "not explicitly set" when it is
+	// empty or equal to the reference-frame epoch (the auto-default from SetEpoch).
+	auto needs_override = [](const std::string& msrObsEpoch, const std::string& msrEpoch) {
+		return msrObsEpoch.empty() || msrObsEpoch == msrEpoch;
+	};
+
+	for (auto& msr_ptr : *vMeasurements)
+	{
+		if (!msr_ptr)
+			continue;
+
+		if (needs_override(msr_ptr->GetObservationEpoch(), msr_ptr->GetEpoch()))
+			msr_ptr->SetObservationEpoch(obsEpoch);
+
+		// GPS baseline cluster (G/X): propagate to every baseline element
+		if (auto* baselines = msr_ptr->GetBaselines_ptr())
+		{
+			for (auto& bsl : *baselines)
+			{
+				if (needs_override(bsl.GetObservationEpoch(), bsl.GetEpoch()))
+					bsl.SetObservationEpoch(obsEpoch);
+			}
+		}
+
+		// GPS point cluster (Y): propagate to every point element
+		if (auto* points = msr_ptr->GetPoints_ptr())
+		{
+			for (auto& pnt : *points)
+			{
+				if (needs_override(pnt.GetObservationEpoch(), pnt.GetEpoch()))
+					pnt.SetObservationEpoch(obsEpoch);
+			}
+		}
+
+		// Direction set (D): directions inherit from the parent measurement; no per-direction
+		// observation_epoch field exists beyond what the set-level value already carries.
+	}
 }
 	
 
@@ -333,9 +385,30 @@ _PARSE_STATUS_ dna_import::ParseInputFile(const std::string& fileName, vdnaStnPt
 
 		SignalComplete();
 	}
+	// JSONL
+	else if (
+		first_chars[0] == '{' ||				// JSON object on first line
+		icontains(fileName, ".jsonl"))			// .jsonl extension
+	{
+		// Set the file type
+		input_file_meta->filetype = jsonl;
+		m_ift = jsonl;
+
+		// Parse the JSONL file
+		ParseJSONL(fileName, vStations, stnCount, vMeasurements, msrCount, clusterID, fileEpsg, fileEpoch, firstFile, success_msg);
+
+		if (fileEpsg.empty())
+			fileEpsg = m_strProjectDefaultEpsg;
+
+		// record the file's default reference frame
+        snprintf(input_file_meta->epsgCode, sizeof(input_file_meta->epsgCode), "%s", fileEpsg.substr(0, STN_EPSG_WIDTH).c_str());
+        snprintf(input_file_meta->epoch, sizeof(input_file_meta->epoch), "%s", fileEpoch.substr(0, STN_EPOCH_WIDTH).c_str());
+
+		SignalComplete();
+	}
 	// STN or MSR
 	else if (
-		// use boost::algorithm::ifind_first, which is a case insensitive implementation of the find first algorithm. 
+		// use boost::algorithm::ifind_first, which is a case insensitive implementation of the find first algorithm.
 		strncmp(first_chars, "!#=DNA", 6) == 0 ||	// dna file?
 		icontains(fileName, ".stn") ||			// dna station file
 		icontains(fileName, ".msr"))				// dna measurement file
@@ -400,18 +473,6 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 	_filespecifiedreferenceframe = false;
 	_filespecifiedepoch = false;
 
-	// Check if DynaML.xsd exists in the current directory
-	// This prevents the XML parser from hanging when the schema file is missing
-	if (!std::filesystem::exists("DynaML.xsd"))
-	{
-		import_file_mutex.unlock();
-		std::stringstream ss;
-		ss << "ParseXML(): DynaML.xsd schema file not found in the current directory." << std::endl;
-		ss << "  The XML parser requires this file to validate XML input files." << std::endl;
-		ss << "  Please ensure DynaML.xsd is present in the working directory.";
-		SignalExceptionParse(ss.str(), 0);
-	}
-
 	try
 	{
 		// Instantiate individual parsers.
@@ -450,7 +511,7 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		StationCoord_p.parsers (string_p, string_p, string_p, Height_p, string_p, GeoidModel_p);
 
 		DnaMeasurement_p.parsers (string_p, string_p, string_p, string_p, string_p, string_p, string_p, string_p,
-				string_p, string_p, Directions_p, string_p, string_p, string_p, GPSBaseline_p, string_p, string_p,
+				string_p, string_p, Directions_p, string_p, string_p, string_p, string_p, GPSBaseline_p, string_p, string_p,
 				string_p, Clusterpoint_p, string_p, string_p, string_p, string_p,
 				(projectSettings_.i.prefer_single_x_as_g == TRUE ? true : false));
 
@@ -473,7 +534,7 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		::xml_schema::document doc_p (DnaXmlFormat_p, "DnaXmlFormat");
 
 		DnaXmlFormat_p.pre();
-		doc_p.parse (*ifsInputFILE_);
+		doc_p.parse (*ifsInputFILE_, ::xml_schema::flags::dont_validate);
 		DnaXmlFormat_p.post_DnaXmlFormat (vStations, vMeasurements);
 
         // unlock after parsing
@@ -553,6 +614,7 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		{
 			std::stringstream ss;
 			ss << "The default input file reference frame \"" << referenceframe_p.str() << "\" is not recognised.";
+			import_file_mutex.unlock();
 			SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
 		}
 
@@ -580,6 +642,7 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		}
 		std::stringstream ss;
 		ss << "ParseXML(): An std::ios_base failure was encountered while parsing " << fileName << "." << std::endl << "  " << f.what();
+		import_file_mutex.unlock();
 		SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
 	}
 	catch (const std::system_error& e)
@@ -598,12 +661,14 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		}
 		std::stringstream ss;
 		ss << "ParseXML(): An std::ios_base failure was encountered while parsing " << fileName << "." << std::endl << "  " << e.what();
+		import_file_mutex.unlock();
 		SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
 	}
-	catch (const XMLInteropException& e) 
+	catch (const XMLInteropException& e)
 	{
 		std::stringstream ss;
 		ss << "ParseXML(): An exception was encountered while parsing " << fileName << "." << std::endl << "  " << e.what();
+		import_file_mutex.unlock();
 		SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
 	}
 	catch (const ::xml_schema::parsing& e)
@@ -611,7 +676,7 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 		std::stringstream ss("");
 		ss << e.what();
 
-		::xsd::cxx::parser::diagnostics<char>::const_iterator _it;		
+		::xsd::cxx::parser::diagnostics<char>::const_iterator _it;
 		for (_it=e.diagnostics().begin(); _it!=e.diagnostics().end(); _it++)
 		{
 			ss << std::endl;
@@ -620,19 +685,29 @@ void dna_import::ParseXML(const std::string& fileName, vdnaStnPtr* vStations, PU
 			ss << ", severity " <<  _it->severity() << std::endl;
 			ss << "  - " << _it->message();
 		}
+		import_file_mutex.unlock();
 		SignalExceptionParse(ss.str(), 0);
 	}
 	catch (const ::xml_schema::exception& e)
 	{
 		std::stringstream ss;
 		ss << "ParseXML(): An xml_schema exception was encountered while parsing " << fileName << "." << std::endl << "  " << e.what();
+		import_file_mutex.unlock();
 		SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
+	}
+	catch (const std::exception& e)
+	{
+		std::stringstream ss;
+		ss << "ParseXML(): An error was encountered while parsing " << fileName << "." << std::endl << "  " << e.what();
+		import_file_mutex.unlock();
+		SignalExceptionParse(ss.str(), 0);
 	}
 	catch (...)
 	{
 		std::stringstream ss;
 		ss << "ParseXML(): An unknown error was encountered while parsing " << fileName << "." << std::endl;
-		SignalExceptionParse(ss.str(), 0);	
+		import_file_mutex.unlock();
+		SignalExceptionParse(ss.str(), 0);
 	}
 
 	if (parseStatus_ != PARSE_SUCCESS)
@@ -818,12 +893,16 @@ void dna_import::ApplyDiscontinuitiesMeasurements(vdnaMsrPtr* vMeasurements)
 			continue;
 		}
 
-		// Check if an epoch been provided with this measurement
-		if (_it_msr->get()->GetEpoch().empty())
+		// Prefer the observation epoch for discontinuity matching; fall back
+		// to reference-frame epoch if the file did not supply an observation epoch.
+		std::string match_epoch = _it_msr->get()->GetObservationEpoch();
+		if (match_epoch.empty())
+			match_epoch = _it_msr->get()->GetEpoch();
+		if (match_epoch.empty())
 			continue;
 
 		// Capture the epoch of the measurement
-		site_date = dateFromString<boost::gregorian::date>(_it_msr->get()->GetEpoch());
+		site_date = dateFromString<boost::gregorian::date>(match_epoch);
 
 		// 2. Handle 'first' station for every measurement type
 		stn1 = _it_msr->get()->GetFirst();
@@ -930,8 +1009,15 @@ void dna_import::ApplyDiscontinuitiesMeasurements_GX(std::vector<CDnaGpsBaseline
 		_it_msr != vGpsBaselines->end();
 		_it_msr++)
 	{
+		// Prefer observation epoch; fall back to reference-frame epoch.
+		std::string match_epoch = _it_msr->GetObservationEpoch();
+		if (match_epoch.empty())
+			match_epoch = _it_msr->GetEpoch();
+		if (match_epoch.empty())
+			continue;
+
 		// Capture the start date of the site
-		site_date = dateFromString<boost::gregorian::date>(_it_msr->GetEpoch());
+		site_date = dateFromString<boost::gregorian::date>(match_epoch);
 
 		// Station 1
 		stn1 = _it_msr->GetFirst();
@@ -983,8 +1069,15 @@ void dna_import::ApplyDiscontinuitiesMeasurements_Y(std::vector<CDnaGpsPoint>* v
 		_it_msr != vGpsPoints->end();
 		_it_msr++)
 	{
+		// Prefer observation epoch; fall back to reference-frame epoch.
+		std::string match_epoch = _it_msr->GetObservationEpoch();
+		if (match_epoch.empty())
+			match_epoch = _it_msr->GetEpoch();
+		if (match_epoch.empty())
+			continue;
+
 		// Capture the start date of the site
-		site_date = dateFromString<boost::gregorian::date>(_it_msr->GetEpoch());
+		site_date = dateFromString<boost::gregorian::date>(match_epoch);
 
 		// Station 1
 		stn1 = _it_msr->GetFirst();
@@ -1056,8 +1149,104 @@ void dna_import::ApplyDiscontinuitiesMeasurements_D(std::vector<CDnaDirection>* 
 }
 	
 
-void dna_import::ParseDNA(const std::string& fileName, vdnaStnPtr* vStations, PUINT32 stnCount, 
-							   vdnaMsrPtr* vMeasurements, PUINT32 msrCount, PUINT32 clusterID, 
+void dna_import::ParseJSONL(const std::string& fileName, vdnaStnPtr* vStations, PUINT32 stnCount,
+							   vdnaMsrPtr* vMeasurements, PUINT32 msrCount, PUINT32 clusterID,
+							   std::string& fileEpsg, std::string& fileEpoch, bool firstFile, std::string* success_msg)
+{
+	parseStatus_ = PARSE_SUCCESS;
+	_filespecifiedreferenceframe = false;
+	_filespecifiedepoch = false;
+
+	try
+	{
+		import::JsonlParseContext ctx;
+		ctx.default_frame = datum_.GetName();
+		ctx.default_epoch = datum_.GetEpoch_s();
+		ctx.first_file = firstFile;
+		ctx.user_supplied_frame = (projectSettings_.i.user_supplied_frame == 1);
+		ctx.user_supplied_epoch = (projectSettings_.i.user_supplied_epoch == 1);
+		ctx.override_input_frame = (projectSettings_.i.override_input_rfame == 1);
+		ctx.prefer_single_x_as_g = (projectSettings_.i.prefer_single_x_as_g == TRUE);
+		ctx.cluster_id = *clusterID;
+
+		import::ParseJsonlFile(fileName, vStations, vMeasurements, ctx);
+
+		*clusterID = ctx.cluster_id;
+		*stnCount = ctx.stn_count;
+		*msrCount = ctx.msr_count;
+		*success_msg = ctx.message + "\n";
+		_filespecifiedreferenceframe = ctx.file_specified_frame;
+		_filespecifiedepoch = ctx.file_specified_epoch;
+
+		// Reference frame / epoch resolution (replicated from ParseXML)
+		try
+		{
+			fileEpsg = ctx.file_epsg;
+			if (fileEpsg.empty())
+				fileEpsg = datum_.GetEpsgCode_s();
+
+			fileEpoch = ctx.file_epoch;
+			if (fileEpoch.empty() || isEpsgDatumStatic(LongFromString<UINT32>(fileEpsg)))
+				fileEpoch = referenceepochFromEpsgString<std::string>(fileEpsg);
+
+			if (projectSettings_.i.user_supplied_frame)
+			{
+				if (!projectSettings_.i.user_supplied_epoch)
+				{
+					if (firstFile)
+					{
+						projectSettings_.i.epoch = fileEpoch;
+						projectSettings_.r.epoch = fileEpoch;
+						m_strProjectDefaultEpoch = fileEpoch;
+						datum_.SetEpoch(fileEpoch);
+					}
+				}
+			}
+			else
+			{
+				if (firstFile)
+				{
+					projectSettings_.i.reference_frame = datumFromEpsgString<std::string>(fileEpsg);
+					projectSettings_.r.reference_frame = projectSettings_.i.reference_frame;
+					m_strProjectDefaultEpsg = fileEpsg;
+
+					projectSettings_.i.epoch = fileEpoch;
+					projectSettings_.r.epoch = fileEpoch;
+					m_strProjectDefaultEpoch = fileEpoch;
+				}
+			}
+		}
+		catch (...)
+		{
+			std::stringstream ss;
+			ss << "The default JSONL input file reference frame is not recognised.";
+			SignalExceptionParse(static_cast<std::string>(ss.str()), 0);
+		}
+
+		if (!vStations->empty() && !vMeasurements->empty())
+			m_idt = stn_msr_data;
+		else if (!vStations->empty())
+			m_idt = stn_data;
+		else if (!vMeasurements->empty())
+			m_idt = msr_data;
+
+	}
+	catch (const XMLInteropException&)
+	{
+		throw;  // re-throw
+	}
+	catch (const std::exception& e)
+	{
+		std::stringstream ss;
+		ss << "ParseJSONL(): An exception was encountered while parsing " << fileName << "." << std::endl;
+		ss << "  " << e.what() << std::endl;
+		SignalExceptionParse(ss.str(), 0);
+	}
+}
+
+
+void dna_import::ParseDNA(const std::string& fileName, vdnaStnPtr* vStations, PUINT32 stnCount,
+							   vdnaMsrPtr* vMeasurements, PUINT32 msrCount, PUINT32 clusterID,
 							   std::string& fileEpsg, std::string& fileEpoch, bool firstFile)
 {
 	parseStatus_ = PARSE_SUCCESS;
@@ -1148,7 +1337,7 @@ void dna_import::ParseDNA(const std::string& fileName, vdnaStnPtr* vStations, PU
 			projectSettings_.r.epoch = fileEpoch;
 			m_strProjectDefaultEpoch = fileEpoch;
 
-			InitialiseDatum(projectSettings_.i.reference_frame, projectSettings_.i.epoch);
+			InitialiseDatum(projectSettings_.i.reference_frame, projectSettings_.i.epoch, projectSettings_.i.observation_epoch);
 		}
 	}
 
@@ -1739,12 +1928,18 @@ void dna_import::ParseDNAMSRLinear(const std::string& sBuf, dnaMsrPtr& msr_ptr)
 
 	// Epoch
 	msr_ptr->SetEpoch(ParseEpochValue(sBuf, "ParseDNAMSRLinear"));
+	// Observation epoch (DNA v3.02 column, optional)
+	{
+		std::string obs_epoch = ParseObsEpochValue(sBuf, "ParseDNAMSRLinear");
+		if (!obs_epoch.empty())
+			msr_ptr->SetObservationEpoch(obs_epoch);
+	}
 
 	// Capture msr_id and cluster_id (for database referencing)
 	ParseDatabaseIds(sBuf, "ParseDNAMSRLinear", msr_ptr->GetTypeC());
 	msr_ptr->SetDatabaseMap(m_msr_db_map);
 
-	// instrument and target heights only make sense for 
+	// instrument and target heights only make sense for
 	// slope distances, vertical angles and zenith distances
 	switch (msr_ptr->GetTypeC())
 	{
@@ -1806,6 +2001,12 @@ void dna_import::ParseDNAMSRCoordinate(const std::string& sBuf, dnaMsrPtr& msr_p
 
 	// Epoch
 	msr_ptr->SetEpoch(ParseEpochValue(sBuf, "ParseDNAMSRLinear"));
+	// Observation epoch (DNA v3.02 column, optional)
+	{
+		std::string obs_epoch = ParseObsEpochValue(sBuf, "ParseDNAMSRCoordinate");
+		if (!obs_epoch.empty())
+			msr_ptr->SetObservationEpoch(obs_epoch);
+	}
 
 	// Capture msr_id and cluster_id (for database referencing), then set
 	// database id info
@@ -1821,6 +2022,7 @@ void dna_import::ParseDNAMSRGPSBaselines(std::string& sBuf, dnaMsrPtr& msr_ptr, 
 
 	bslTmp.SetReferenceFrame(msr_ptr->GetReferenceFrame());
 	bslTmp.SetEpoch(msr_ptr->GetEpoch());
+	bslTmp.SetObservationEpoch(msr_ptr->GetObservationEpoch());
 
 	// Measurement type
 	std::string tmp;
@@ -1943,10 +2145,18 @@ void dna_import::ParseDNAMSRGPSBaselines(std::string& sBuf, dnaMsrPtr& msr_ptr, 
 				// Set the baseline epoch
 				bslTmp.SetEpoch(tmp);
 			}
+
+			// Observation epoch (DNA v3.02 column, optional; overrides default)
+			std::string obs_epoch = ParseObsEpochValue(sBuf, "ParseDNAMSRGPSBaselines");
+			if (!obs_epoch.empty())
+			{
+				msr_ptr->SetObservationEpoch(obs_epoch);
+				bslTmp.SetObservationEpoch(obs_epoch);
+			}
 		}
 		catch (std::runtime_error& e) {
 			std::stringstream ss;
-			ss << "ParseDNAMSRGPSBaselines(): Error parsing epoch:  " << 
+			ss << "ParseDNAMSRGPSBaselines(): Error parsing epoch:  " <<
 			 	std::endl << "    " << e.what();
 			SignalExceptionParseDNA(ss.str(), "", dml_.msr_gps_epoch);
 		}
@@ -2042,6 +2252,7 @@ void dna_import::ParseDNAMSRGPSPoints(std::string& sBuf, dnaMsrPtr& msr_ptr, boo
 
 	pntTmp.SetReferenceFrame(msr_ptr->GetReferenceFrame());
 	pntTmp.SetEpoch(msr_ptr->GetEpoch());
+	pntTmp.SetObservationEpoch(msr_ptr->GetObservationEpoch());
 
 	// Measurement type
 	std::string tmp;
@@ -2136,6 +2347,7 @@ void dna_import::ParseDNAMSRGPSPoints(std::string& sBuf, dnaMsrPtr& msr_ptr, boo
 		// Set the point frame
 		pntTmp.SetReferenceFrame(projectSettings_.i.reference_frame);
 		pntTmp.SetEpoch(msr_ptr->GetEpoch());
+		pntTmp.SetObservationEpoch(msr_ptr->GetObservationEpoch());
 	}
 	else //if (!projectSettings_.i.override_input_rfame)
 	{
@@ -2153,7 +2365,7 @@ void dna_import::ParseDNAMSRGPSPoints(std::string& sBuf, dnaMsrPtr& msr_ptr, boo
 		}
 		catch (std::runtime_error& e) {
 			std::stringstream ss;
-			ss << "ParseDNAMSRGPSPoints(): Error parsing reference frame:  " << std::endl << 
+			ss << "ParseDNAMSRGPSPoints(): Error parsing reference frame:  " << std::endl <<
 				"    " << e.what();
 			SignalExceptionParseDNA(ss.str(), "", dml_.msr_gps_reframe);
 		}
@@ -2179,10 +2391,18 @@ void dna_import::ParseDNAMSRGPSPoints(std::string& sBuf, dnaMsrPtr& msr_ptr, boo
 				// Set the point epoch
 				pntTmp.SetEpoch(tmp);
 			}
+
+			// Observation epoch (DNA v3.02 column, optional; overrides default)
+			std::string obs_epoch = ParseObsEpochValue(sBuf, "ParseDNAMSRGPSPoints");
+			if (!obs_epoch.empty())
+			{
+				msr_ptr->SetObservationEpoch(obs_epoch);
+				pntTmp.SetObservationEpoch(obs_epoch);
+			}
 		}
 		catch (std::runtime_error& e) {
 			std::stringstream ss;
-			ss << "ParseDNAMSRGPSPoints(): Error parsing epoch:  " << std::endl << 
+			ss << "ParseDNAMSRGPSPoints(): Error parsing epoch:  " << std::endl <<
 				"    " << e.what();
 			SignalExceptionParseDNA(ss.str(), "", dml_.msr_gps_epoch);
 		}
@@ -2691,7 +2911,7 @@ std::string dna_import::ParseEpochValue(const std::string& sBuf, const std::stri
 {
 	if (sBuf.length() <= dml_.msr_gps_epoch)
 		return "";
-	
+
 	std::string epoch;
 	try {
 		if (sBuf.length() > static_cast<std::string::size_type>(dml_.msr_gps_epoch + dmw_.msr_gps_epoch))
@@ -2705,6 +2925,30 @@ std::string dna_import::ParseEpochValue(const std::string& sBuf, const std::stri
 	}
 
 	return epoch;
+}
+
+std::string dna_import::ParseObsEpochValue(const std::string& sBuf, const std::string& calling_function)
+{
+	// DNA v3.01 (and earlier) files don't have an observation-epoch column;
+	// in that case the field layout leaves msr_gps_obs_epoch at 0.
+	if (dml_.msr_gps_obs_epoch == 0 || dmw_.msr_gps_obs_epoch == 0)
+		return "";
+	if (sBuf.length() <= dml_.msr_gps_obs_epoch)
+		return "";
+
+	std::string obs_epoch;
+	try {
+		if (sBuf.length() > static_cast<std::string::size_type>(dml_.msr_gps_obs_epoch + dmw_.msr_gps_obs_epoch))
+			obs_epoch = trimstr(sBuf.substr(dml_.msr_gps_obs_epoch, dmw_.msr_gps_obs_epoch));
+		else
+			obs_epoch = trimstr(sBuf.substr(dml_.msr_gps_obs_epoch));
+	}
+	catch (...) {
+		SignalExceptionParseDNA(calling_function + "(): Could not extract observation epoch from the record:  ",
+			sBuf, dml_.msr_gps_obs_epoch);
+	}
+
+	return obs_epoch;
 }
 
 std::string dna_import::ParseGPSMsrValue(const std::string& sBuf, const std::string& element, const std::string& calling_function)
@@ -2770,6 +3014,12 @@ void dna_import::ParseDNAMSRAngular(const std::string& sBuf, dnaMsrPtr& msr_ptr)
 
 	// Epoch
 	msr_ptr->SetEpoch(ParseEpochValue(sBuf, "ParseDNAMSRAngular"));
+	// Observation epoch (DNA v3.02 column, optional)
+	{
+		std::string obs_epoch = ParseObsEpochValue(sBuf, "ParseDNAMSRAngular");
+		if (!obs_epoch.empty())
+			msr_ptr->SetObservationEpoch(obs_epoch);
+	}
 
 	// Capture msr_id and cluster_id (for database referencing), then set
 	// database id info
@@ -2849,6 +3099,12 @@ UINT32 dna_import::ParseDNAMSRDirections(std::string& sBuf, dnaMsrPtr& msr_ptr, 
 
 		// Epoch
 		msr_ptr->SetEpoch(ParseEpochValue(sBuf, "ParseDNAMSRDirections"));
+		// Observation epoch (DNA v3.02 column, optional)
+		{
+			std::string obs_epoch = ParseObsEpochValue(sBuf, "ParseDNAMSRDirections");
+			if (!obs_epoch.empty())
+				msr_ptr->SetObservationEpoch(obs_epoch);
+		}
 
 		// Capture msr_id and cluster_id (for database referencing)
 		ParseDatabaseIds(sBuf, "ParseDNAMSRDirections", msr_ptr->GetTypeC());

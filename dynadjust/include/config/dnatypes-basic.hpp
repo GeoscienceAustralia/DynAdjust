@@ -89,7 +89,8 @@ typedef enum _INPUT_FILE_TYPE_
 	dynaml = 1,
 	dna = 2,
 	csv = 3,
-	sinex = 4
+	sinex = 4,
+	jsonl = 5
 } INPUT_FILE_TYPE;
 
 typedef enum _INPUT_DATA_TYPE_

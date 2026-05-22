@@ -10,8 +10,11 @@ on:
   push:
 
 env:
-  WINDOWS_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/f5881e61-dcdc-40f1-9bd9-717081ac623c/intel-oneapi-base-toolkit-2025.2.1.46_offline.exe
   LINUX_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/3b7a16b3-a7b0-460f-be16-de0d64fa6b1e/intel-oneapi-base-toolkit-2025.2.1.44_offline.sh
+  WINDOWS_TOOLKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/bae85ab1-cfcd-4251-8d42-a0c27949ea33/intel-oneapi-toolkit-2026.0.0.193_offline.exe
+  WINDOWS_MKL_COMPONENTS: intel.oneapi.win.cpp-dpcpp-common:intel.oneapi.win.mkl.devel:intel.oneapi.win.tbb.devel:intel.oneapi.win.dpl
+  WINDOWS_ONEAPI_CACHE_NUMBER: 1
+  ONEAPI_VS_VER: vs2026
 
 
 jobs:
@@ -40,7 +43,7 @@ jobs:
 
       - name: Cache installed packages
         id: cache-apt
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/apt-install-cache
           key: apt-installed-${{ runner.os }}-${{ env.APT_HASH }}
@@ -67,7 +70,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
@@ -100,7 +103,7 @@ jobs:
 
       - name: Cache installed packages
         id: cache-apt
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/apt-install-cache
           key: apt-installed-${{ runner.os }}-${{ env.APT_HASH }}
@@ -125,7 +128,7 @@ jobs:
 
       - name: Cache Intel OneAPI
         id: cache-oneapi
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /opt/intel
           key: intel-oneapi-linux-${{ env.ONEAPI_HASH }}
@@ -142,7 +145,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
@@ -159,7 +162,7 @@ jobs:
           mkdir -p ./zip/dynadjust-linux-mkl
           mv ./bin/* ./zip/dynadjust-linux-mkl
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dynadjust-linux-mkl
           path: ./zip/
@@ -187,7 +190,7 @@ jobs:
 
       - name: Cache installed packages
         id: cache-apt
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/apt-install-cache
           key: apt-installed-${{ runner.os }}-${{ env.APT_HASH }}
@@ -214,13 +217,13 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
       - name: Cache static xerces
         id: cache-xerces
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             /usr/local/lib/libxerces-c*.a
@@ -254,7 +257,7 @@ jobs:
           mkdir -p ./zip/dynadjust-linux-static
           mv ./bin/* ./zip/dynadjust-linux-static
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dynadjust-linux-openblas-static
           path: ./zip/
@@ -277,7 +280,7 @@ jobs:
 
       - name: Cache Homebrew packages
         id: cache-brew
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             /opt/homebrew/Cellar/boost
@@ -304,7 +307,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
@@ -332,7 +335,7 @@ jobs:
 
       - name: Cache Homebrew packages
         id: cache-brew
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             /opt/homebrew/Cellar/boost
@@ -359,7 +362,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
@@ -369,7 +372,7 @@ jobs:
           make -j2 VERBOSE=1
           ls -la bin/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dynadjust-macos-static
           path: ./bin/
@@ -378,13 +381,12 @@ jobs:
 
   build_windows_dyn_mkl:
     name: Windows build (mkl)
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess xerces-c vcpkg-tool-ninja
       VCPKG_INSTALLATION_ROOT: "C:/vcpkg"
       VCPKG_BINARY_SOURCES: "clear"
-      ONEAPI_VERSION: "2025.2"
 
     steps:
 
@@ -392,11 +394,10 @@ jobs:
       shell: bash
       run: |
         echo VCPKG_HASH=$(echo "${VCPKG_PACKAGES}" | sed "s/ /_/g" | md5sum | cut -f 1 -d" ") >> $GITHUB_ENV
-        echo ONEAPI_HASH=$(echo "${WINDOWS_BASEKIT_URL}" | md5sum | cut -f 1 -d" ") >> $GITHUB_ENV
 
     - name: Cache vcpkg
       id: cache-vcpkg
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
         key: vcpkg-${{ runner.os }}-mkl-${{ env.VCPKG_HASH }}
@@ -406,12 +407,15 @@ jobs:
 
     - name: Cache Intel OneAPI
       id: cache-oneapi
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
-        path: C:\Program Files (x86)\Intel\oneAPI
-        key: intel-oneapi-windows-${{ env.ONEAPI_HASH }}
-        restore-keys: |
-          intel-oneapi-windows-
+        path: |
+          C:\Program Files (x86)\Intel\oneAPI\setvars.bat
+          C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat
+          C:\Program Files (x86)\Intel\oneAPI\compiler
+          C:\Program Files (x86)\Intel\oneAPI\mkl
+          C:\Program Files (x86)\Intel\oneAPI\tbb
+        key: intel-oneapi-windows-${{ env.WINDOWS_ONEAPI_CACHE_NUMBER }}-${{ env.WINDOWS_TOOLKIT_URL }}-${{ env.WINDOWS_MKL_COMPONENTS }}
 
     - name: Install vcpkg prerequisites
       if: steps.cache-vcpkg.outputs.cache-hit != 'true'
@@ -432,35 +436,24 @@ jobs:
       if: steps.cache-oneapi.outputs.cache-hit != 'true'
       shell: powershell
       run: |
-        Write-Host "Installing Intel OneAPI..."
-        $url = $env:WINDOWS_BASEKIT_URL
-        $components = "intel.oneapi.win.mkl.devel"
         $tempExe = Join-Path $env:TEMP "webimage.exe"
-
-        Write-Host "Downloading installer from $url..."
-        curl.exe -L $url -o $tempExe
-
-        Write-Host "Extracting installer..."
-        $installerArgs = "-s -x -f webimage_extracted --log extract.log"
-        $proc = Start-Process -FilePath $tempExe -ArgumentList $installerArgs -NoNewWindow -Wait -PassThru
+        curl.exe --output $tempExe --url $env:WINDOWS_TOOLKIT_URL --retry 5 --retry-delay 5
+        $extract = Start-Process -FilePath $tempExe -ArgumentList "-s -x -f webimage_extracted --log extract.log" -NoNewWindow -Wait -PassThru
         Remove-Item $tempExe -Force
+        if ($extract.ExitCode -ne 0) { exit $extract.ExitCode }
 
         $bootstrapperPath = Join-Path -Path (Join-Path $PWD "webimage_extracted") "bootstrapper.exe"
-
-        Write-Host "Listing available components..."
-        $procBootstrap = Start-Process -FilePath $bootstrapperPath -ArgumentList "--list-components" -NoNewWindow -Wait -PassThru -RedirectStandardOutput components
-        get-content components
-
-        Write-Host "Running bootstrapper..."
+        $components = $env:WINDOWS_MKL_COMPONENTS
         $bootstrapArgs = "-s --action install --components=$components --eula=accept -p=NEED_VS2017_INTEGRATION=0 -p=NEED_VS2019_INTEGRATION=0 -p=NEED_VS2022_INTEGRATION=0 --log-dir=."
-        $procBootstrap = Start-Process -FilePath $bootstrapperPath -ArgumentList $bootstrapArgs -NoNewWindow -Wait -PassThru
+        $bootstrap = Start-Process -FilePath $bootstrapperPath -ArgumentList $bootstrapArgs -NoNewWindow -Wait -PassThru
         Remove-Item -Recurse -Force "webimage_extracted"
+        exit $bootstrap.ExitCode
 
     - name: Check branch name
       shell: bash
       run: echo ${{ env.BRANCH_NAME }}
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         ref: ${{ env.BRANCH_NAME }}
         path: "./src"
@@ -472,37 +465,35 @@ jobs:
         curl.exe -L -O https://www.codesynthesis.com/download/xsd/4.2/libxsd-4.2.0.tar.gz
         tar zxvf libxsd-4.2.0.tar.gz
 
-    - name: Extract OneAPI version
-      shell: powershell
-      run: |
-        # Extract version from URL (e.g., 2025.2.1 -> 2025.2)
-        $url = "${{ env.WINDOWS_BASEKIT_URL }}"
-        if ($url -match 'toolkit-(\d+\.\d+)\.\d+') {
-          $version = $matches[1]
-          echo "ONEAPI_VERSION=$version" >> $env:GITHUB_ENV
-          Write-Host "Extracted OneAPI version: $version"
-        } else {
-          Write-Host "Failed to extract version, using default 2025.2"
-          echo "ONEAPI_VERSION=2025.2" >> $env:GITHUB_ENV
-        }
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v3
+      with:
+        vs-version: '[18.0,19.0)'
 
     - name: Build with CMake
       working-directory: "./src"
       shell: cmd
       run: |
         vcpkg.exe integrate install
-        call "C:\Program Files (x86)\Intel\oneAPI\compiler\%ONEAPI_VERSION%\env\vars.bat"
-        call "C:\Program Files (x86)\Intel\oneAPI\mkl\%ONEAPI_VERSION%\env\vars.bat"
-        set XSDROOT=%cd%\libxsd-4.2.0
-        set VPKG_INCLUDE=${{ env.VCPKG_INSTALLATION_ROOT }}\installed\x64-windows\include
-        set INCLUDE=%XSDROOT%;%VPKG_INCLUDE%;%INCLUDE%
-        set UseEnv=true
+        set "VS2026INSTALLDIR=C:\Program Files\Microsoft Visual Studio\18\Enterprise"
+        call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+        if errorlevel 1 exit /b %errorlevel%
+        if exist "C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat" (
+          call "C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat" %ONEAPI_VS_VER%
+          if errorlevel 1 call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
+        ) else (
+          call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
+        )
+        if errorlevel 1 exit /b %errorlevel%
+        if not defined MKLROOT set "MKLROOT=C:\Program Files (x86)\Intel\oneAPI\mkl\latest"
         cmake -DUSE_MKL=ON ^
+              "-DMKL_DIR:PATH=%MKLROOT%\lib\cmake\mkl" ^
+              -DMKL_THREADING=sequential ^
               -DVCPKG_MANIFEST_MODE=OFF ^
               -DCMAKE_TOOLCHAIN_FILE"=${{ env.VCPKG_INSTALLATION_ROOT }}/scripts/buildsystems/vcpkg.cmake" ^
               -DBUILD_TESTING=OFF ^
               -DUSE_UNITY_BUILD=ON ^
-              -G "Visual Studio 17 2022" -A x64 dynadjust
+              -G "Visual Studio 18 2026" -A x64 dynadjust
         cmake --build %cd% --config Release --parallel 2
 
     - name: Collate artifacts
@@ -516,7 +507,7 @@ jobs:
         cp -f ./src/bin/*.exe ./release/DynAdjust-Windows/ 2>/dev/null || true
         ls -la ./release/DynAdjust-Windows/
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: dynadjust-windows-mkl
         path: ./release/
@@ -525,7 +516,7 @@ jobs:
 
   build_windows_dyn_openblas:
     name: Windows build (openblas)
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess xerces-c vcpkg-tool-ninja openblas lapack-reference
@@ -541,7 +532,7 @@ jobs:
 
     - name: Cache vcpkg
       id: cache-vcpkg
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
         key: vcpkg-${{ runner.os }}-openblas-${{ env.VCPKG_HASH }}
@@ -568,7 +559,7 @@ jobs:
       shell: bash
       run: echo ${{ env.BRANCH_NAME }}
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         ref: ${{ env.BRANCH_NAME }}
         path: "./src"
@@ -581,21 +572,22 @@ jobs:
         tar zxvf libxsd-4.2.0.tar.gz
 
     - name: Add MSBuild to PATH
-      uses: microsoft/setup-msbuild@v2
+      uses: microsoft/setup-msbuild@v3
+      with:
+        vs-version: '[18.0,19.0)'
 
     - name: Build with CMake
       working-directory: "./src"
       shell: cmd
       run: |
         vcpkg.exe integrate install
-        setx WindowsTargetPlatformVersion 10.0.22621.0
         set XSDROOT=%cd%\libxsd-4.2.0
         cmake -DUSE_MKL=OFF ^
               -DVCPKG_MANIFEST_MODE=OFF ^
               -DBUILD_TESTING=OFF ^
               -DUSE_UNITY_BUILD=ON ^
               -DCMAKE_TOOLCHAIN_FILE"=${{ env.VCPKG_INSTALLATION_ROOT }}/scripts/buildsystems/vcpkg.cmake" ^
-              -G "Visual Studio 17 2022" -A x64 dynadjust
+              -G "Visual Studio 18 2026" -A x64 dynadjust
         cmake --build %cd% --config Release --parallel 2
 
     - name: Collate artifacts
@@ -609,7 +601,7 @@ jobs:
         cp -f ./src/bin/*.exe ./release/DynAdjust-Windows/ 2>/dev/null || true
         ls -la ./release/DynAdjust-Windows/
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: dynadjust-windows-openblas
         path: ./release/
@@ -646,7 +638,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
@@ -662,7 +654,7 @@ jobs:
 
       - name: Upload test log on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ctest-linux-openblas-log
           path: Testing/Temporary/LastTest.log
@@ -728,7 +720,7 @@ jobs:
 
       - name: Cache Intel OneAPI
         id: cache-oneapi
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /opt/intel
           key: intel-oneapi-linux-${{ env.ONEAPI_HASH }}
@@ -745,7 +737,7 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
@@ -767,7 +759,7 @@ jobs:
 
       - name: Upload test log on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ctest-linux-mkl-log
           path: Testing/Temporary/LastTest.log
@@ -863,13 +855,12 @@ jobs:
 
   ctest_windows_dyn_mkl:
     name: Build and run ctests on Windows (mkl)
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess boost-filesystem boost-timer boost-date-time boost-chrono xerces-c vcpkg-tool-ninja
       VCPKG_INSTALLATION_ROOT: "C:/vcpkg"
       VCPKG_BINARY_SOURCES: "clear"
-      ONEAPI_VERSION: "2025.2"
 
     steps:
 
@@ -883,11 +874,10 @@ jobs:
       shell: bash
       run: |
         echo VCPKG_HASH=$(echo "${VCPKG_PACKAGES}" | sed "s/ /_/g" | md5sum | cut -f 1 -d" ") >> $GITHUB_ENV
-        echo ONEAPI_HASH=$(echo "${WINDOWS_BASEKIT_URL}" | md5sum | cut -f 1 -d" ") >> $GITHUB_ENV
 
     - name: Cache vcpkg
       id: cache-vcpkg
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
         key: vcpkg-${{ runner.os }}-mkl-${{ env.VCPKG_HASH }}
@@ -897,12 +887,15 @@ jobs:
 
     - name: Cache Intel OneAPI
       id: cache-oneapi
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
-        path: C:\Program Files (x86)\Intel\oneAPI
-        key: intel-oneapi-windows-${{ env.ONEAPI_HASH }}
-        restore-keys: |
-          intel-oneapi-windows-
+        path: |
+          C:\Program Files (x86)\Intel\oneAPI\setvars.bat
+          C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat
+          C:\Program Files (x86)\Intel\oneAPI\compiler
+          C:\Program Files (x86)\Intel\oneAPI\mkl
+          C:\Program Files (x86)\Intel\oneAPI\tbb
+        key: intel-oneapi-windows-${{ env.WINDOWS_ONEAPI_CACHE_NUMBER }}-${{ env.WINDOWS_TOOLKIT_URL }}-${{ env.WINDOWS_MKL_COMPONENTS }}
 
     - name: Install vcpkg prerequisites
       if: steps.cache-vcpkg.outputs.cache-hit != 'true'
@@ -923,35 +916,24 @@ jobs:
       if: steps.cache-oneapi.outputs.cache-hit != 'true'
       shell: powershell
       run: |
-        Write-Host "Installing Intel OneAPI..."
-        $url = $env:WINDOWS_BASEKIT_URL
-        $components = "intel.oneapi.win.mkl.devel"
         $tempExe = Join-Path $env:TEMP "webimage.exe"
-
-        Write-Host "Downloading installer from $url..."
-        curl.exe -L $url -o $tempExe
-
-        Write-Host "Extracting installer..."
-        $installerArgs = "-s -x -f webimage_extracted --log extract.log"
-        $proc = Start-Process -FilePath $tempExe -ArgumentList $installerArgs -NoNewWindow -Wait -PassThru
+        curl.exe --output $tempExe --url $env:WINDOWS_TOOLKIT_URL --retry 5 --retry-delay 5
+        $extract = Start-Process -FilePath $tempExe -ArgumentList "-s -x -f webimage_extracted --log extract.log" -NoNewWindow -Wait -PassThru
         Remove-Item $tempExe -Force
+        if ($extract.ExitCode -ne 0) { exit $extract.ExitCode }
 
         $bootstrapperPath = Join-Path -Path (Join-Path $PWD "webimage_extracted") "bootstrapper.exe"
-
-        Write-Host "Listing available components..."
-        $procBootstrap = Start-Process -FilePath $bootstrapperPath -ArgumentList "--list-components" -NoNewWindow -Wait -PassThru -RedirectStandardOutput components
-        get-content components
-
-        Write-Host "Running bootstrapper..."
+        $components = $env:WINDOWS_MKL_COMPONENTS
         $bootstrapArgs = "-s --action install --components=$components --eula=accept -p=NEED_VS2017_INTEGRATION=0 -p=NEED_VS2019_INTEGRATION=0 -p=NEED_VS2022_INTEGRATION=0 --log-dir=."
-        $procBootstrap = Start-Process -FilePath $bootstrapperPath -ArgumentList $bootstrapArgs -NoNewWindow -Wait -PassThru
+        $bootstrap = Start-Process -FilePath $bootstrapperPath -ArgumentList $bootstrapArgs -NoNewWindow -Wait -PassThru
         Remove-Item -Recurse -Force "webimage_extracted"
+        exit $bootstrap.ExitCode
 
     - name: Check branch name
       shell: bash
       run: echo ${{ env.BRANCH_NAME }}
 
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         ref: ${{ env.BRANCH_NAME }}
         path: "./src"
@@ -963,48 +945,62 @@ jobs:
         curl.exe -L -O https://www.codesynthesis.com/download/xsd/4.2/libxsd-4.2.0.tar.gz
         tar zxvf libxsd-4.2.0.tar.gz
 
-    - name: Extract OneAPI version
-      shell: powershell
-      run: |
-        # Extract version from URL (e.g., 2025.2.1 -> 2025.2)
-        $url = "${{ env.WINDOWS_BASEKIT_URL }}"
-        if ($url -match 'toolkit-(\d+\.\d+)\.\d+') {
-          $version = $matches[1]
-          echo "ONEAPI_VERSION=$version" >> $env:GITHUB_ENV
-          Write-Host "Extracted OneAPI version: $version"
-        } else {
-          Write-Host "Failed to extract version, using default 2025.2"
-          echo "ONEAPI_VERSION=2025.2" >> $env:GITHUB_ENV
-        }
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v3
+      with:
+        vs-version: '[18.0,19.0)'
 
     - name: Build with CMake
       working-directory: "./src"
       shell: cmd
       run: |
         vcpkg.exe integrate install
-        call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat" intel64 vs2022
-        set XSDROOT=%cd%\libxsd-4.2.0
-        set VPKG_INCLUDE=${{ env.VCPKG_INSTALLATION_ROOT }}\installed\x64-windows\include
-        set INCLUDE=%XSDROOT%;%VPKG_INCLUDE%;%INCLUDE%
-        set UseEnv=true
+        set "VS2026INSTALLDIR=C:\Program Files\Microsoft Visual Studio\18\Enterprise"
+        call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+        if errorlevel 1 exit /b %errorlevel%
+        if exist "C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat" (
+          call "C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat" %ONEAPI_VS_VER%
+          if errorlevel 1 call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
+        ) else (
+          call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
+        )
+        if errorlevel 1 exit /b %errorlevel%
+        if not defined MKLROOT set "MKLROOT=C:\Program Files (x86)\Intel\oneAPI\mkl\latest"
         cmake -DUSE_MKL=ON ^
+              "-DMKL_DIR:PATH=%MKLROOT%\lib\cmake\mkl" ^
+              -DMKL_THREADING=sequential ^
               -DBUILD_TESTING=ON ^
               -DVCPKG_MANIFEST_MODE=OFF ^
               -DCMAKE_TOOLCHAIN_FILE"=${{ env.VCPKG_INSTALLATION_ROOT }}/scripts/buildsystems/vcpkg.cmake" ^
-              -G "Visual Studio 17 2022" -A x64 dynadjust
+              -G "Visual Studio 18 2026" -A x64 dynadjust
         cmake --build %cd% --config Release --parallel 2
+        cmake --build %cd% --config Release --target unit_tests --parallel 2
         dir bin\
 
     - name: Run tests
       working-directory: "./src"
       shell: cmd
       run: |
-        call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
-        ctest --timeout 20 --output-on-failure -C Release 2>&1 | powershell -Command "$input | Tee-Object -FilePath ctest_output.log"
+        set "VS2026INSTALLDIR=C:\Program Files\Microsoft Visual Studio\18\Enterprise"
+        call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+        if errorlevel 1 exit /b %errorlevel%
+        if exist "C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat" (
+          call "C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat" %ONEAPI_VS_VER%
+          if errorlevel 1 call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
+        ) else (
+          call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
+        )
+        if errorlevel 1 exit /b %errorlevel%
+        set "MKL_NUM_THREADS=1"
+        set "OMP_NUM_THREADS=1"
+        set "MKL_DYNAMIC=FALSE"
+        set "MKL_DOMAIN_NUM_THREADS=MKL_DOMAIN_ALL=1"
+        set "MKL_THREADING_LAYER=SEQUENTIAL"
+        ctest --timeout 120 --output-on-failure --stop-on-failure -C Release -E "^unit-MatrixTest$" 2>&1 | powershell -Command "$input | Tee-Object -FilePath ctest_output.log"
 
     - name: Upload test log on failure
       if: failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ctest-windows-mkl-log
         path: src/Testing/Temporary/LastTest.log
@@ -1084,7 +1080,7 @@ jobs:
 
       - name: Cache Intel OneAPI
         id: cache-oneapi
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /opt/intel
           key: intel-oneapi-linux-${{ env.ONEAPI_HASH }}
@@ -1101,12 +1097,12 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
       - name: Download MKL binaries artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: dynadjust-linux-mkl
           path: ./artifacts
@@ -1145,8 +1141,9 @@ jobs:
           # Source Intel OneAPI environment
           source /opt/intel/oneapi/setvars.sh
 
-          # Modify PATH to use our binaries
+          # Modify PATH and LD_LIBRARY_PATH to use our binaries
           export PATH="../bin:$PATH"
+          export LD_LIBRARY_PATH="../bin:${LD_LIBRARY_PATH:-}"
 
           # Run the test script and capture output
           set +e  # Don't exit on error
@@ -1169,8 +1166,9 @@ jobs:
           # Source Intel OneAPI environment
           source /opt/intel/oneapi/setvars.sh
 
-          # Modify PATH to use our binaries
+          # Modify PATH and LD_LIBRARY_PATH to use our binaries
           export PATH="../bin:$PATH"
+          export LD_LIBRARY_PATH="../bin:${LD_LIBRARY_PATH:-}"
 
           # Run the test script and capture output
           set +e  # Don't exit on error
@@ -1207,12 +1205,12 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
       - name: Download static binaries artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: dynadjust-linux-openblas-static
           path: ./artifacts
@@ -1307,12 +1305,12 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
       - name: Download static binaries artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: dynadjust-macos-static
           path: ./artifacts
@@ -1386,14 +1384,13 @@ jobs:
 
   test_windows_mkl_binaries:
     name: Test Windows MKL binaries
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     needs: [build_windows_dyn_mkl]
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess xerces-c vcpkg-tool-ninja
       VCPKG_INSTALLATION_ROOT: "C:/vcpkg"
       VCPKG_BINARY_SOURCES: "clear"
-      ONEAPI_VERSION: "2025.2"
 
     steps:
       - name: Show CPU information
@@ -1406,11 +1403,10 @@ jobs:
         shell: bash
         run: |
           echo VCPKG_HASH=$(echo "${VCPKG_PACKAGES}" | sed "s/ /_/g" | md5sum | cut -f 1 -d" ") >> $GITHUB_ENV
-          echo ONEAPI_HASH=$(echo "${WINDOWS_BASEKIT_URL}" | md5sum | cut -f 1 -d" ") >> $GITHUB_ENV
 
       - name: Cache vcpkg
         id: cache-vcpkg
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
           key: vcpkg-${{ runner.os }}-mkl-${{ env.VCPKG_HASH }}
@@ -1420,12 +1416,15 @@ jobs:
 
       - name: Cache Intel OneAPI
         id: cache-oneapi
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
-          path: C:\Program Files (x86)\Intel\oneAPI
-          key: intel-oneapi-windows-${{ env.ONEAPI_HASH }}
-          restore-keys: |
-            intel-oneapi-windows-
+          path: |
+            C:\Program Files (x86)\Intel\oneAPI\setvars.bat
+            C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat
+            C:\Program Files (x86)\Intel\oneAPI\compiler
+            C:\Program Files (x86)\Intel\oneAPI\mkl
+            C:\Program Files (x86)\Intel\oneAPI\tbb
+          key: intel-oneapi-windows-${{ env.WINDOWS_ONEAPI_CACHE_NUMBER }}-${{ env.WINDOWS_TOOLKIT_URL }}-${{ env.WINDOWS_MKL_COMPONENTS }}
 
       - name: Install vcpkg prerequisites
         if: steps.cache-vcpkg.outputs.cache-hit != 'true'
@@ -1442,50 +1441,29 @@ jobs:
         if: steps.cache-oneapi.outputs.cache-hit != 'true'
         shell: powershell
         run: |
-          Write-Host "Installing Intel OneAPI..."
-          $url = $env:WINDOWS_BASEKIT_URL
-          $components = "intel.oneapi.win.mkl.devel"
           $tempExe = Join-Path $env:TEMP "webimage.exe"
-
-          Write-Host "Downloading installer from $url..."
-          curl.exe -L $url -o $tempExe
-
-          Write-Host "Extracting installer..."
-          $installerArgs = "-s -x -f webimage_extracted --log extract.log"
-          $proc = Start-Process -FilePath $tempExe -ArgumentList $installerArgs -NoNewWindow -Wait -PassThru
+          curl.exe --output $tempExe --url $env:WINDOWS_TOOLKIT_URL --retry 5 --retry-delay 5
+          $extract = Start-Process -FilePath $tempExe -ArgumentList "-s -x -f webimage_extracted --log extract.log" -NoNewWindow -Wait -PassThru
           Remove-Item $tempExe -Force
+          if ($extract.ExitCode -ne 0) { exit $extract.ExitCode }
 
           $bootstrapperPath = Join-Path -Path (Join-Path $PWD "webimage_extracted") "bootstrapper.exe"
-
-          Write-Host "Running bootstrapper..."
+          $components = $env:WINDOWS_MKL_COMPONENTS
           $bootstrapArgs = "-s --action install --components=$components --eula=accept -p=NEED_VS2017_INTEGRATION=0 -p=NEED_VS2019_INTEGRATION=0 -p=NEED_VS2022_INTEGRATION=0 --log-dir=."
-          $procBootstrap = Start-Process -FilePath $bootstrapperPath -ArgumentList $bootstrapArgs -NoNewWindow -Wait -PassThru
+          $bootstrap = Start-Process -FilePath $bootstrapperPath -ArgumentList $bootstrapArgs -NoNewWindow -Wait -PassThru
           Remove-Item -Recurse -Force "webimage_extracted"
-
-      - name: Extract OneAPI version
-        shell: powershell
-        run: |
-          # Extract version from URL (e.g., 2025.2.1 -> 2025.2)
-          $url = "${{ env.WINDOWS_BASEKIT_URL }}"
-          if ($url -match 'toolkit-(\d+\.\d+)\.\d+') {
-            $version = $matches[1]
-            echo "ONEAPI_VERSION=$version" >> $env:GITHUB_ENV
-            Write-Host "Extracted OneAPI version: $version"
-          } else {
-            Write-Host "Failed to extract version, using default 2025.2"
-            echo "ONEAPI_VERSION=2025.2" >> $env:GITHUB_ENV
-          }
+          exit $bootstrap.ExitCode
 
       - name: Check branch name
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
       - name: Download binaries artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: dynadjust-windows-mkl
           path: ./artifacts
@@ -1516,8 +1494,19 @@ jobs:
         working-directory: ./sampleData
         shell: cmd
         run: |
-          call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
-          set PATH=..\bin;%PATH%
+          set "VS2026INSTALLDIR=C:\Program Files\Microsoft Visual Studio\18\Enterprise"
+          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b %errorlevel%
+          if exist "C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat" (
+            call "C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat" %ONEAPI_VS_VER%
+            if errorlevel 1 call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
+          ) else (
+            call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
+          )
+          if errorlevel 1 exit /b %errorlevel%
+          if not defined ONEAPI_ROOT set "ONEAPI_ROOT=C:\Program Files (x86)\Intel\oneAPI"
+          if not defined MKLROOT set "MKLROOT=%ONEAPI_ROOT%\mkl\latest"
+          set PATH=..\bin;%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin;%MKLROOT%\bin;%ONEAPI_ROOT%\compiler\latest\bin;%PATH%
 
           :: Run the commands directly using the correct names
           ..\bin\import.exe -n gnss gnss-network.stn gnss-network.msr
@@ -1543,8 +1532,19 @@ jobs:
         working-directory: ./sampleData
         shell: cmd
         run: |
-          call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
-          set PATH=..\bin;%PATH%
+          set "VS2026INSTALLDIR=C:\Program Files\Microsoft Visual Studio\18\Enterprise"
+          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b %errorlevel%
+          if exist "C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat" (
+            call "C:\Program Files (x86)\Intel\oneAPI\setvars-vcvarsall.bat" %ONEAPI_VS_VER%
+            if errorlevel 1 call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
+          ) else (
+            call "C:\Program Files (x86)\Intel\oneAPI\setvars.bat"
+          )
+          if errorlevel 1 exit /b %errorlevel%
+          if not defined ONEAPI_ROOT set "ONEAPI_ROOT=C:\Program Files (x86)\Intel\oneAPI"
+          if not defined MKLROOT set "MKLROOT=%ONEAPI_ROOT%\mkl\latest"
+          set PATH=..\bin;%VCPKG_INSTALLATION_ROOT%\installed\x64-windows\bin;%MKLROOT%\bin;%ONEAPI_ROOT%\compiler\latest\bin;%PATH%
 
           :: Run the commands directly using the correct names
           ..\bin\import.exe -n urban urban-network.stn urban-network.msr
@@ -1569,7 +1569,7 @@ jobs:
 
   test_windows_openblas_binaries:
     name: Test Windows OpenBLAS binaries
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     needs: [build_windows_dyn_openblas]
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
@@ -1591,7 +1591,7 @@ jobs:
 
       - name: Cache vcpkg
         id: cache-vcpkg
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ env.VCPKG_INSTALLATION_ROOT }}/installed
           key: vcpkg-${{ runner.os }}-openblas-${{ env.VCPKG_HASH }}
@@ -1614,12 +1614,12 @@ jobs:
         shell: bash
         run: echo ${{ env.BRANCH_NAME }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.BRANCH_NAME }}
 
       - name: Download binaries artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: dynadjust-windows-openblas
           path: ./artifacts

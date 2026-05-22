@@ -22,7 +22,13 @@
 
 #include <include/memory/dnafile_mapping.hpp>
 
-namespace dynadjust { 
+#ifdef __linux__
+#include <cstdint>
+#include <sys/mman.h>
+#include <unistd.h>
+#endif
+
+namespace dynadjust {
 namespace memory {
 
 //block_map_t::block_map_t()
@@ -72,12 +78,30 @@ block_map_t::block_map_t(const block_map_t &p)
 void block_map_t::MapRegion(FileMapPtr file_map_ptr) {
 	region_ptr_.reset(
 		new boost::interprocess::mapped_region(
-			*file_map_ptr, 
-			boost::interprocess::read_write, 
-			region_offset_, 
+			*file_map_ptr,
+			boost::interprocess::read_write,
+			region_offset_,
 			data_size_
 			)
 		);
+}
+
+
+void block_map_t::AdviseSequential() {
+	if (region_ptr_)
+		region_ptr_->advise(boost::interprocess::mapped_region::advice_sequential);
+}
+
+
+void block_map_t::AdviseDontNeed() {
+	if (region_ptr_)
+		region_ptr_->advise(boost::interprocess::mapped_region::advice_dontneed);
+}
+
+
+void block_map_t::AdviseWillNeed() {
+	if (region_ptr_)
+		region_ptr_->advise(boost::interprocess::mapped_region::advice_willneed);
 }
 
 
@@ -129,9 +153,53 @@ void vmat_file_map::CreateFileMap()
 }
 	
 
-void vmat_file_map::MapRegion(const UINT32 block) 
+void vmat_file_map::MapRegion(const UINT32 block)
 {
 	vblockMapRegions_.at(block).MapRegion(file_map_ptr_);
+}
+
+
+void vmat_file_map::AdviseRegion(const UINT32 block, boost::interprocess::mapped_region::advice_types advice)
+{
+	auto& region = vblockMapRegions_.at(block);
+#ifdef __linux__
+	// Boost's mapped_region::advise calls madvise() without
+	// page-aligning the address.  Stage regions are packed
+	// end-to-end so only the first region's address is page-
+	// aligned by chance; madvise on the rest fails silently
+	// with EINVAL.  Round start up and end down to whole
+	// pages, then call madvise directly.  For DONTNEED also
+	// flush dirty pages asynchronously so the kernel can
+	// evict them promptly.
+	if (region.region_ptr_ && region.data_size_ > 0) {
+		const std::size_t page_size =
+			static_cast<std::size_t>(sysconf(_SC_PAGESIZE));
+		auto base = reinterpret_cast<std::uintptr_t>(
+			region.region_ptr_->get_address());
+		std::uintptr_t aligned_start =
+			(base + page_size - 1) & ~(page_size - 1);
+		std::uintptr_t aligned_end =
+			(base + region.data_size_) & ~(page_size - 1);
+		if (aligned_end > aligned_start) {
+			void* addr = reinterpret_cast<void*>(aligned_start);
+			std::size_t len = aligned_end - aligned_start;
+			int madv = MADV_NORMAL;
+			switch (advice) {
+			case boost::interprocess::mapped_region::advice_sequential:
+				madv = MADV_SEQUENTIAL; break;
+			case boost::interprocess::mapped_region::advice_willneed:
+				madv = MADV_WILLNEED; break;
+			case boost::interprocess::mapped_region::advice_dontneed:
+				msync(addr, len, MS_ASYNC);
+				madv = MADV_DONTNEED; break;
+			default: break;
+			}
+			madvise(addr, len, madv);
+			return;
+		}
+	}
+#endif
+	region.region_ptr_->advise(advice);
 }
 	
 

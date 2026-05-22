@@ -151,7 +151,11 @@ const char* const LSQ_INVERSE_METHOD = "inversion-method";
 const char* const SCALE_NORMAL_UNITY = "scale-normals-to-unity";
 const char* const PURGE_STAGE_FILES = "purge-stage-files";
 const char* const RECREATE_STAGE_FILES = "create-stage-files";
+const char* const STAGE_PATH = "stage-path";
 const char* const UPDATE_ORIGINAL_STN_FILE = "update-orig-stn-file";
+
+// Threading options
+const char* const MAX_THREADS = "max-threads";
 
 const char* const SEG_MIN_INNER_STNS = "min-inner-stns";
 const char* const SEG_THRESHOLD_STNS = "max-block-stns";
@@ -171,6 +175,7 @@ const char* const REFERENCE_FRAME = "reference-frame";
 const char* const REFERENCE_FRAME_R = "reference-frame,r";
 const char* const EPOCH = "epoch";
 const char* const EPOCH_E = "epoch,e";
+const char* const OBSERVATION_EPOCH = "observation-epoch";
 const char* const OVERRIDE_INPUT_FRAME = "override-input-ref-frame";
 const char* const TECTONIC_PLATE_BDY_FILE = "plate-boundary-file";
 const char* const TECTONIC_PLATE_BDY_FILE_B = "plate-boundary-file,b";
@@ -211,6 +216,7 @@ const char* const EXPORT_GEO_FILE = "export-dna-geo-file";
 const char* const EXPORT_NTV2_ASCII_FILE = "export-ntv2-asc-file";
 const char* const EXPORT_NTV2_BINARY_FILE = "export-ntv2-gsb-file";
 const char* const EXPORT_SNX_FILE = "export-sinex-file";
+const char* const OUTPUT_JSON = "output-json";
 const char* const IMPORT_GEO_FILE = "geo-file";
 const char* const IMPORT_GEO_FILE_G = "geo-file,g";
 const char* const EXPORT_ASL_FILE = "export-asl-file";

@@ -185,7 +185,7 @@ public:
 struct import_settings : private boost::equality_comparable<import_settings> {
 public:
 	import_settings()
-		: reference_frame(DEFAULT_DATUM), epoch(DEFAULT_EPOCH), user_supplied_frame(0), user_supplied_epoch(0), override_input_rfame(0)
+		: reference_frame(DEFAULT_DATUM), epoch(DEFAULT_EPOCH), observation_epoch(""), user_supplied_frame(0), user_supplied_epoch(0), user_supplied_observation_epoch(0), override_input_rfame(0)
 		, test_integrity(0), verify_coordinates(0), export_dynaml(0), export_from_bfiles(0)
 		, export_single_xml_file(0), prefer_single_x_as_g(0), export_asl_file(0), export_aml_file(0), export_map_file(0)
 		, export_dna_files(0), export_discont_file(0), import_geo_file(0), simulate_measurements(0), split_clusters(0), include_transcending_msrs(0)
@@ -232,9 +232,11 @@ private:
 
 public:
 	std::string		reference_frame;			// Project reference frame - used primarily for reductions on the ellipsoid.
-	std::string		epoch;						// Project epoch
+	std::string		epoch;						// Project epoch (of reference frame)
+	std::string		observation_epoch;			// Default observation epoch applied to measurements with no file-level value
 	UINT16		user_supplied_frame;		// User has supplied a frame - use this to change the default frame
 	UINT16		user_supplied_epoch;		// User has supplied a epoch - use this to change the default epoch
+	UINT16		user_supplied_observation_epoch;	// User has supplied an observation epoch via --observation-epoch
 	UINT16		override_input_rfame;		// Override reference frame specified in input files using the default or user supplied frame.
 	UINT16		test_integrity;				// Test integrity of network
 	UINT16		verify_coordinates;			// Test integrity of coordinates
@@ -430,7 +432,8 @@ public:
 		, iteration_threshold((float)0.0005), free_std_dev(10.0), fixed_std_dev(PRECISION_1E6), station_constraints("")
 		, map_file(""), bst_file(""), bms_file(""), seg_file(""), comments("") 
 		, command_line_arguments("")
-		, type_b_global (""), type_b_file ("") {}
+		, type_b_global (""), type_b_file ("")
+		, max_threads(0) {}
 
 private:
 	// Disallow use of compiler generated equality operator.
@@ -471,6 +474,7 @@ public:
 	UINT16		scale_normals_to_unity;	// Scale normals to unity prior to inversion
 	bool		purge_stage_files;		// Purge memory mapped files from disk upon adjustment completion.
 	UINT16		recreate_stage_files;	// Recreate memory mapped files.
+	std::string	stage_path;				// Directory for memory mapped stage files (default: output_folder).
 	float		iteration_threshold;	// Convergence limit
 	double		free_std_dev;			// SD for free stations
 	double		fixed_std_dev;			// SD for fixed stations
@@ -483,6 +487,9 @@ public:
 	std::string		command_line_arguments;
 	std::string      type_b_global;          // Comma delimited string containing Type b uncertainties to be applied to all uncertainties computed from an adjustment
 	std::string      type_b_file;            // File path to Type b uncertainties to be applied to specific site uncertainties computed from an adjustment
+
+	// Threading
+	int			max_threads;			// Maximum BLAS threads (0 = auto)
 };
 
 // datum and geoid settings
@@ -491,13 +498,15 @@ public:
 	output_settings()
 		: _m2s_file(""), _adj_file(""), _xyz_file("")
 		, _snx_file(""), _xml_file(""), _cor_file(""), _apu_file("")
+		, _adj_json_file(""), _xyz_json_file(""), _apu_json_file("")
+		, _cor_json_file(""), _m2s_json_file("")
 		, _adj_stn_iteration(0), _adj_msr_iteration(0), _cmp_msr_iteration(0), _adj_stat_iteration(0)
 		, _adj_msr_final(0), _adj_msr_tstat(0), _database_ids(0), _print_ignored_msrs(0), _adj_gnss_units(0)
 		, _output_stn_blocks(0), _output_msr_blocks(0), _sort_stn_file_order(0), _sort_adj_msr(0), _sort_msr_to_stn(0)
 		, _init_stn_corrections(0), _msr_to_stn(0), _stn_corr(0), _positional_uncertainty(0)
 		, _apu_vcv_units(0), _output_pu_covariances(0)
 		, _export_xml_stn_file(0), _export_xml_msr_file(0), _export_dna_stn_file(0), _export_dna_msr_file(0)
-		, _export_snx_file(0)
+		, _export_snx_file(0), _output_json(0)
 		, _hz_corr_threshold(0.0), _vt_corr_threshold(0.0)
 		, _stn_coord_types("PLHhXYZ"), _angular_type_stn(DMS)
 		, _precision_seconds_stn(5), _precision_metres_stn(4), _precision_seconds_msr(4), _precision_metres_msr(4)
@@ -547,6 +556,11 @@ public:
 	std::string			_xml_file;				// Estimated station coordinates and full variance matrix in DynaML (DynAdjust XML) format. Uses Y cluster.
 	std::string			_cor_file;				// Corrections to intial stations output
 	std::string			_apu_file;				// Adjusted positional uncertainty output
+	std::string			_adj_json_file;			// Optional JSONL sibling of _adj_file
+	std::string			_xyz_json_file;			// Optional JSONL sibling of _xyz_file
+	std::string			_apu_json_file;			// Optional JSONL sibling of _apu_file
+	std::string			_cor_json_file;			// Optional JSONL sibling of _cor_file
+	std::string			_m2s_json_file;			// Optional JSONL sibling of _m2s_file
 	UINT16			_adj_stn_iteration;		// Outputs adjusted stations for each block within each iteration
 	UINT16			_adj_msr_iteration;		// Outputs adjusted measurements for each block within each iteration
 	UINT16			_cmp_msr_iteration;		// Outputs computed measurements for each block within each iteration
@@ -572,6 +586,7 @@ public:
 	UINT16			_export_dna_stn_file;	// Create a DNA stn file
 	UINT16			_export_dna_msr_file;	// Create a DNA msr file
 	UINT16			_export_snx_file;		// Create a sinex file from the adjustment
+	UINT16			_output_json;			// Also emit adjustment reports as JSONL alongside text reports
 	double			_hz_corr_threshold;		// Minimum horizontal threshold for station corrections
 	double			_vt_corr_threshold;		// Minimum vertical threshold for station corrections
 	std::string			_stn_coord_types;		// String defining the cooridnate types to be printed for each station

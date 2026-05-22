@@ -467,6 +467,7 @@ public:
 	virtual void Directions ();
 	virtual void Vscale (const ::std::string&);
 	virtual void Epoch (const ::std::string&);
+	virtual void EpochOfObservation (const ::std::string&);
 	virtual void ReferenceFrame (const ::std::string&);
 	virtual void GPSBaseline ();
 	virtual void Hscale (const ::std::string&);
@@ -558,6 +559,7 @@ public:
 	void Directions_parser (::Directions_pskel&);
 	void Vscale_parser (::xml_schema::string_pskel&);
 	void Epoch_parser (::xml_schema::string_pskel&);
+	void EpochOfObservation_parser (::xml_schema::string_pskel&);
 	void ReferenceFrame_parser (::xml_schema::string_pskel&);
 	void GPSBaseline_parser (::GPSBaseline_pskel&);
 	void Hscale_parser (::xml_schema::string_pskel&);
@@ -583,6 +585,7 @@ public:
 			::Directions_pskel& /* Directions */,
 			::xml_schema::string_pskel& /* Vscale */,
 			::xml_schema::string_pskel& /* Epoch */,
+			::xml_schema::string_pskel& /* EpochOfObservation */,
 			::xml_schema::string_pskel& /* ReferenceFrame */,
 			::GPSBaseline_pskel& /* GPSBaseline */,
 			::xml_schema::string_pskel& /* Hscale */,
@@ -630,6 +633,7 @@ protected:
 	::Directions_pskel* Directions_parser_;
 	::xml_schema::string_pskel* Vscale_parser_;
 	::xml_schema::string_pskel* Epoch_parser_;
+	::xml_schema::string_pskel* EpochOfObservation_parser_;
 	::xml_schema::string_pskel* ReferenceFrame_parser_;
 	::GPSBaseline_pskel* GPSBaseline_parser_;
 	::xml_schema::string_pskel* Hscale_parser_;

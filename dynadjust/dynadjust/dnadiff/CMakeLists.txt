@@ -24,8 +24,8 @@ else()
   # Link statically
   if(UNIX)
     if(NOT APPLE)
-      SET_TARGET_PROPERTIES(${STATIC_TARGET_NAME} PROPERTIES LINK_FLAGS "-static")
-      target_link_libraries (${STATIC_TARGET_NAME} pthread)
+      target_link_options(${STATIC_TARGET_NAME} PRIVATE -static-libgcc -static-libstdc++)
+      target_link_libraries(${STATIC_TARGET_NAME} pthread)
     endif()
   endif()
 

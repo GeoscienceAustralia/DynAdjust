@@ -36,42 +36,56 @@
 #if defined(USE_MKL) || defined(__MKL__)
 #include <mkl.h>
 
-#elif defined(OPENBLAS_VERSION) || defined(__OPENBLAS_CONFIG_H) || defined(OPENBLAS_LOPT_H)
+#elif !defined(__APPLE__)
+
+#include <cblas.h>
+
+#if defined(OPENBLAS_VERSION) || defined(__OPENBLAS_CONFIG_H) || defined(OPENBLAS_LOPT_H)
 
 #ifndef USE_OPENBLAS
 #define USE_OPENBLAS
 #endif
 
-#include <cblas.h>
+#elif defined(__has_include)
+#if __has_include(<openblas_config.h>)
+#ifndef USE_OPENBLAS
+#define USE_OPENBLAS
+#endif
 #include <openblas_config.h>
+#endif
+#endif
 
+#ifdef USE_OPENBLAS
 extern "C" { void openblas_set_num_threads(int); }
+#endif
 
 #elif defined(__APPLE__)
 #include <Accelerate/Accelerate.h>
 #endif
 /// \endcond
 
+inline int positive_env_int(const char* name) {
+    const char* env = std::getenv(name);
+    if (!env || !*env) return 0;
+    int value = std::atoi(env);
+    return value > 0 ? value : 0;
+}
+
 inline int init_linear_algebra_threads(int requested_threads = 0) {
     int n = requested_threads;
 
-#if defined(_OPENMP)
     if (n <= 0) {
-        if (const char* env = std::getenv("OMP_NUM_THREADS"); env && *env) {
-            int v = std::atoi(env);
-            if (v > 0) n = v;
-        }
-    }
-    if (n <= 0) n = std::max(1, omp_get_max_threads());
+        n = positive_env_int("OMP_NUM_THREADS");
+#if defined(USE_MKL) || defined(__MKL__)
+        if (n <= 0) n = positive_env_int("MKL_NUM_THREADS");
+#elif defined(USE_OPENBLAS)
+        if (n <= 0) n = positive_env_int("OPENBLAS_NUM_THREADS");
 #elif defined(__APPLE__)
-    if (n == 1) {
-        BLASSetThreading(BLAS_THREADING_SINGLE_THREADED);
-    } else {
-        BLASSetThreading(BLAS_THREADING_MULTI_THREADED);
-    }
-#else
-    if (n <= 0) n = 1;
+        if (n <= 0) n = positive_env_int("VECLIB_MAXIMUM_THREADS");
 #endif
+    }
+
+    if (n <= 0) return 0;
 
 #if defined(_OPENMP)
     omp_set_dynamic(0);
@@ -83,7 +97,13 @@ inline int init_linear_algebra_threads(int requested_threads = 0) {
     omp_set_num_threads(n);
 #endif
 
-#ifdef USE_MKL
+#if defined(__APPLE__)
+    if (n == 1) {
+        BLASSetThreading(BLAS_THREADING_SINGLE_THREADED);
+    } else {
+        BLASSetThreading(BLAS_THREADING_MULTI_THREADED);
+    }
+#elif defined(USE_MKL) || defined(__MKL__)
     mkl_set_dynamic(0);
     mkl_set_num_threads(n);
 #if defined(MKL_THREAD_LOCAL)

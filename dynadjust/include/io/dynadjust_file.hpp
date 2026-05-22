@@ -37,7 +37,7 @@
 #include <include/config/dnatypes-fwd.hpp>
 #include <include/config/dnatypes-structs.hpp>
 
-#define __FILE_VERSION__ "1.1"
+#define __FILE_VERSION__ "1.2"
 
 namespace dynadjust {
 namespace iostreams {

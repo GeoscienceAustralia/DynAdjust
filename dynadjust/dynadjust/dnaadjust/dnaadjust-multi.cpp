@@ -94,11 +94,9 @@ void dna_adjust::AdjustPhasedMultiThread()
 	initialiseIteration();
 
 	std::string corr_msg;
-	std::ostringstream ss;
 	UINT32 i;
 	bool iterate(true);
 
-	std::chrono::milliseconds iteration_time(std::chrono::milliseconds(0));
 	cpu_timer it_time, tot_time;
 
 #if defined(__ICC) || defined(__INTEL_COMPILER)		// Intel compiler
@@ -169,7 +167,6 @@ void dna_adjust::AdjustPhasedMultiThread()
 		for_each(mt_adjust_threads.begin(), mt_adjust_threads.end(), std::mem_fn(&std::thread::join));
 #endif
 		// This point is reached when the threads have finished
-		iteration_time = std::chrono::duration_cast<std::chrono::milliseconds>(it_time.elapsed().wall);
 
 		//delete mt_adjust_threads;
 #if defined(__ICC) || defined(__INTEL_COMPILER)		// Intel compiler
@@ -195,18 +192,12 @@ void dna_adjust::AdjustPhasedMultiThread()
 		if (IsCancelled())
 			break;
 
-		ss.str("");
-		if (iteration_time >= std::chrono::seconds(1)) {
-			auto seconds = std::chrono::duration_cast<std::chrono::seconds>(iteration_time);
-			ss << seconds.count() << "s";
-		} else {
-			ss << iteration_time.count() << "ms";
-		}
+		std::string iteration_time_str = FormatElapsedTime(it_time.elapsed().wall.count() / 1.0e9);
 
 		///////////////////////////////////
 		// protected write to adj file (not needed here since write to
 		// adj file at this stage is via single thread
-		adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Elapsed time" << ss.str() << std::endl;
+		adj_file << std::setw(PRINT_VAR_PAD) << std::left << "Elapsed time" << iteration_time_str << std::endl;
 		OutputLargestCorrection(corr_msg);
 		///////////////////////////////////
 
@@ -214,6 +205,7 @@ void dna_adjust::AdjustPhasedMultiThread()
 			debug_file << concurrentAdjustments.print_adjusted_blocks();
 
 		iterationCorrections_.add_message(corr_msg);
+		iterationTimes_.add_message(iteration_time_str);
 		iterationQueue_.push_and_notify(CurrentIteration());				// currentIteration begins at 1, so not zero-indexed
 
 		// continue iterating?
@@ -303,7 +295,7 @@ void dna_adjust::SolveMT(bool COMPUTE_INVERSE, const UINT32& block)
 	{
 		// Compute inverse of normals (aposteriori variance matrix)
 		// (AT * V-1 * A)-1
-		FormInverseVarianceMatrix(&(v_normalsR_.at(block)), false);
+		FormInverseVarianceMatrix(&(v_normalsR_.at(block)), false, true);
 	}
 
 	// compute weighted "measured minus computed"
@@ -312,7 +304,10 @@ void dna_adjust::SolveMT(bool COMPUTE_INVERSE, const UINT32& block)
 
 	// Solve corrections from normal equations
 	v_correctionsR_.at(block).redim(v_designR_.at(block).columns(), 1);
-	v_correctionsR_.at(block).multiply(v_normalsR_.at(block), "N", At_Vinv_m, "N");
+	if (v_normalsR_.at(block).is_symmetric())
+		v_correctionsR_.at(block).multiply_sym(v_normalsR_.at(block), At_Vinv_m);
+	else
+		v_correctionsR_.at(block).multiply(v_normalsR_.at(block), "N", At_Vinv_m, "N");
 
 	// debug output?
 	if (projectSettings_.g.verbose > 3)
@@ -842,4 +837,3 @@ void dna_adjust::PrepareAdjustmentMultiThread()
 
 }	// namespace networkadjust
 }	// namespace dynadjust
-

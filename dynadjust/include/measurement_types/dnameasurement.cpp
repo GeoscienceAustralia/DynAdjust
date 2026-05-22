@@ -221,19 +221,20 @@ UINT32 CDnaCovariance::SetMeasurementRec(const vstn_t&, it_vmsr_t& it_msr)
 }
 	
 
-void CDnaCovariance::WriteBinaryMsr(std::ofstream *binary_stream, PUINT32 msrIndex, const std::string& epsgCode, const std::string& epoch) const
+void CDnaCovariance::WriteBinaryMsr(std::ofstream *binary_stream, PUINT32 msrIndex, const std::string& epsgCode, const std::string& epoch, const std::string& observation_epoch) const
 {
 	*msrIndex += 3;
 	measurement_t measRecord;
 
 	// Common
 	measRecord.measType = GetTypeC();
-	measRecord.station1 = m_lstn1Index;	
-	measRecord.station2 = m_lstn2Index;	
+	measRecord.station1 = m_lstn1Index;
+	measRecord.station2 = m_lstn2Index;
 	measRecord.clusterID = m_lclusterID;
-	
+
 	snprintf(measRecord.epsgCode, sizeof(measRecord.epsgCode), "%s", epsgCode.substr(0, STN_EPSG_WIDTH).c_str());
 	snprintf(measRecord.epoch, sizeof(measRecord.epoch), "%s", epoch.substr(0, STN_EPOCH_WIDTH).c_str());
+	snprintf(measRecord.observation_epoch, sizeof(measRecord.observation_epoch), "%s", observation_epoch.substr(0, STN_EPOCH_WIDTH).c_str());
 
 	// X
 	measRecord.measStart = xCov;
@@ -360,6 +361,7 @@ CDnaMeasurement::CDnaMeasurement()
 	, m_epsgCode(DEFAULT_EPSG_S)
 	, m_sourceFileIndex(0)
 	, m_epoch("")
+	, m_observation_epoch("")
 	, m_bInsufficient(false)
 {
 }
@@ -388,6 +390,7 @@ CDnaMeasurement::CDnaMeasurement(CDnaMeasurement&& m)
 	m_preAdjCorr = m.m_preAdjCorr;
 
 	m_epoch = m.m_epoch;
+	m_observation_epoch = m.m_observation_epoch;
 	m_epsgCode = m.m_epsgCode;
 	m_sourceFileIndex = m.m_sourceFileIndex;
 
@@ -419,6 +422,7 @@ CDnaMeasurement& CDnaMeasurement::operator= (CDnaMeasurement&& rhs)
 	m_preAdjCorr = rhs.m_preAdjCorr;
 
 	m_epoch = rhs.m_epoch;
+	m_observation_epoch = rhs.m_observation_epoch;
 	m_epsgCode = rhs.m_epsgCode;
 	m_sourceFileIndex = rhs.m_sourceFileIndex;
 
@@ -501,6 +505,16 @@ void CDnaMeasurement::SerialiseDatabaseMap(std::ofstream* os)
 void CDnaMeasurement::SetEpoch(const std::string& epoch)
 {
 	m_epoch = epoch;
+	// Default the (immutable) observation epoch to the reference-frame epoch
+	// when it has not been explicitly supplied. Legacy DNA v3.01 / DynaML
+	// files without <EpochOfObservation> thus behave identically to before.
+	if (m_observation_epoch.empty())
+		m_observation_epoch = epoch;
+}
+
+void CDnaMeasurement::SetObservationEpoch(const std::string& observation_epoch)
+{
+	m_observation_epoch = observation_epoch;
 }
 
 }	// namespace measurements

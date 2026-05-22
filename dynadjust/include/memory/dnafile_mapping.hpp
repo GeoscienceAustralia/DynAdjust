@@ -64,11 +64,16 @@ public:
 	inline size_t GetDataSize() const { return data_size_; }
 	inline size_t GetRegionOffset() const { return region_offset_; }
 	inline size_t GetCumulativeRegionOffset() const { return region_offset_ + data_size_; }
-	
+
 	inline void SetDataSize(const size_t& size) { data_size_ = size; }
 	inline void SetRegionOffset(const size_t& size) { region_offset_ = size; }
-	
+
 	void MapRegion(FileMapPtr file_map_ptr);
+
+	// Memory advisory hints for mapped regions
+	void AdviseSequential();
+	void AdviseDontNeed();
+	void AdviseWillNeed();
 
 	size_t			data_size_;		// Size of this matrix.  
 	size_t			region_offset_;		// Offset from the beginning of the region
@@ -92,10 +97,11 @@ public:
 	void setnewFilePath(const std::string& filePath, bool remove_mapped_file);
 	void CreateFileMap();
 	void MapRegion(const UINT32 block);
+	void AdviseRegion(const UINT32 block, boost::interprocess::mapped_region::advice_types advice);
 
 	inline FileMapPtr getFileMapPtr() const { return file_map_ptr_; }
-	inline void* GetBlockRegionAddr(const UINT32 block) const { 
-		return vblockMapRegions_.at(block).region_ptr_->get_address(); 
+	inline void* GetBlockRegionAddr(const UINT32 block) const {
+		return vblockMapRegions_.at(block).region_ptr_->get_address();
 	}
 
 	vmat_file_map(const vmat_file_map&);				// prevent copying

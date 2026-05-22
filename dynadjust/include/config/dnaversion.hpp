@@ -204,8 +204,8 @@ const char* const __plot_dll_name__ = "libdnaplot.so";
 // 2.2.0.a1    02020001		Alpha release 
 // 2.2.0.b2    02020002		Beta release
 // 2.2.0.rc2   02020003		Release candidate 1 (unless bug notification is received, this is taken to be the final release)
-#define __BINARY_VERSION__ "1.3.0"
-#define __SHORT_VERSION__ "10300"	// used to record DynAdjust version in binary file header
+#define __BINARY_VERSION__ "1.4.0"
+#define __SHORT_VERSION__ "10400"	// used to record DynAdjust version in binary file header
 
 // define executable name
 #define __GLOBAL_BINARY_NAME__ __dynadjust_app_name__
@@ -310,7 +310,7 @@ const char* const __plot_dll_name__ = "libdnaplot.so";
 
 #if defined(__clang__)                                   // Clang compiler
   #define __COMPILER__ "Clang"
-  #define __COMPILER_VERSION__ __VERSION__
+  #define __COMPILER_VERSION__ __clang_version__
 #elif defined(__GNUC__) || defined(__GNUG__)				// GNU GCC
   #define __COMPILER__ "GNU GCC"
   #define __COMPILER_VERSION__ __VERSION__

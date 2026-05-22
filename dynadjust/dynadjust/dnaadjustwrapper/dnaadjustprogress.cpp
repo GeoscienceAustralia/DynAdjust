@@ -21,6 +21,7 @@
 
 #include <dynadjust/dnaadjustwrapper/dnaadjustprogress.hpp>
 #include <dynadjust/dnaadjust/dnaadjust.hpp>
+#include <include/math/dnamatrix_contiguous.hpp>
 
 /// \cond
 #include <time.h>
@@ -323,13 +324,14 @@ void dna_adjust_progress_thread::processAdjustment()
 				ss.str("");
 				ss << "  Iteration " << std::right << std::setw(2) << std::fixed << std::setprecision(0) << currentIteration;
 				ss << ", max station corr: " << std::right << std::setw(PROGRESS_ADJ_BLOCK_12) <<
-					_dnaAdj->GetMaxCorrection(currentIteration) << std::endl;
-					
+					_dnaAdj->GetMaxCorrection(currentIteration);
+				ss << ", time: " << _dnaAdj->GetIterationTime(currentIteration) << std::endl;
+
 				coutMessage(ss.str());
 			}
 			std::this_thread::sleep_for(std::chrono::milliseconds(80));
 		}
-		
+
 		break;
 	case Phased_Block_1Mode:
 	case PhasedMode:
@@ -350,12 +352,13 @@ void dna_adjust_progress_thread::processAdjustment()
 						
 				ss.str("");
 				ss << "  Iteration " << std::right << std::setw(2) << std::fixed << std::setprecision(0) << currentIteration;
-				ss << ", max station corr: " << std::right << std::setw(PROGRESS_ADJ_BLOCK_12) << _dnaAdj->GetMaxCorrection(currentIteration) << std::endl;
-				
+				ss << ", max station corr: " << std::right << std::setw(PROGRESS_ADJ_BLOCK_12) << _dnaAdj->GetMaxCorrection(currentIteration);
+				ss << ", time: " << _dnaAdj->GetIterationTime(currentIteration) << std::endl;
+
 				sst.str("");
 				if (first_time)
 					sst << std::setw(PROGRESS_ADJ_BLOCK_28) << std::left << " ";
-				sst << PROGRESS_BACKSPACE_28 << std::setw(PROGRESS_ADJ_BLOCK_28) << std::left << ss.str();
+				sst << PROGRESS_BACKSPACE_28 << std::left << ss.str();
 				coutMessage(sst.str());
 				first_time = true;
 			}
@@ -364,24 +367,33 @@ void dna_adjust_progress_thread::processAdjustment()
 					
 			// print new block to screen when adjusting only
 			if (block != currentBlock && _dnaAdj->IsAdjusting())
-			{						
+			{
 				ss.str("");
 				ss << "  Iteration " << std::right << std::setw(2) << std::fixed << std::setprecision(0) << _dnaAdj->CurrentIteration();
 
 				if (_p->a.multi_thread && !_dnaAdj->processingCombine())
 					ss << std::left << std::setw(13) << ", adjusting...";
 				else
-					ss << ", block " << std::left << std::setw(6) << std::fixed << std::setprecision(0) << _dnaAdj->CurrentBlock() + 1;
-						
-				sst.str("");
-				if (first_time)
 				{
-					sst << std::setw(PROGRESS_ADJ_BLOCK_28) << std::left << " ";
-					first_time = false;
+					ss << ", block " << std::left << std::setw(4) << std::fixed << std::setprecision(0) << _dnaAdj->CurrentBlock() + 1;
+					UINT32 stnCount = _dnaAdj->CurrentBlockStationCount();
+					if (stnCount > 0)
+					{
+						int max_t = dna_adjust::GetMaxBlasThreads();
+						ss << " (" << std::right << std::setw(5) << stnCount << " stns, ";
+						if (max_t > 0)
+							ss << std::setw(2) << max_t << "T";
+						else
+							ss << "auto";
+						ss << ")";
+					}
+					int64_t elapsedMs = _dnaAdj->LastBlockElapsedMs();
+					if (elapsedMs > 0)
+						ss << "  " << std::fixed << std::setprecision(1) << (elapsedMs / 1000.0) << "s";
 				}
-				
-				sst << PROGRESS_BACKSPACE_28 << std::setw(PROGRESS_ADJ_BLOCK_28) << std::left << ss.str();
-				coutMessage(sst.str());
+				ss << std::endl;
+				coutMessage(ss.str());
+				first_time = true;
 
 				currentBlock = block;
 			}
@@ -416,4 +428,3 @@ void dna_adjust_progress_thread::coutMessage(const std::string& message)
 	std::cout.flush();
 	cout_mutex.unlock();
 }
-

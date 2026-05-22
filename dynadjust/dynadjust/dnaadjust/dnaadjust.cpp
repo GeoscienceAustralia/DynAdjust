@@ -17,7 +17,10 @@
 // Description  : DynAdjust Network Adjustment library
 //============================================================================
 
+#include <cstdlib>
+
 #include <dynadjust/dnaadjust/dnaadjust.hpp>
+#include <dynadjust/dnaadjust/dnaadjust_json_printer.hpp>
 #include <dynadjust/dnaadjust/dnaadjust-multi.cpp>
 
 namespace dynadjust {
@@ -32,6 +35,9 @@ concurrent_queue<UINT32> combineAdjustmentQueue;
 concurrent_queue<UINT32> prepareAdjustmentQueue;
 std::exception_ptr fwd_error, rev_error, cmb_error, prep_error;
 
+void dna_adjust::SetMaxBlasThreads(int n) { dynadjust::math::set_max_blas_threads(n); }
+int dna_adjust::GetMaxBlasThreads() { return dynadjust::math::get_max_blas_threads(); }
+
 dna_adjust::dna_adjust()
 	: isPreparing_(false)
 	, isAdjusting_(false)
@@ -42,7 +48,12 @@ dna_adjust::dna_adjust()
 	, isAdjustmentQuestionable_(false)
 	, blockCount_(1)
 	, currentBlock_(0)
+	, lastBlockElapsedMs_(0)
 	, total_time_(0)
+	, profileTimings_(std::getenv("DYNADJUST_PROFILE") != nullptr)
+	, profileUpdateNormalsNs_(0)
+	, profileStageLoadNs_(0)
+	, profileStageStoreNs_(0)
 	, adjustStatus_(ADJUST_SUCCESS)
 	, currentIteration_(0)
 	, datum_(DEFAULT_EPSG_U)
@@ -133,10 +144,9 @@ dna_adjust::dna_adjust()
 		v_correctionsR_.clear();
 	}
 
-	// Initialize the printer
 	printer_ = std::make_unique<DynAdjustPrinter>(*this);
 }
-	
+
 
 dna_adjust::~dna_adjust()
 {
@@ -172,8 +182,15 @@ UINT32& dna_adjust::incrementIteration()
 	return ++currentIteration_; 
 }
 
-void dna_adjust::initialiseIteration(const UINT32& iteration) 
-{ 
+void dna_adjust::decrementIteration()
+{
+	std::lock_guard<std::mutex> lock(current_iterationMutex);
+	if (currentIteration_ > 0)
+		--currentIteration_;
+}
+
+void dna_adjust::initialiseIteration(const UINT32& iteration)
+{
 	std::lock_guard<std::mutex> lock(current_iterationMutex);
 	currentIteration_ = iteration; 
 }
@@ -195,6 +212,9 @@ void dna_adjust::InitialiseAdjustment()
 
 	adjustStatus_ = ADJUST_SUCCESS;
 	statusMessages_.clear();
+	profileUpdateNormalsNs_.store(0, std::memory_order_relaxed);
+	profileStageLoadNs_.store(0, std::memory_order_relaxed);
+	profileStageStoreNs_.store(0, std::memory_order_relaxed);
 	currentBlock_ = 0;
 	initialiseIteration();
 	
@@ -240,6 +260,7 @@ void dna_adjust::PrepareAdjustment(const project_settings& projectSettings)
 	isPreparing_ = true;
 	isAdjusting_ = true;
 	isCombining_ = false;
+	rebuildingDesign_ = false;
 	isFirstTimeAdjustment_ = true;
 	projectSettings_ = projectSettings;
 
@@ -248,9 +269,16 @@ void dna_adjust::PrepareAdjustment(const project_settings& projectSettings)
 			projectSettings_.a.multi_thread))
 		projectSettings_.a.stage = false;
 
-	// Load the bst/bms meta and set the default 
+	// Load the bst/bms meta and set the default
 	// reference frame (via binary station file)
 	SetDefaultReferenceFrame();
+
+	if (projectSettings_.o._output_json)
+	{
+		auto json_printer = std::make_unique<DynAdjustJsonPrinter>(*this);
+		json_printer->OpenStreams();
+		printer_ = std::move(json_printer);
+	}
 
 	// Open output files for printing adjustment results
 	OpenOutputFileStreams();
@@ -528,14 +556,14 @@ void dna_adjust::UpdateAdjustment(bool iterate)
 			// Hence, only design and msr-comp are required so as to compute stats
 			if (!iterate)
 				continue;
-			
+
 			switch (projectSettings_.a.adjust_mode)
 			{
 			case PhasedMode:
 			case Phased_Block_1Mode:
 				v_normals_.at(block).zero();
 				UpdateNormals(block, false);
-				
+
 				if (projectSettings_.a.multi_thread)
 				{
 					v_estimatedStationsR_.at(block) = v_rigorousStations_.at(block);
@@ -545,9 +573,9 @@ void dna_adjust::UpdateAdjustment(bool iterate)
 				}
 
 				// Back up normals.  This copy contains the contributions from all
-				// apriori measurement variances, excluding parameter station 
+				// apriori measurement variances, excluding parameter station
 				// variances and junction station variances
-				v_normalsR_.at(block) = v_normals_.at(block);				
+				v_normalsR_.at(block) = v_normals_.at(block);
 				AddConstraintStationstoNormalsForward(block);
 
 				break;
@@ -742,17 +770,19 @@ void dna_adjust::PrepareStationandVarianceMatrices(const UINT32& block)
 
 			// resize rigorous coordinate estimate array
 			v_rigorousStations_.at(block).redim(v_unknownsCount_.at(block), 1);
-		
-			// resize rigorous variances
-			v_rigorousVariances_.at(block).redim(v_unknownsCount_.at(block), v_unknownsCount_.at(block));
+
+			if (projectSettings_.a.stage || projectSettings_.a.multi_thread)
+				v_rigorousVariances_.at(block).redim_packed(v_unknownsCount_.at(block));
+			else
+				v_rigorousVariances_.at(block).redim(v_unknownsCount_.at(block), v_unknownsCount_.at(block));
 
 			// resize junction variances
-			v_junctionVariances_.at(block).redim(j, j);
+			v_junctionVariances_.at(block).redim_packed(j);
 
 			// resize junction station coordinate estimate arrays
 			if (!v_blockMeta_.at(block)._blockLast && !v_blockMeta_.at(block)._blockIsolated)
 			{
-				v_junctionVariancesFwd_.at(block).redim(j, j);
+				v_junctionVariancesFwd_.at(block).redim_packed(j);
 				v_junctionEstimatesFwd_.at(block).redim(j, 1);
 				v_junctionEstimatesRev_.at(block+1).redim(j, 1);
 			}
@@ -860,11 +890,10 @@ void dna_adjust::PrepareDesignAndMsrMnsCmpMatrices(const UINT32& block)
 	// Simultaneous, phased (multithreaded and block1) adjustments
 
 	// Redim all matrices
-	v_normals_.at(block).redim(v_unknownsCount_.at(block), v_unknownsCount_.at(block));
+	v_normals_.at(block).redim_packed(v_unknownsCount_.at(block));
 	
 	v_design_.at(block).redim(v_measurementCount_.at(block), v_unknownsCount_.at(block));
 	v_corrections_.at(block).redim(v_unknownsCount_.at(block), 1);
-	v_precAdjMsrsFull_.at(block).redim(v_measurementVarianceCount_.at(block), 1);
 	
 	// All blocks in v_correctionsR_ are used for multi thread mode, but only the last is used
 	// in single thread mode
@@ -897,9 +926,7 @@ void dna_adjust::PrepareDesignAndMsrMnsCmpMatricesStage(const UINT32& block)
 	if (projectSettings_.a.recreate_stage_files || !bms_meta_.reduced)
 	{
 		// Redim NormalsR
-		v_normalsR_.at(block).redim(
-			v_unknownsCount_.at(block), 
-			v_unknownsCount_.at(block));
+		v_normalsR_.at(block).redim_packed(v_unknownsCount_.at(block));
 
 		// Redimension the corrections matrices
 		v_corrections_.at(block).redim(v_unknownsCount_.at(block), 1);
@@ -930,7 +957,41 @@ void dna_adjust::PrepareDesignAndMsrMnsCmpMatricesStage(const UINT32& block)
 		// Creating new memory mapped files?  Form the design matrices
 		FillDesignNormalMeasurementsMatrices(true, block, false);
 }
-	
+
+
+void dna_adjust::RebuildDesignAndAtVinv(const UINT32& block)
+{
+	UINT32 pseudoMsrElemCount(0);
+
+	if (!v_blockMeta_.at(block)._blockIsolated)
+	{
+		UINT32 pseudoMsrCount = static_cast<UINT32>(v_JSL_.at(block).size());
+		if (!v_blockMeta_.at(block)._blockFirst)
+			pseudoMsrCount += static_cast<UINT32>(v_JSL_.at(block-1).size());
+		pseudoMsrElemCount = pseudoMsrCount * 3;
+	}
+
+	v_design_.at(block).redim(v_measurementCount_.at(block), v_unknownsCount_.at(block));
+	v_AtVinv_.at(block).redim(
+		v_unknownsCount_.at(block),
+		v_measurementCount_.at(block) + pseudoMsrElemCount);
+
+	if (pseudoMsrElemCount > 0)
+		v_AtVinv_.at(block).shrink(0, pseudoMsrElemCount);
+
+	assert(v_design_.at(block).getbuffer() != nullptr && "RebuildDesignAtVinv: design null after redim");
+	assert(v_AtVinv_.at(block).getbuffer() != nullptr && "RebuildDesignAtVinv: AtVinv null after redim");
+	assert(v_estimatedStations_.at(block).getbuffer() != nullptr && "RebuildDesignAtVinv: estimatedStations null");
+	assert(v_measMinusComp_.at(block).getbuffer() != nullptr && "RebuildDesignAtVinv: measMinusComp null");
+
+	rebuildingDesign_ = true;
+	FillDesignNormalMeasurementsMatrices(true, block, false, true);
+	rebuildingDesign_ = false;
+
+	assert(v_design_.at(block).getbuffer() != nullptr && "RebuildDesignAtVinv: design null after Fill");
+	assert(v_AtVinv_.at(block).getbuffer() != nullptr && "RebuildDesignAtVinv: AtVinv null after Fill");
+}
+
 
 // Re-form At * V-1 for next block using estimated junction parameter station variances
 // nextBlock = currentBlock+1
@@ -1233,9 +1294,9 @@ void dna_adjust::UpdateAtVinv(pit_vmsr_t _it_msr, const UINT32& stn1, const UINT
 				std::fixed << std::setprecision(16) << std::setw(26) << variance << std::endl;
 
 	// Build  At * V-1
-	AtVinv->put(stn1, design_row, variance * design->get(design_row, stn1));
-	AtVinv->put(stn1+1, design_row, variance * design->get(design_row, stn1+1));
-	AtVinv->put(stn1+2, design_row, variance * design->get(design_row, stn1+2));
+	AtVinv->dense_put(stn1, design_row, variance * design->dense_get(design_row, stn1));
+	AtVinv->dense_put(stn1+1, design_row, variance * design->dense_get(design_row, stn1+1));
+	AtVinv->dense_put(stn1+2, design_row, variance * design->dense_get(design_row, stn1+2));
 	
 	// Single station measurements
 	switch ((*_it_msr)->measType)
@@ -1250,16 +1311,16 @@ void dna_adjust::UpdateAtVinv(pit_vmsr_t _it_msr, const UINT32& stn1, const UINT
 	}
 
 	// Two station measurements
-	AtVinv->put(stn2, design_row, variance * design->get(design_row, stn2));
-	AtVinv->put(stn2+1, design_row, variance * design->get(design_row, stn2+1));
-	AtVinv->put(stn2+2, design_row, variance * design->get(design_row, stn2+2));
+	AtVinv->dense_put(stn2, design_row, variance * design->dense_get(design_row, stn2));
+	AtVinv->dense_put(stn2+1, design_row, variance * design->dense_get(design_row, stn2+1));
+	AtVinv->dense_put(stn2+2, design_row, variance * design->dense_get(design_row, stn2+2));
 
 	switch ((*_it_msr)->measType)
 	{
 	case 'A':	// Horizontal angle
-		AtVinv->put(stn3, design_row, variance * design->get(design_row, stn3));
-		AtVinv->put(stn3+1, design_row, variance * design->get(design_row, stn3+1));
-		AtVinv->put(stn3+2, design_row, variance * design->get(design_row, stn3+2));
+		AtVinv->dense_put(stn3, design_row, variance * design->dense_get(design_row, stn3));
+		AtVinv->dense_put(stn3+1, design_row, variance * design->dense_get(design_row, stn3+1));
+		AtVinv->dense_put(stn3+2, design_row, variance * design->dense_get(design_row, stn3+2));
 	}
 }
 	
@@ -1269,27 +1330,27 @@ void dna_adjust::UpdateAtVinv_D(const UINT32& stn1, const UINT32& stn2, const UI
 							UINT32& design_row, UINT32& design_row_begin,
 							matrix_2d* Vinv, matrix_2d* design, matrix_2d* AtVinv)
 {
+	const double angle_variance = Vinv->dense_get(angle, angle);
 	for (UINT32 j, i(0); i<3; ++i)													// for each coordinate element (x, y, z)
 	{
 		// add variances
-		AtVinv->elementadd(stn1+i, design_row,											// station1
-			design->get(design_row, stn1+i) * Vinv->get(angle, angle));
-		AtVinv->elementadd(stn2+i, design_row,											// station2
-			design->get(design_row, stn2+i) * Vinv->get(angle, angle));
-		AtVinv->elementadd(stn3+i, design_row,											// station3
-			design->get(design_row, stn3+i) * Vinv->get(angle, angle));
+		const double design1 = design->dense_get(design_row, stn1+i);
+		const double design2 = design->dense_get(design_row, stn2+i);
+		const double design3 = design->dense_get(design_row, stn3+i);
+
+		AtVinv->dense_add(stn1+i, design_row, design1 * angle_variance);				// station1
+		AtVinv->dense_add(stn2+i, design_row, design2 * angle_variance);				// station2
+		AtVinv->dense_add(stn3+i, design_row, design3 * angle_variance);				// station3
 		
 		// add covariances
 		for (j=0; j<angle_count; ++j)
 		{
 			if (j == angle)
 				continue;
-			AtVinv->elementadd(stn1+i, design_row_begin+j,								// station1
-				design->get(design_row, stn1+i) * Vinv->get(angle, j));
-			AtVinv->elementadd(stn2+i, design_row_begin+j,								// station2
-				design->get(design_row, stn2+i) * Vinv->get(angle, j));
-			AtVinv->elementadd(stn3+i, design_row_begin+j,								// station3
-				design->get(design_row, stn3+i) * Vinv->get(angle, j));
+			const double angle_covariance = Vinv->dense_get(angle, j);
+			AtVinv->dense_add(stn1+i, design_row_begin+j, design1 * angle_covariance);	// station1
+			AtVinv->dense_add(stn2+i, design_row_begin+j, design2 * angle_covariance);	// station2
+			AtVinv->dense_add(stn3+i, design_row_begin+j, design3 * angle_covariance);	// station3
 		}			
 	}
 }
@@ -1302,6 +1363,7 @@ void dna_adjust::UpdateAtVinv_D(const UINT32& stn1, const UINT32& stn2, const UI
 //		- PrepareFwdAdj (used by adjust_forward_thread)
 void dna_adjust::UpdateNormals(const UINT32& block, bool MT_ReverseOrCombine)
 {
+	const auto profile_start = profileTimings_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
 	UINT32 stn1, stn2, stn3, design_row(0);
 	
 	it_vUINT32 _it_block_msr;
@@ -1382,22 +1444,59 @@ void dna_adjust::UpdateNormals(const UINT32& block, bool MT_ReverseOrCombine)
 				"'." << std::endl;
 			SignalExceptionAdjustment(ss.str(), block);
 		}		
-	}	
+	}
+
+	if (profileTimings_)
+	{
+		const auto elapsed = std::chrono::steady_clock::now() - profile_start;
+		profileUpdateNormalsNs_.fetch_add(
+			static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count()),
+			std::memory_order_relaxed);
+	}
 }
 	
+
+namespace {
+
+inline void add_normal_3x3_from_design_row(UINT32 design_row, UINT32 atvinv_station, UINT32 design_station,
+	matrix_2d* normals, const matrix_2d* design, const matrix_2d* AtVinv)
+{
+	const double* atvinv_col = AtVinv->dense_ptr(atvinv_station, design_row);
+
+	for (UINT32 col = 0; col < 3; ++col)
+	{
+		const double design_value = *design->dense_ptr(design_row, design_station + col);
+		normals->lower_add(atvinv_station, design_station + col,
+			atvinv_col[0] * design_value);
+		normals->lower_add(atvinv_station + 1, design_station + col,
+			atvinv_col[1] * design_value);
+		normals->lower_add(atvinv_station + 2, design_station + col,
+			atvinv_col[2] * design_value);
+	}
+}
+
+inline void add_normal_3x3_from_atvinv_columns(UINT32 design_row, UINT32 atvinv_station, UINT32 normal_station,
+	double scale, matrix_2d* normals, const matrix_2d* AtVinv)
+{
+	for (UINT32 col = 0; col < 3; ++col)
+	{
+		const double* atvinv_col = AtVinv->dense_ptr(atvinv_station, design_row + col);
+		normals->lower_add(atvinv_station, normal_station + col,
+			scale * atvinv_col[0]);
+		normals->lower_add(atvinv_station + 1, normal_station + col,
+			scale * atvinv_col[1]);
+		normals->lower_add(atvinv_station + 2, normal_station + col,
+			scale * atvinv_col[2]);
+	}
+}
+
+} // namespace
 
 void dna_adjust::AddMsrtoNormalsVar(const UINT32& design_row, const UINT32& stn,
 										 matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv)
 {
 	// Add weighted measurement contributions to normal matrix
-	for (UINT32 row, col(0); col<3; ++col)
-	{
-		for (row=0; row<3; ++row)
-		{
-			normals->elementadd(stn+row, stn+col,
-				AtVinv->get(stn+row, design_row) * design->get(design_row, stn+col));
-		}
-	}
+	add_normal_3x3_from_design_row(design_row, stn, stn, normals, design, AtVinv);
 }
 	
 
@@ -1405,50 +1504,20 @@ void dna_adjust::AddMsrtoNormalsCoVar2(const UINT32& design_row, const UINT32& s
 										 matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv)
 {
 	// Add covariance terms (station 1 and station 2) to normal matrix
-	for (UINT32 row, col(0); col<3; ++col)
-	{
-		for (row=0; row<3; ++row)
-		{
-			// 1-2
-			normals->elementadd(stn1+row, stn2+col,
-				AtVinv->get(stn1+row, design_row) * design->get(design_row, stn2+col));
-
-			normals->elementadd(stn2+row, stn1+col,
-				AtVinv->get(stn2+row, design_row) * design->get(design_row, stn1+col));
-		}
-	}
+	add_normal_3x3_from_design_row(design_row, stn1, stn2, normals, design, AtVinv);
+	add_normal_3x3_from_design_row(design_row, stn2, stn1, normals, design, AtVinv);
 }
 
 void dna_adjust::AddMsrtoNormalsCoVar3(const UINT32& design_row, const UINT32& stn1, const UINT32& stn2, const UINT32& stn3,
 										 matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv)
 {
 	// Add covariance terms (station 1, station 2, station 3) to normal matrix
-	for (UINT32 row, col(0); col<3; ++col)
-	{
-		for (row=0; row<3; ++row)
-		{
-			// 1-2
-			normals->elementadd(stn1+row, stn2+col,
-				AtVinv->get(stn1+row, design_row) * design->get(design_row, stn2+col));
-
-			normals->elementadd(stn2+row, stn1+col,
-				AtVinv->get(stn2+row, design_row) * design->get(design_row, stn1+col));
-
-			// 1-3
-			normals->elementadd(stn1+row, stn3+col,
-				AtVinv->get(stn1+row, design_row) * design->get(design_row, stn3+col));
-
-			normals->elementadd(stn3+row, stn1+col,
-				AtVinv->get(stn3+row, design_row) * design->get(design_row, stn1+col));
-			
-			// 2-3
-			normals->elementadd(stn2+row, stn3+col,
-				AtVinv->get(stn2+row, design_row) * design->get(design_row, stn3+col));
-
-			normals->elementadd(stn3+row, stn2+col,
-				AtVinv->get(stn3+row, design_row) * design->get(design_row, stn2+col));
-		}
-	}
+	add_normal_3x3_from_design_row(design_row, stn1, stn2, normals, design, AtVinv);
+	add_normal_3x3_from_design_row(design_row, stn2, stn1, normals, design, AtVinv);
+	add_normal_3x3_from_design_row(design_row, stn1, stn3, normals, design, AtVinv);
+	add_normal_3x3_from_design_row(design_row, stn3, stn1, normals, design, AtVinv);
+	add_normal_3x3_from_design_row(design_row, stn2, stn3, normals, design, AtVinv);
+	add_normal_3x3_from_design_row(design_row, stn3, stn2, normals, design, AtVinv);
 }
 
 
@@ -1471,7 +1540,7 @@ void dna_adjust::UpdateNormals_A(const UINT32& stn1, const UINT32& stn2, const U
 void dna_adjust::UpdateNormals_D(const UINT32& block, it_vmsr_t& _it_msr, UINT32& design_row,
 										 matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv)
 {
-	UINT32 row, col, a, angle_count(_it_msr->vectorCount2 - 1);
+	UINT32 a, angle_count(_it_msr->vectorCount2 - 1);
 	UINT32 skip(0), ignored(_it_msr->vectorCount1 - _it_msr->vectorCount2);
 
 	std::vector<UINT32> stations;
@@ -1522,22 +1591,11 @@ void dna_adjust::UpdateNormals_D(const UINT32& block, it_vmsr_t& _it_msr, UINT32
 		}
 
 		// station 1
-		for (col=0; col<3; ++col)
-			for (row=0; row<3; ++row)
-				normals->elementadd(stn1+row, stn1+col,
-					AtVinv->get(stn1+row, design_row+a) * design->get(design_row+a, stn1+col));
-		//
+		add_normal_3x3_from_design_row(design_row+a, stn1, stn1, normals, design, AtVinv);
 		// station 2
-		for (col=0; col<3; ++col)
-			for (row=0; row<3; ++row)
-				normals->elementadd(stn2+row, stn2+col,
-					AtVinv->get(stn2+row, design_row+a) * design->get(design_row+a, stn2+col));
-		//
+		add_normal_3x3_from_design_row(design_row+a, stn2, stn2, normals, design, AtVinv);
 		// station 3
-		for (col=0; col<3; ++col)
-			for (row=0; row<3; ++row)
-				normals->elementadd(stn3+row, stn3+col,
-					AtVinv->get(stn3+row, design_row+a) * design->get(design_row+a, stn3+col));
+		add_normal_3x3_from_design_row(design_row+a, stn3, stn3, normals, design, AtVinv);
 
 		if (a+1 == angle_count)
 			break;
@@ -1568,17 +1626,8 @@ void dna_adjust::UpdateNormals_D(const UINT32& block, it_vmsr_t& _it_msr, UINT32
 				if (stn2 == stn1)
 					continue;
 
-				for (col=0; col<3; ++col)
-				{
-					for (row=0; row<3; ++row)
-					{
-						// 1-2
-						normals->elementadd(stn1+row, stn2+col,
-							AtVinv->get(stn1+row, design_row+a) * design->get(design_row+a, stn2+col));
-						normals->elementadd(stn2+row, stn1+col,
-							AtVinv->get(stn2+row, design_row+a) * design->get(design_row+a, stn1+col));
-					}				
-				}
+				add_normal_3x3_from_design_row(design_row+a, stn1, stn2, normals, design, AtVinv);
+				add_normal_3x3_from_design_row(design_row+a, stn2, stn1, normals, design, AtVinv);
 			}
 		}
 		it_angle++;
@@ -1615,39 +1664,21 @@ void dna_adjust::UpdateNormals_HIJPQR(const UINT32& stn1, UINT32& design_row,
 void dna_adjust::UpdateNormals_G(const UINT32& stn1, const UINT32& stn2, UINT32& design_row,
 										 matrix_2d* normals, matrix_2d* AtVinv)
 {
-	UINT32 col, row;
-
 	// station 2
-	for (col=0; col<3; ++col)
-		for (row=0; row<3; ++row)
-			normals->elementadd(stn2+row, stn2+col,
-				// AtVinv->get(stn2+row, design_row+col) * design->get(design_row+col, stn2+col));
-				// No need to multiply by 1 as stn2 design element is always 1.  See UpdateDesignMeasMatrices_GX()
-				AtVinv->get(stn2+row, design_row+col));
+	// No need to multiply by 1 as stn2 design element is always 1.  See UpdateDesignMeasMatrices_GX()
+	add_normal_3x3_from_atvinv_columns(design_row, stn2, stn2, 1., normals, AtVinv);
 
 	// station 1
-	for (col=0; col<3; ++col)
-		for (row=0; row<3; ++row)
-			normals->elementadd(stn1+row, stn1+col,
-				// AtVinv->get(stn1+row, design_row+col) * design->get(design_row+col, stn1+col));
-				// No need to multiply by -1 as stn1 design element is always -1.  See UpdateDesignMeasMatrices_GX()
-				-AtVinv->get(stn1+row, design_row+col));
+	// No need to multiply by -1 as stn1 design element is always -1.  See UpdateDesignMeasMatrices_GX()
+	add_normal_3x3_from_atvinv_columns(design_row, stn1, stn1, -1., normals, AtVinv);
 
 	// covariance terms (station 1 and station 2)
-	for (col=0; col<3; ++col)
-		for (row=0; row<3; ++row)
-			normals->elementadd(stn1+row, stn2+col,
-				// AtVinv->get(stn1+row, design_row+col) * design->get(design_row+col, stn2+col));
-				// No need to multiply as stn2 is always 1.  See UpdateDesignMeasMatrices_GX()
-				AtVinv->get(stn1+row, design_row+col));
+	// No need to multiply as stn2 is always 1.  See UpdateDesignMeasMatrices_GX()
+	add_normal_3x3_from_atvinv_columns(design_row, stn1, stn2, 1., normals, AtVinv);
 
 	// covariance terms (station 2 and station 1)
-	for (col=0; col<3; ++col)
-		for (row=0; row<3; ++row)
-			normals->elementadd(stn2+row, stn1+col,
-				// AtVinv->get(stn2+row, design_row+col) * design->get(design_row+col, stn1+col));
-				// No need to multiply by -1 as stn1 design element is always -1.  See UpdateDesignMeasMatrices_GX()
-				-AtVinv->get(stn2+row, design_row+col));
+	// No need to multiply by -1 as stn1 design element is always -1.  See UpdateDesignMeasMatrices_GX()
+	add_normal_3x3_from_atvinv_columns(design_row, stn2, stn1, -1., normals, AtVinv);
 
 	design_row += 3;
 }
@@ -2112,6 +2143,7 @@ _ADJUST_STATUS_ dna_adjust::AdjustNetwork()
 	isIterationComplete_ = false;
 	isAdjustmentQuestionable_ = false;
 	iterationCorrections_.clear_messages();
+	iterationTimes_.clear_messages();
 
 	if (projectSettings_.o._database_ids)
 		LoadDatabaseId();
@@ -2171,8 +2203,7 @@ _ADJUST_STATUS_ dna_adjust::AdjustNetwork()
 	
 void dna_adjust::PrintAdjustedNetworkStations()
 {
-	networkadjust::DynAdjustPrinter printer(*this);
-	printer.PrintAdjustedNetworkStations();
+	printer_->PrintAdjustedNetworkStations();
 }
 	
 // First item in the file is a UINT32 value - the number of records in the file
@@ -2383,7 +2414,12 @@ void dna_adjust::AdjustSimultaneous()
 {
 	adjustStatus_ = ADJUST_SUCCESS;
 	initialiseIteration();
-	
+
+	// Reset oscillation diagnostics
+	corrPrev_.clear();
+	stnOscCount_.clear();
+	oscHistory_.clear();
+
 	std::ostringstream ss;
 	std::string corr_msg;
 	std::chrono::milliseconds elapsed_time(std::chrono::milliseconds(0));
@@ -2429,9 +2465,11 @@ void dna_adjust::AdjustSimultaneous()
 		// Compute and print largest correction
 		maxCorr_ = v_corrections_.at(0).compute_maximum_value();
 		OutputLargestCorrection(corr_msg);
+		UpdateIterationDiagnostics();
 
 		// update data for messages
 		iterationCorrections_.add_message(corr_msg);
+		iterationTimes_.add_message(FormatElapsedTime(it_time.elapsed().wall.count() / 1.0e9));
 		iterationQueue_.push_and_notify(CurrentIteration());	// currentIteration begins at 1, so not zero-indexed
 		isIterationComplete_ = true;
 		
@@ -2489,7 +2527,7 @@ void dna_adjust::ValidateandFinaliseAdjustment(cpu_timer& tot_time)
 		fabs(maxCorr_) > projectSettings_.a.iteration_threshold)
 		adjustStatus_ = ADJUST_MAX_ITERATIONS_EXCEEDED;
 
-	// Back up simultaneous rigorous variance estimates (for serialising 
+	// Back up simultaneous rigorous variance estimates (for serialising
 	// to disk at SerialiseAdjustedVarianceMatrices() ), so that executing adjust
 	// in report-results mode has access to the latest variance estimates
 	switch (projectSettings_.a.adjust_mode)
@@ -2507,6 +2545,7 @@ void dna_adjust::ValidateandFinaliseAdjustment(cpu_timer& tot_time)
 	printer_->PrintAdjustmentStatus();
 	// Compute and print time taken to run adjustment
 	PrintAdjustmentTime(tot_time, total_time);
+	PrintPerformanceProfile();
 }
 	
 void dna_adjust::PrintAdjustmentTime(cpu_timer& time, _TIMER_TYPE_ timerType)
@@ -2520,9 +2559,31 @@ void dna_adjust::PrintAdjustmentTime(cpu_timer& time, _TIMER_TYPE_ timerType)
 	printer_->PrintAdjustmentTime(time, static_cast<int>(timerType));
 }
 
+void dna_adjust::PrintPerformanceProfile() const
+{
+	if (!profileTimings_)
+		return;
+
+	const auto ns_to_ms = [](uint64_t ns) {
+		return static_cast<double>(ns) / 1000000.0;
+	};
+
+	std::cerr << "DynAdjust profile timings:"
+			  << " update_normals=" << std::fixed << std::setprecision(3)
+			  << ns_to_ms(profileUpdateNormalsNs_.load(std::memory_order_relaxed)) << "ms"
+			  << " stage_load=" << ns_to_ms(profileStageLoadNs_.load(std::memory_order_relaxed)) << "ms"
+			  << " stage_store=" << ns_to_ms(profileStageStoreNs_.load(std::memory_order_relaxed)) << "ms"
+			  << std::endl;
+}
+
 void dna_adjust::AdjustPhased()
 {
 	initialiseIteration();
+
+	// Reset oscillation diagnostics
+	corrPrev_.clear();
+	stnOscCount_.clear();
+	oscHistory_.clear();
 
 	std::string corr_msg;
 	std::ostringstream ss;
@@ -2530,7 +2591,7 @@ void dna_adjust::AdjustPhased()
 	bool iterate(true);
 
 	cpu_timer it_time, tot_time;
-		
+
 	// do until convergence criteria is met
 	for (i=0; i<projectSettings_.a.max_iterations; ++i)
 	{
@@ -2548,10 +2609,10 @@ void dna_adjust::AdjustPhased()
 		potentialOutlierCount_ = 0;
 		chiSquaredStage_ = 0.;
 		measurementParams_ = 0;
-	
+
 		// Print the iteration # to adj file
 		printer_->PrintIteration(incrementIteration());
-		
+
 		it_time.start();
 
 		AdjustPhasedForward();
@@ -2567,8 +2628,10 @@ void dna_adjust::AdjustPhased()
 
 		// Calculate and print largest adjustment correction and station ID
 		OutputLargestCorrection(corr_msg);
-		
+		UpdateIterationDiagnostics();
+
 		iterationCorrections_.add_message(corr_msg);
+		iterationTimes_.add_message(FormatElapsedTime(it_time.elapsed().wall.count() / 1.0e9));
 		iterationQueue_.push_and_notify(CurrentIteration());	// currentIteration begins at 1, so not zero-indexed
 		isIterationComplete_ = true;
 
@@ -2581,7 +2644,7 @@ void dna_adjust::AdjustPhased()
 		// Similar to PrepareAdjustment, UpdateAdjustment prepares every block
 		// in the network so that forward and reverse adjustments can commence
 		// at the same time.
-		UpdateAdjustment(iterate);	
+		UpdateAdjustment(iterate);
 		if (IsCancelled())
 			break;
 
@@ -2590,7 +2653,7 @@ void dna_adjust::AdjustPhased()
 		{
 			// Compute network statistics
 			ComputeStatisticsOnIteration();
-			
+
 			// Print statistics summary to adj file
 			printer_->PrintStatistics(false);
 		}
@@ -2645,8 +2708,9 @@ void dna_adjust::AdjustPhasedBlock1()
 
 	if (fabs(maxCorr_) > projectSettings_.a.iteration_threshold)
 		adjustStatus_ = ADJUST_THRESHOLD_EXCEEDED;
-		
+
 	iterationCorrections_.add_message(corr_msg);
+	iterationTimes_.add_message(FormatElapsedTime(it_time.elapsed().wall.count() / 1.0e9));
 	iterationQueue_.push_and_notify(CurrentIteration());	// currentIteration begins at 1, so not zero-indexed
 
 	ValidateandFinaliseAdjustment(tot_time);
@@ -2695,9 +2759,10 @@ void dna_adjust::AdjustPhasedForward()
 
 	UINT32 currentBlock(0);
 
-	// For staged adjustments, load the first block from mapped memory file
+	// For staged adjustments, prefetch and load the first block from mapped memory file
 	if (projectSettings_.a.stage)
 	{
+		AdviseBlockWillNeed(currentBlock);
 		DeserialiseBlockFromMappedFile(currentBlock);
 		RebuildNormals(currentBlock, __forward__, true, true);
 		if (IsCancelled())
@@ -2735,16 +2800,21 @@ void dna_adjust::AdjustPhasedForward()
 		// At this point, whether first iteration or not, if currentBlock is the first block, 
 		// the normals will have been initialised.  For all later blocks, the normals will contain
 		// the contribution of junction station coordinates and variances from preceding blocks.
-		// In either case, the block is ready for adjustment.  Junction station coordinates and 
+		// In either case, the block is ready for adjustment.  Junction station coordinates and
 		// variances are carried forward below
+
+		assert(v_design_.at(currentBlock).getbuffer() != nullptr && "AdjFwd: design null before SolveTry");
+		assert(v_AtVinv_.at(currentBlock).getbuffer() != nullptr && "AdjFwd: AtVinv null before SolveTry");
+		assert(v_normals_.at(currentBlock).getbuffer() != nullptr && "AdjFwd: normals null before SolveTry");
+		assert(v_measMinusComp_.at(currentBlock).getbuffer() != nullptr && "AdjFwd: measMinusComp null before SolveTry");
 
 		// Least Squares Solution
 		SolveTry(true, currentBlock);
 
 		// Does the user want to print adjusted measurements
 		// on each iteration?
-		if (projectSettings_.o._adj_msr_iteration || 
-			projectSettings_.o._adj_stn_iteration || 
+		if (projectSettings_.o._adj_msr_iteration ||
+			projectSettings_.o._adj_stn_iteration ||
 			projectSettings_.o._cmp_msr_iteration)
 			adj_file << " done." << std::endl;
 
@@ -2766,21 +2836,21 @@ void dna_adjust::AdjustPhasedForward()
 		// OK, now shrink matrices back to normal size
 		ShrinkForwardMatrices(currentBlock);
 
-		// Carry the estimated junction station coordinates and variances 
+		// Carry the estimated junction station coordinates and variances
 		// to the next block for applicable blocks only.  For staged
-		// Deserialise the next block from mapped files and rebuild 
+		// Deserialise the next block from mapped files and rebuild
 		// normals
 		CarryForwardJunctions(currentBlock, currentBlock+1);
 
 		// For staged adjustments, write to disk and unload matrix data
 		if (projectSettings_.a.stage)
-			// Don't offload last block since the reverse adjustment 
+			// Don't offload last block since the reverse adjustment
 			// will need this block
 			if (currentBlock < (blockCount_ - 1))
 				OffloadBlockToMappedFile(currentBlock);
 	}
 }
-	
+
 
 void dna_adjust::PurgeMatricesFromDisk()
 {
@@ -2885,8 +2955,7 @@ void dna_adjust::PrepareAdjustmentBlock(const UINT32 block, const UINT32 thread_
 		v_normalsR_.at(block) = v_normals_.at(block);
 
 		if (projectSettings_.a.multi_thread) {
-			v_normalsRC_.at(block).redim(
-				v_normalsR_.at(block).rows(), v_normalsR_.at(block).columns());
+			v_normalsRC_.at(block).redim_packed(v_normalsR_.at(block).rows());
 		}
 
 		switch (projectSettings_.a.adjust_mode)
@@ -2940,6 +3009,8 @@ void dna_adjust::ShrinkForwardMatrices(const UINT32 currentBlock)
 	{
 		pseudoMsrElemCount = static_cast<UINT32>(v_JSL_.at(currentBlock-1).size() * 3);
 
+		assert(v_measMinusComp_.at(currentBlock).getbuffer() != nullptr && "ShrinkFwd: measMinusComp null");
+		assert(v_AtVinv_.at(currentBlock).getbuffer() != nullptr && "ShrinkFwd: AtVinv null");
 		v_measMinusComp_.at(currentBlock).shrink(pseudoMsrElemCount, 0);
 		v_AtVinv_.at(currentBlock).shrink(0, pseudoMsrElemCount);
 	}
@@ -2974,7 +3045,9 @@ void dna_adjust::UpdateEstimatesForward(const UINT32 currentBlock)
 
 		// Now copy 'estimated' coordinates to 'rigorous' for comparison on the next iteration
 		v_rigorousStations_.at(currentBlock) = v_estimatedStations_.at(currentBlock);
+		assert(v_normals_.at(currentBlock).getbuffer() != nullptr && "UpdateEstFwd: normals null before copy to rigorousVariances");
 		v_rigorousVariances_.at(currentBlock) = v_normals_.at(currentBlock);
+		assert(v_rigorousVariances_.at(currentBlock).getbuffer() != nullptr && "UpdateEstFwd: rigorousVariances null after copy");
 
 		// Temporarily hold corrections for last block.  These corrections will be restored
 		// in UpdateEstimatesFinal()
@@ -3024,9 +3097,10 @@ void dna_adjust::CarryForwardJunctions(const UINT32 thisBlock, const UINT32 next
 	if (v_blockMeta_.at(nextBlock)._blockIsolated)
 		return;
 	
-	// For staged adjustments, load block info for nextBlock
+	// For staged adjustments, prefetch and load block info for nextBlock
 	if (projectSettings_.a.stage)
 	{
+		AdviseBlockWillNeed(nextBlock);
 		DeserialiseBlockFromMappedFile(nextBlock);
 		RebuildNormals(nextBlock, __forward__, true, true);
 	}
@@ -3061,7 +3135,7 @@ bool dna_adjust::PrepareAdjustmentReverse(const UINT32 currentBlock, bool MT_Rev
 
 	// OK. currentBlock is the last block, and this is the commencement of
 	// a reverse run, so reset coordinates
-	matrix_2d* estimatedStations(&v_estimatedStations_.at(currentBlock));	
+	matrix_2d* estimatedStations(&v_estimatedStations_.at(currentBlock));
 
 	if (MT_ReverseOrCombine)
 	{
@@ -3069,15 +3143,23 @@ bool dna_adjust::PrepareAdjustmentReverse(const UINT32 currentBlock, bool MT_Rev
 	}
 	else
 	{
-		// Restore back up copy of normals for reverse adjustment in 
+		// Restore back up copy of normals for reverse adjustment in
 		// single thread mode
+		assert(v_normalsR_.at(currentBlock).getbuffer() != nullptr && "PrepareAdjReverse: normalsR null before copy");
+		assert(v_normalsR_.at(currentBlock).rows() > 0 && "PrepareAdjReverse: normalsR has 0 rows");
 		v_normals_.at(currentBlock) = v_normalsR_.at(currentBlock);
+		assert(v_normals_.at(currentBlock).getbuffer() != nullptr && "PrepareAdjReverse: normals null after copy");
 
 	}
 
+	assert(v_originalStations_.at(currentBlock).getbuffer() != nullptr && "PrepareAdjReverse: originalStations null");
 	// Reset coordinates to original values
 	*estimatedStations = v_originalStations_.at(currentBlock);
-	
+
+	assert(v_design_.at(currentBlock).rows() > 0 && "PrepareAdjReverse: design has 0 rows");
+	assert(v_AtVinv_.at(currentBlock).rows() > 0 && "PrepareAdjReverse: AtVinv has 0 rows");
+	assert(v_measMinusComp_.at(currentBlock).rows() > 0 && "PrepareAdjReverse: measMinusComp has 0 rows");
+
 	AddConstraintStationstoNormalsReverse(currentBlock, MT_ReverseOrCombine);
 
 	return true;
@@ -3417,6 +3499,11 @@ void dna_adjust::AdjustPhasedReverseCombine()
 		if (projectSettings_.g.verbose > 3)
 			debug_file << "In isolation" << std::endl;
 
+		assert(v_design_.at(currentBlock).getbuffer() != nullptr && "design null before SolveTry (reverse combine)");
+		assert(v_AtVinv_.at(currentBlock).getbuffer() != nullptr && "AtVinv null before SolveTry (reverse combine)");
+		assert(v_normals_.at(currentBlock).getbuffer() != nullptr && "normals null before SolveTry (reverse combine)");
+		assert(v_measMinusComp_.at(currentBlock).getbuffer() != nullptr && "measMinusComp null before SolveTry (reverse combine)");
+
 		// Backup normals prior to inversion for re-use in combination
 		// adjustment... only if a combination is required
 		BackupNormals(currentBlock, false);
@@ -3429,7 +3516,7 @@ void dna_adjust::AdjustPhasedReverseCombine()
 
 		// Add corrections to estimates.
 		// If --output-adj-iter-stat argument is supplied or currentBlock
-		// is the first block, then compute geographic coordinates, recompute 
+		// is the first block, then compute geographic coordinates, recompute
 		// meas-minus-computed vector, then print statistics.
 		// Output of stats also prints largest correction.
 		// If --output-adj-iter-stn argument is supplied, print station coords
@@ -3437,16 +3524,16 @@ void dna_adjust::AdjustPhasedReverseCombine()
 
 		// Debug and diagnose (if required)
 		debug_BlockInformation(currentBlock, "(reverse, in isolation)");
-		
+
 		// Carry the estimated junction station coordinates and variances to the next block and
 		// combine.  CarryReverseEstimates will return false if currentBlock is the first block
-		// or an isolated block.  If estimates can be carried, CarryReverseEstimates updates 
+		// or an isolated block.  If estimates can be carried, CarryReverseEstimates updates
 		// geographic coords (if req'd), recomputes meas-minus-comp vector and updates normals for
 		// the next block.
 		if (CarryReverseJunctions(currentBlock, currentBlock-1, false))
-		{			
+		{
 			//////////////////////////////////////////////////////////////////////////
-			// Combination Adjustment 
+			// Combination Adjustment
 			//
 			// Perform combination on all blocks except the first and last as they will
 			// be rigorous from reverse and forward adjustments respectively
@@ -3454,13 +3541,13 @@ void dna_adjust::AdjustPhasedReverseCombine()
 			// First, carry the junction station estimates and variances of the next block
 			// (obtained during the forward pass).  These were copied to v_junctionEstimatesFwd_
 			// and v_junctionVariances_ in CarryStnEstimatesandVariancesForward(..) during
-			// the forward pass. 
+			// the forward pass.
 			if (PrepareAdjustmentCombine(currentBlock, pseudomsrJSLCount, false))
 			{
 				isCombining_ = true;
 				if (projectSettings_.g.verbose > 3)
 					debug_file << "Rigorous" << std::endl;
-			
+
 				if (projectSettings_.o._adj_stn_iteration)
 					if (!v_blockMeta_.at(currentBlock)._blockFirst)
 						adj_file << std::endl << std::left << "Adjusting block " << currentBlock+1 << " (reverse, rigorous)... ";
@@ -3501,7 +3588,7 @@ void dna_adjust::AdjustPhasedReverseCombine()
 
 	}	// for (UINT32 block=0; block<blockCount_; ++block, --currentBlock)
 }
-	
+
 
 // Single thread reverse and combination adjustment
 void dna_adjust::AdjustPhasedReverse()
@@ -3510,9 +3597,12 @@ void dna_adjust::AdjustPhasedReverse()
 	isCombining_ = false;
 	UINT32 currentBlock(blockCount_ - 1);
 
-	// For staged adjustments, load the last block from mapped memory file
+	// For staged adjustments, prefetch and load the last block from mapped memory file
 	if (projectSettings_.a.stage)
+	{
+		AdviseBlockWillNeed(currentBlock);
 		DeserialiseBlockFromMappedFile(currentBlock);
+	}
 
 	for (UINT32 block=0; block<blockCount_; ++block, --currentBlock)
 	{
@@ -3553,10 +3643,10 @@ void dna_adjust::AdjustPhasedReverse()
 
 		if (projectSettings_.o._adj_stn_iteration)
 			adj_file << " done." << std::endl;
-		
+
 		// Add corrections to estimates.
 		// If --output-adj-iter-stat argument is supplied or currentBlock
-		// is the first block, then compute geographic coordinates, recompute 
+		// is the first block, then compute geographic coordinates, recompute
 		// meas-minus-computed vector, then print statistics.
 		// Output of stats also prints largest correction.
 		// If --output-adj-iter-stn argument is supplied, print station coords
@@ -3567,7 +3657,7 @@ void dna_adjust::AdjustPhasedReverse()
 
 		// Carry the estimated junction station coordinates and variances to the next block and
 		// combine.  CarryReverseEstimates will return false if currentBlock is the first block
-		// or an isolated block.  If estimates can be carried, CarryReverseEstimates updates 
+		// or an isolated block.  If estimates can be carried, CarryReverseEstimates updates
 		// geographic coords (if req'd), recomputes meas-minus-comp vector and updates normals for
 		// the next block.
 		CarryReverseJunctions(currentBlock, currentBlock-1, false);
@@ -3581,9 +3671,9 @@ void dna_adjust::AdjustPhasedReverse()
 
 	}	// for (UINT32 block=0; block<blockCount_; ++block, --currentBlock)
 }
-	
 
-// This method will not be reached if currentBlock is a single (isolated) block, since 
+
+// This method will not be reached if currentBlock is a single (isolated) block, since
 // PrepareAdjustmentReverse performs this test.
 void dna_adjust::UpdateEstimatesReverse(const UINT32 currentBlock, bool MT_ReverseOrCombine)
 {
@@ -3678,7 +3768,11 @@ void dna_adjust::UpdateEstimatesFinal(const UINT32 currentBlock)
 		AtVinv = &v_AtVinvR_.at(currentBlock);
 		measMinusComp = &v_measMinusCompR_.at(currentBlock);
 		aposterioriVariances = &v_normalsR_.at(currentBlock);
-	}	
+	}
+
+	assert(AtVinv->getbuffer() != nullptr && "UpdateEstFinal: AtVinv null");
+	assert(measMinusComp->getbuffer() != nullptr && "UpdateEstFinal: measMinusComp null");
+	assert(aposterioriVariances->getbuffer() != nullptr && "UpdateEstFinal: aposterioriVariances null");
 
 	if (v_blockMeta_.at(currentBlock)._blockFirst)
 	{
@@ -3758,13 +3852,16 @@ bool dna_adjust::CarryReverseJunctions(const UINT32 currentBlock, const UINT32 n
 			v_normals_.at(nextBlock) = v_normalsR_.at(nextBlock);
 	}
 
-	// For staged adjustments, load blocks info for nextBlock
+	// For staged adjustments, prefetch and load blocks info for nextBlock
 	if (projectSettings_.a.stage)
+	{
+		AdviseBlockWillNeed(nextBlock);
 		DeserialiseBlockFromMappedFile(nextBlock);
+	}
 
 	// Next, update estimates for next block to original estimates
 	*estimatedStationsNext = v_originalStations_.at(nextBlock);
-	
+
 	// For staged adjustments, rebuild design and AtVinv
 	if (projectSettings_.a.stage)
 		RebuildNormals(nextBlock, __reverse__, false, false);
@@ -3788,25 +3885,25 @@ bool dna_adjust::CarryReverseJunctions(const UINT32 currentBlock, const UINT32 n
 
 
 // go through each of the measurements in the binary measurements file and formulate partial derivatives
-void dna_adjust::FillDesignNormalMeasurementsMatrices(bool buildnewMatrices, const UINT32& block, bool MT_ReverseOrCombine)
+void dna_adjust::FillDesignNormalMeasurementsMatrices(bool buildnewMatrices, const UINT32& block, bool MT_ReverseOrCombine, bool skipNormals)
 {
 	UINT32 design_row(0);
-	
+
 	it_vUINT32 _it_block_msr;
-	it_vmsr_t _it_msr; 
+	it_vmsr_t _it_msr;
 
 	for (_it_block_msr=v_CML_.at(block).begin(); _it_block_msr!=v_CML_.at(block).end(); ++_it_block_msr)
 	{
 		if (InitialiseandValidateMsrPointer(_it_block_msr, _it_msr))
 			continue;
 
-		// When a target direction is found, continue to next element.  
+		// When a target direction is found, continue to next element.
 		if (_it_msr->measType == 'D')
 			if (_it_msr->vectorCount2 < 1)
 				continue;
 
 		// Build AtVinv, Normals and Meas minus Comp vectors
-		UpdateDesignNormalMeasMatrices(&_it_msr, design_row, buildnewMatrices, block, MT_ReverseOrCombine);
+		UpdateDesignNormalMeasMatrices(&_it_msr, design_row, buildnewMatrices, block, MT_ReverseOrCombine, skipNormals);
 	}
 }
 
@@ -3815,6 +3912,9 @@ void dna_adjust::FillDesignNormalMeasurementsMatrices(bool buildnewMatrices, con
 // pre-adjustment value, otherwise back up the current value.
 bool dna_adjust::InitialiseMeasurement(pit_vmsr_t _it_msr, bool buildnewMatrices)
 {
+	if (rebuildingDesign_)
+		return false;
+
 	if (buildnewMatrices)
 	{
 		// Was this measurement reduced from previous
@@ -3835,7 +3935,7 @@ bool dna_adjust::InitialiseMeasurement(pit_vmsr_t _it_msr, bool buildnewMatrices
 }
 	
 
-void dna_adjust::UpdateDesignNormalMeasMatrices(pit_vmsr_t _it_msr, UINT32& design_row, bool buildnewMatrices, const UINT32& block, bool MT_ReverseOrCombine)
+void dna_adjust::UpdateDesignNormalMeasMatrices(pit_vmsr_t _it_msr, UINT32& design_row, bool buildnewMatrices, const UINT32& block, bool MT_ReverseOrCombine, bool skipNormals)
 {
 	std::stringstream ss;
 
@@ -3851,101 +3951,101 @@ void dna_adjust::UpdateDesignNormalMeasMatrices(pit_vmsr_t _it_msr, UINT32& desi
 		design = &v_designR_.at(block);
 		AtVinv = &v_AtVinvR_.at(block);
 		measMinusComp = &v_measMinusCompR_.at(block);
-	}	
+	}
 
 	switch ((*_it_msr)->measType)
 	{
 	case 'A':	// Horizontal angle
 		UpdateDesignNormalMeasMatrices_A(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 		break;
 	case 'B':	// Geodetic azimuth
 	case 'K':	// Astronomic azimuth
-		// Note: UpdateDesignNormalMeasMatrices_BK reduces K measurements to the geodetic reference frame, 
+		// Note: UpdateDesignNormalMeasMatrices_BK reduces K measurements to the geodetic reference frame,
 		// after which UpdateDesignNormalMeasMatrices_BK treats K measurements as B measurements upon forming
 		// design matrix elements.
 		UpdateDesignNormalMeasMatrices_BK(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);	
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 		break;
 	case 'C':	// Chord dist
 		UpdateDesignNormalMeasMatrices_C(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 		break;
-	case 'D':	// Direction set	
+	case 'D':	// Direction set
 		UpdateDesignNormalMeasMatrices_D(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 		break;
 	case 'E':	// Ellipsoid arc
 		UpdateDesignNormalMeasMatrices_E(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 		break;
 	case 'G':	// GPS Baseline
 		UpdateDesignNormalMeasMatrices_G(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 		break;
 	case 'H':	// Orthometric height
 		// Note: UpdateDesignNormalMeasMatrices_H reduces term1 to ellipsoid height, after which
 		// UpdateDesignNormalMeasMatrices_HR is used to form design elements.
 		UpdateDesignNormalMeasMatrices_H(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 		break;
 	case 'I':	// Astronomic latitude
 		// Note: UpdateDesignNormalMeasMatrices_I reduces term1 to geodetic latitude, after which
 		// UpdateDesignNormalMeasMatrices_IP is used to form design elements.
 		UpdateDesignNormalMeasMatrices_I(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 		break;
 	case 'J':	// Astronomic longitude
 		// Note: UpdateDesignNormalMeasMatrices_J reduces term1 to geodetic longitude, after which
 		// UpdateDesignNormalMeasMatrices_JQ is used to form design elements.
 		UpdateDesignNormalMeasMatrices_J(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
-		break;		
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
+		break;
 	case 'L':	// Level difference
 		UpdateDesignNormalMeasMatrices_L(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
-		break;		
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
+		break;
 	case 'M':	// MSL arc
 		UpdateDesignNormalMeasMatrices_M(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
-		break;		
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
+		break;
 	case 'P':	// Geodetic latitude
 		// Note: UpdateDesignNormalMeasMatrices_P archives the raw measurement, after which
 		// UpdateDesignNormalMeasMatrices_IP is used to form design elements.
 		UpdateDesignNormalMeasMatrices_P(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
-		break;		
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
+		break;
 	case 'Q':	// Geodetic longitude
 		// Note: UpdateDesignNormalMeasMatrices_Q archives the raw measurement, after which
 		// UpdateDesignNormalMeasMatrices_JQ is used to form design elements.
 		UpdateDesignNormalMeasMatrices_Q(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
-		break;		
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
+		break;
 	case 'R':	// Ellipsoidal height
 		// Note: UpdateDesignNormalMeasMatrices_R archives the raw measurement, after which
 		// UpdateDesignNormalMeasMatrices_HR is used to form design elements.
 		UpdateDesignNormalMeasMatrices_R(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 		break;
 	case 'S':	// Slope distance
 		UpdateDesignNormalMeasMatrices_S(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 		break;
 	case 'V':	// Zenith distance
 		UpdateDesignNormalMeasMatrices_V(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
-		break;		
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
+		break;
 	case 'X':	// GPS Baseline cluster
 		UpdateDesignNormalMeasMatrices_X(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, design, AtVinv, buildnewMatrices);
-		break;		
+			measMinusComp, estimatedStations, design, AtVinv, buildnewMatrices, skipNormals);
+		break;
 	case 'Y':	// GPS Point cluster
 		UpdateDesignNormalMeasMatrices_Y(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, design, AtVinv, buildnewMatrices);
-		break;		
+			measMinusComp, estimatedStations, design, AtVinv, buildnewMatrices, skipNormals);
+		break;
 	case 'Z':	// Vertical angle
 		UpdateDesignNormalMeasMatrices_Z(_it_msr, design_row, block,
-			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+			measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 		break;
 	default:
 		ss << "UpdateDesignNormalMeasMatrices(): Unknown measurement type - '" <<
@@ -4652,8 +4752,8 @@ void dna_adjust::AddMsrtoMeasMinusComp(pit_vmsr_t _it_msr, const UINT32& design_
 	
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_A(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
 	UINT32 stn1(GetBlkMatrixElemStn1(block, _it_msr)); 
 	UINT32 stn2(GetBlkMatrixElemStn2(block, _it_msr));
@@ -4679,11 +4779,11 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_A(pit_vmsr_t _it_msr, UINT32& de
 		&direction12, &direction13, 
 		&local_12e, &local_12n, &local_13e, &local_13n));
 	
-	// Initialise measurement.  No need to test if no further calculations are 
+	// Initialise measurement.  No need to test if no further calculations are
 	// required (as in stage mode), as this is done later (below)
 	InitialiseMeasurement(_it_msr, buildnewMatrices);
 
-	if (buildnewMatrices)
+	if (buildnewMatrices && !rebuildingDesign_)
 	{
 		// deflections available?
 		if (fabs(stn1_it->verticalDef) > E4_SEC_DEFLECTION || fabs(stn1_it->meridianDef) > E4_SEC_DEFLECTION)
@@ -4802,7 +4902,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_A(pit_vmsr_t _it_msr, UINT32& de
 
 	UpdateAtVinv(_it_msr, stn1, stn2, stn3, design_row, design, AtVinv, buildnewMatrices);
 
-	if (buildnewMatrices)
+	if (buildnewMatrices && !skipNormals)
 		// Add weighted measurement contributions to normal matrix
 		UpdateNormals_A(stn1, stn2, stn3, design_row, normals, design, AtVinv);
 	else
@@ -4811,8 +4911,8 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_A(pit_vmsr_t _it_msr, UINT32& de
 
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_BK(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
 	UINT32 stn1(GetBlkMatrixElemStn1(block, _it_msr)); 
 	UINT32 stn2(GetBlkMatrixElemStn2(block, _it_msr));
@@ -4834,11 +4934,11 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_BK(pit_vmsr_t _it_msr, UINT32& d
 		stn1_it->currentLongitude,
 		&local_12e, &local_12n));
 	
-	// Initialise measurement.  No need to test if no further calculations are 
+	// Initialise measurement.  No need to test if no further calculations are
 	// required (as in stage mode), as this is done later (below)
 	InitialiseMeasurement(_it_msr, buildnewMatrices);
-	
-	if (buildnewMatrices)
+
+	if (buildnewMatrices && !rebuildingDesign_)
 	{
 		// deflections available?
 		if ((*_it_msr)->measType == 'K' &&						// Astro
@@ -4906,19 +5006,19 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_BK(pit_vmsr_t _it_msr, UINT32& d
 	// Update AtVinv based on new design matrix elements
 	UpdateAtVinv(_it_msr, stn1, stn2, 0, design_row, design, AtVinv, buildnewMatrices);
 
-	if (buildnewMatrices)
+	if (buildnewMatrices && !skipNormals)
 		// Add weighted measurement contributions to normal matrix
 		UpdateNormals_BCEKLMSVZ(stn1, stn2, design_row, normals, design, AtVinv);
 	else
 		design_row++;
 }
-	
+
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_C(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
-	// Initialise measurement and test if no further calculations are 
+	// Initialise measurement and test if no further calculations are
 	// required (as in stage mode)
 	if (InitialiseMeasurement(_it_msr, buildnewMatrices))
 		return;
@@ -4929,13 +5029,13 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_C(pit_vmsr_t _it_msr, UINT32& de
 
 	// Now call UpdateDesignNormalMeasMatrices_CEM
 	UpdateDesignNormalMeasMatrices_CEM(_it_msr, design_row, block,
-		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 }
 	
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_CEM(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
 	UINT32 stn1(GetBlkMatrixElemStn1(block, _it_msr)); 
 	UINT32 stn2(GetBlkMatrixElemStn2(block, _it_msr));
@@ -4971,17 +5071,17 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_CEM(pit_vmsr_t _it_msr, UINT32& 
 	// Update AtVinv based on new design matrix elements
 	UpdateAtVinv(_it_msr, stn1, stn2, 0, design_row, design, AtVinv, buildnewMatrices);
 
-	if (buildnewMatrices)
+	if (buildnewMatrices && !skipNormals)
 		// Add weighted measurement contributions to normal matrix
 		UpdateNormals_BCEKLMSVZ(stn1, stn2, design_row, normals, design, AtVinv);
 	else
 		design_row++;
 }
-	
+
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_D(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
 	it_vmsr_t _it_msr_first(*_it_msr);
 	UINT32 design_row_begin(design_row);
@@ -5030,7 +5130,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_D(pit_vmsr_t _it_msr, UINT32& de
 
 			it_angle->station3 = (*_it_msr)->station2;
 			
-			if (buildnewMatrices)
+			if (buildnewMatrices && !rebuildingDesign_)
 			{
 				// Was this measurement reduced from previous
 				// adjustment, which was serialised to disk?
@@ -5063,7 +5163,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_D(pit_vmsr_t _it_msr, UINT32& de
 			UpdateDesignNormalMeasMatrices_A(&it_angle, design_row, block,
 				measMinusComp, estimatedStations, 0, design, AtVinv, buildnewMatrices);
 
-			if (buildnewMatrices)
+			if (buildnewMatrices && !rebuildingDesign_)
 			{
 				// Update derived angle, corrected for deflection of vertical
 				(*_it_msr)->scale1 = it_angle->term1;
@@ -5134,14 +5234,14 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_D(pit_vmsr_t _it_msr, UINT32& de
 		it_angle++;
 	}
 
-	if (buildnewMatrices)
+	if (buildnewMatrices && !skipNormals)
 		// Add weighted measurement contributions to normal matrix
 		UpdateNormals_D(block, _it_msr_first, design_row_begin, normals, design, AtVinv);
 }
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_E(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
 	// Initialise measurement and test if no further calculations are 
 	// required (as in stage mode)
@@ -5177,7 +5277,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_E(pit_vmsr_t _it_msr, UINT32& de
 
 	// Now that the ellipsoid arc has been reduced to a chord, call UpdateDesignNormalMeasMatrices_CEM
 	UpdateDesignNormalMeasMatrices_CEM(_it_msr, design_row, block,
-		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 }
 
 void dna_adjust::UpdateDesignMeasMatrices_GX(pit_vmsr_t _it_msr, UINT32& design_row,
@@ -5251,8 +5351,8 @@ void dna_adjust::UpdateDesignMeasMatrices_GX(pit_vmsr_t _it_msr, UINT32& design_
 }
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_G(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
 	it_vmsr_t _it_msr_first(*_it_msr);
 	UINT32 stn1(GetBlkMatrixElemStn1(block, _it_msr)); 
@@ -5274,7 +5374,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_G(pit_vmsr_t _it_msr, UINT32& de
 
 
 	// For first time run or staged adjustment mode
-	if (buildnewMatrices || projectSettings_.a.stage)
+	if (buildnewMatrices || projectSettings_.a.stage || skipNormals)
 	{
 		// Load GPS Variance matrix.  For the first run, scaling is applied
 		// and the variances are written to the binary measurements list.
@@ -5283,23 +5383,23 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_G(pit_vmsr_t _it_msr, UINT32& de
 
 		if (buildnewMatrices && projectSettings_.a.stage)
 			return;
-	
+
 		// Build  At * V-1
 		AtVinv->replace(stn1, design_row_begin, var_cart * -1);
 		AtVinv->replace(stn2, design_row_begin, var_cart);
 
-		if (buildnewMatrices && !projectSettings_.a.stage)
+		if (buildnewMatrices && !projectSettings_.a.stage && !skipNormals)
 			// Add weighted measurement contributions to normal matrix
 			UpdateNormals_G(stn1, stn2, design_row_begin, normals, AtVinv);
 	}
-	
+
 	design_row++;
 }
-	
+
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_M(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
 	// Initialise measurement and test if no further calculations are 
 	// required (as in stage mode)
@@ -5324,22 +5424,22 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_M(pit_vmsr_t _it_msr, UINT32& de
 
 	// Now that the MSL arc has been reduced to a chord, call UpdateDesignNormalMeasMatrices_CEM
 	UpdateDesignNormalMeasMatrices_CEM(_it_msr, design_row, block,
-		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 }
 
 // Like zenith distances and vertical angles, the relationship between slope distances and the
 // coordinates of p1 and p2 requires a little extra work to take into consideration instrument
 // and target height.  For the measurements-minus-computed vector, the "computed" distance
-// is the true distance between the instrument and target, and so must take into consideration 
+// is the true distance between the instrument and target, and so must take into consideration
 // instrument and target heights.  However, the dX, dY, dZ components for the partial 
 // derivatives represent the true geometric difference between the two stations (not 
 // instrument and target).
 void dna_adjust::UpdateDesignNormalMeasMatrices_S(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
 	// preAdjMeas is used to store original measured MSL arc distance
-	if (buildnewMatrices)
+	if (buildnewMatrices && !rebuildingDesign_)
 	{
 		// This is the first time adjust has run, so
 		// back up the raw measurement
@@ -5349,7 +5449,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_S(pit_vmsr_t _it_msr, UINT32& de
 			return;
 	}
 
-	UINT32 stn1(GetBlkMatrixElemStn1(block, _it_msr)); 
+	UINT32 stn1(GetBlkMatrixElemStn1(block, _it_msr));
 	UINT32 stn2(GetBlkMatrixElemStn2(block, _it_msr));
 
 	it_vstn_t_const stn1_it(bstBinaryRecords_.begin() + (*_it_msr)->station1);
@@ -5357,7 +5457,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_S(pit_vmsr_t _it_msr, UINT32& de
 	// compute dX, dY, dZ for instrument height (ih) and target height (th)
 	double dXih, dYih, dZih, dXth, dYth, dZth;
 	CartesianElementsFromInstrumentHeight((*_it_msr)->term3,				// instrument height
-		&dXih, &dYih, &dZih, 
+		&dXih, &dYih, &dZih,
 		stn1_it->currentLatitude,
 		stn1_it->currentLongitude);
 	CartesianElementsFromInstrumentHeight((*_it_msr)->term4,				// target height
@@ -5385,7 +5485,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_S(pit_vmsr_t _it_msr, UINT32& de
 	// Update AtVinv based on new design matrix elements
 	UpdateAtVinv(_it_msr, stn1, stn2, 0, design_row, design, AtVinv, buildnewMatrices);
 
-	if (buildnewMatrices)
+	if (buildnewMatrices && !skipNormals)
 		// Add weighted measurement contributions to normal matrix
 		UpdateNormals_BCEKLMSVZ(stn1, stn2, design_row, normals, design, AtVinv);
 	else
@@ -5402,10 +5502,10 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_S(pit_vmsr_t _it_msr, UINT32& de
 // partial derivatives represent the true geometric difference between the two stations (not 
 // instrument and target).
 void dna_adjust::UpdateDesignNormalMeasMatrices_V(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
-	UINT32 stn1(GetBlkMatrixElemStn1(block, _it_msr)); 
+	UINT32 stn1(GetBlkMatrixElemStn1(block, _it_msr));
 	UINT32 stn2(GetBlkMatrixElemStn2(block, _it_msr));
 
 	it_vstn_t_const stn1_it(bstBinaryRecords_.begin() + (*_it_msr)->station1);
@@ -5413,11 +5513,11 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_V(pit_vmsr_t _it_msr, UINT32& de
 
 	double local_12e, local_12n, local_12up;
 
-	// Initialise measurement.  No need to test if no further calculations are 
+	// Initialise measurement.  No need to test if no further calculations are
 	// required (as in stage mode), as this is done later (below)
 	InitialiseMeasurement(_it_msr, buildnewMatrices);
 
-	if (buildnewMatrices)
+	if (buildnewMatrices && !rebuildingDesign_)
 	{
 		// deflections available?
 		if (fabs(stn1_it->verticalDef) > E4_SEC_DEFLECTION || fabs(stn1_it->meridianDef) > E4_SEC_DEFLECTION)
@@ -5493,7 +5593,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_V(pit_vmsr_t _it_msr, UINT32& de
 	// Update AtVinv based on new design matrix elements
 	UpdateAtVinv(_it_msr, stn1, stn2, 0, design_row, design, AtVinv, buildnewMatrices);
 
-	if (buildnewMatrices)
+	if (buildnewMatrices && !skipNormals)
 		// Add weighted measurement contributions to normal matrix
 		UpdateNormals_BCEKLMSVZ(stn1, stn2, design_row, normals, design, AtVinv);
 	else
@@ -5506,15 +5606,15 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_V(pit_vmsr_t _it_msr, UINT32& de
 // Like zenith distances, the relationship between slope distances and the
 // coordinates of p1 and p2 requires a little extra work to take into consideration instrument
 // and target height.  For the measurements-minus-computed vector, the "computed" distance
-// is the true distance between the instrument and target, and so must take into consideration 
-// instrument and target heights.  However, the dX, dY, dZ components for the partial 
-// derivatives represent the true geometric difference between the two stations (not 
+// is the true distance between the instrument and target, and so must take into consideration
+// instrument and target heights.  However, the dX, dY, dZ components for the partial
+// derivatives represent the true geometric difference between the two stations (not
 // instrument and target).
 void dna_adjust::UpdateDesignNormalMeasMatrices_Z(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
-	UINT32 stn1(GetBlkMatrixElemStn1(block, _it_msr)); 
+	UINT32 stn1(GetBlkMatrixElemStn1(block, _it_msr));
 	UINT32 stn2(GetBlkMatrixElemStn2(block, _it_msr));
 
 	it_vstn_t_const stn1_it(bstBinaryRecords_.begin() + (*_it_msr)->station1);
@@ -5522,11 +5622,11 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_Z(pit_vmsr_t _it_msr, UINT32& de
 
 	double local_12e, local_12n, local_12up;
 
-	// Initialise measurement.  No need to test if no further calculations are 
+	// Initialise measurement.  No need to test if no further calculations are
 	// required (as in stage mode), as this is done later (below)
 	InitialiseMeasurement(_it_msr, buildnewMatrices);
 
-	if (buildnewMatrices)
+	if (buildnewMatrices && !rebuildingDesign_)
 	{
 		// deflections available?
 		if (fabs(stn1_it->verticalDef) > E4_SEC_DEFLECTION || fabs(stn1_it->meridianDef) > E4_SEC_DEFLECTION)
@@ -5602,21 +5702,21 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_Z(pit_vmsr_t _it_msr, UINT32& de
 	// Update AtVinv based on new design matrix elements
 	UpdateAtVinv(_it_msr, stn1, stn2, 0, design_row, design, AtVinv, buildnewMatrices);
 
-	if (buildnewMatrices)
+	if (buildnewMatrices && !skipNormals)
 		// Add weighted measurement contributions to normal matrix
 		UpdateNormals_BCEKLMSVZ(stn1, stn2, design_row, normals, design, AtVinv);
 	else
 		design_row++;
 }
-	
+
 
 // Orthometric height difference.
-// This function requires geoid-ellipsoid separation in order to reduce 
-// to ellipsoidal height difference counterpart.  
+// This function requires geoid-ellipsoid separation in order to reduce
+// to ellipsoidal height difference counterpart.
 // Hence, run geoid with -f, -s and -n options
 void dna_adjust::UpdateDesignNormalMeasMatrices_L(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
 	UINT32 stn1(GetBlkMatrixElemStn1(block, _it_msr)); 
 	UINT32 stn2(GetBlkMatrixElemStn2(block, _it_msr));
@@ -5641,11 +5741,11 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_L(pit_vmsr_t _it_msr, UINT32& de
 		&h1, &h2, &nu1, &nu2, &Zn1, &Zn2, 
 		datum_.GetEllipsoidRef()));
 
-	// Initialise measurement.  No need to test if no further calculations are 
+	// Initialise measurement.  No need to test if no further calculations are
 	// required (as in stage mode), as this is done later (below)
 	InitialiseMeasurement(_it_msr, buildnewMatrices);
 
-	if (buildnewMatrices)
+	if (buildnewMatrices && !rebuildingDesign_)
 	{
 		// N value available?
 		if (fabs(stn1_it->geoidSep) > PRECISION_1E4 ||
@@ -5676,7 +5776,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_L(pit_vmsr_t _it_msr, UINT32& de
 	// Update AtVinv based on new design matrix elements
 	UpdateAtVinv(_it_msr, stn1, stn2, 0, design_row, design, AtVinv, buildnewMatrices);
 
-	if (buildnewMatrices)
+	if (buildnewMatrices && !skipNormals)
 		// Add weighted measurement contributions to normal matrix
 		UpdateNormals_BCEKLMSVZ(stn1, stn2, design_row, normals, design, AtVinv);
 	else
@@ -5684,17 +5784,17 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_L(pit_vmsr_t _it_msr, UINT32& de
 }
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_I(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
-	// Initialise measurement.  No need to test if no further calculations are 
+	// Initialise measurement.  No need to test if no further calculations are
 	// required (as in stage mode), as this is done later (below)
 	InitialiseMeasurement(_it_msr, buildnewMatrices);
 
-	if (buildnewMatrices)
+	if (buildnewMatrices && !rebuildingDesign_)
 	{
 		it_vstn_t_const stn1_it(bstBinaryRecords_.begin() + (*_it_msr)->station1);
-	
+
 		// deflections available?
 		if (fabs(stn1_it->meridianDef) > E4_SEC_DEFLECTION)
 		{
@@ -5709,22 +5809,22 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_I(pit_vmsr_t _it_msr, UINT32& de
 	}    
 
 	UpdateDesignNormalMeasMatrices_IP(_it_msr, design_row, block,
-		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 }
 
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_J(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
-	// Initialise measurement.  No need to test if no further calculations are 
+	// Initialise measurement.  No need to test if no further calculations are
 	// required (as in stage mode), as this is done later (below)
 	InitialiseMeasurement(_it_msr, buildnewMatrices);
 
-	if (buildnewMatrices)
+	if (buildnewMatrices && !rebuildingDesign_)
 	{
 		it_vstn_t_const stn1_it(bstBinaryRecords_.begin() + (*_it_msr)->station1);
-	
+
 		// deflections available?
 		if (fabs(stn1_it->verticalDef) > E4_SEC_DEFLECTION)
 		{
@@ -5740,27 +5840,27 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_J(pit_vmsr_t _it_msr, UINT32& de
 	}    
 
 	UpdateDesignNormalMeasMatrices_JQ(_it_msr, design_row, block,
-		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 }
 
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_P(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
-	// Initialise measurement and test if no further calculations are 
+	// Initialise measurement and test if no further calculations are
 	// required (as in stage mode)
 	if (InitialiseMeasurement(_it_msr, buildnewMatrices))
 		return;
 
 	UpdateDesignNormalMeasMatrices_IP(_it_msr, design_row, block,
-		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 }
-	
+
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_IP(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
 	UINT32 stn1(GetBlkMatrixElemStn1(block, _it_msr)); 
 	
@@ -5806,31 +5906,31 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_IP(pit_vmsr_t _it_msr, UINT32& d
 	// Update AtVinv based on new design matrix elements
 	UpdateAtVinv(_it_msr, stn1, 0, 0, design_row, design, AtVinv, buildnewMatrices);
 	
-	if (buildnewMatrices)
+	if (buildnewMatrices && !skipNormals)
 		// Add weighted measurement contributions to normal matrix
 		UpdateNormals_HIJPQR(stn1, design_row, normals, design, AtVinv);
 	else
 		design_row++;
 }
-	
+
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_Q(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
-	// Initialise measurement and test if no further calculations are 
+	// Initialise measurement and test if no further calculations are
 	// required (as in stage mode)
 	if (InitialiseMeasurement(_it_msr, buildnewMatrices))
 		return;
 
 	UpdateDesignNormalMeasMatrices_JQ(_it_msr, design_row, block,
-		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 }
-	
+
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_JQ(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
 	UINT32 stn1(GetBlkMatrixElemStn1(block, _it_msr)); 
 	
@@ -5858,26 +5958,26 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_JQ(pit_vmsr_t _it_msr, UINT32& d
 	// Update AtVinv based on new design matrix elements
 	UpdateAtVinv(_it_msr, stn1, 0, 0, design_row, design, AtVinv, buildnewMatrices);
 	
-	if (buildnewMatrices)
+	if (buildnewMatrices && !skipNormals)
 		// Add weighted measurement contributions to normal matrix
 		UpdateNormals_HIJPQR(stn1, design_row, normals, design, AtVinv);
 	else
 		design_row++;
 }
-	
+
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_H(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
-	// Initialise measurement.  No need to test if no further calculations are 
+	// Initialise measurement.  No need to test if no further calculations are
 	// required (as in stage mode), as this is done later (below)
 	InitialiseMeasurement(_it_msr, buildnewMatrices);
 
-	if (buildnewMatrices)
+	if (buildnewMatrices && !rebuildingDesign_)
 	{
 		it_vstn_t_const stn1_it(bstBinaryRecords_.begin() + (*_it_msr)->station1);
-	
+
 		// N value available?
 		if (fabs(stn1_it->geoidSep) > PRECISION_1E4)
 		{
@@ -5891,13 +5991,13 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_H(pit_vmsr_t _it_msr, UINT32& de
 	}
 
 	UpdateDesignNormalMeasMatrices_HR(_it_msr, design_row, block,
-		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 }
 
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_HR(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
 	UINT32 stn1(GetBlkMatrixElemStn1(block, _it_msr));
 
@@ -5931,31 +6031,31 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_HR(pit_vmsr_t _it_msr, UINT32& d
 	// Update AtVinv based on new design matrix elements
 	UpdateAtVinv(_it_msr, stn1, 0, 0, design_row, design, AtVinv, buildnewMatrices);
 	
-	if (buildnewMatrices)
+	if (buildnewMatrices && !skipNormals)
 		// Add weighted measurement contributions to normal matrix
 		UpdateNormals_HIJPQR(stn1, design_row, normals, design, AtVinv);
 	else
 		design_row++;
 }
-	
+
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_R(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
-	// Initialise measurement and test if no further calculations are 
+	// Initialise measurement and test if no further calculations are
 	// required (as in stage mode)
 	if (InitialiseMeasurement(_it_msr, buildnewMatrices))
 		return;
 
 	UpdateDesignNormalMeasMatrices_HR(_it_msr, design_row, block,
-		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices);
+		measMinusComp, estimatedStations, normals, design, AtVinv, buildnewMatrices, skipNormals);
 }
-	
+
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_X(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
 	it_vmsr_t _it_msr_first(*_it_msr);
 
@@ -5992,7 +6092,7 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_X(pit_vmsr_t _it_msr, UINT32& de
 
 	matrix_2d var_cart(baseline_count * 3, baseline_count * 3);
 
-	if (buildnewMatrices || projectSettings_.a.stage)
+	if (buildnewMatrices || projectSettings_.a.stage || skipNormals)
 	{
 		// Load apriori variance matrix, and assign to binary measurement
 		// If required, apply scalars
@@ -6002,10 +6102,10 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_X(pit_vmsr_t _it_msr, UINT32& de
 			return;
 	}
 
-	// If this method is called via PrepareAdjustment() and the adjustment 
+	// If this method is called via PrepareAdjustment() and the adjustment
 	// mode is staged, then don't update the AtVinv matrix.  This will be
 	// done during an adjustment via AdjustPhasedForward().
-	if (!buildnewMatrices && !projectSettings_.a.stage)
+	if (!buildnewMatrices && !projectSettings_.a.stage && !skipNormals)
 		return;
 
 	UINT32 cluster_cov;
@@ -6064,11 +6164,11 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_X(pit_vmsr_t _it_msr, UINT32& de
 			_it_msr_temp += 3;
 	}
 
-	if (projectSettings_.a.stage || !buildnewMatrices)
+	if (projectSettings_.a.stage || !buildnewMatrices || skipNormals)
 		return;
-	
+
 	_it_msr_temp = _it_msr_first;
-	
+
 	matrix_2d tmp0(3, 3);
 
 	// Build  At * V-1 * A variances
@@ -6147,8 +6247,8 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_X(pit_vmsr_t _it_msr, UINT32& de
 
 
 void dna_adjust::UpdateDesignNormalMeasMatrices_Y(pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
-											  matrix_2d* measMinusComp, matrix_2d* estimatedStations, 
-											  matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices)
+											  matrix_2d* measMinusComp, matrix_2d* estimatedStations,
+											  matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices, bool skipNormals)
 {
 	it_vmsr_t _it_msr_first(*_it_msr);
 	it_vmsr_t tmp_msr;
@@ -6361,23 +6461,23 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_Y(pit_vmsr_t _it_msr, UINT32& de
 
 	matrix_2d var_cart(point_count * 3, point_count * 3);
 
-	if (buildnewMatrices || projectSettings_.a.stage)
+	if (buildnewMatrices || projectSettings_.a.stage || skipNormals)
 	{
 		// Load apriori variance matrix, and assign to binary measurement
-		// If required, propagate to cartesian reference frame and apply 
+		// If required, propagate to cartesian reference frame and apply
 		// scalars
 		LoadVarianceMatrix_Y(_it_msr_first, &var_cart, coordType);
-	
+
 		// If preparing for a stage adjustment, return
 		// Normals will be built for each block as needed
 		if (buildnewMatrices && projectSettings_.a.stage)
 			return;
 	}
-	
-	// If this method is called via PrepareAdjustment() and the adjustment 
+
+	// If this method is called via PrepareAdjustment() and the adjustment
 	// mode is staged, then don't update the AtVinv matrix.  This will be
 	// done during an adjustment via AdjustPhasedForward().
-	if (!buildnewMatrices && !projectSettings_.a.stage)
+	if (!buildnewMatrices && !projectSettings_.a.stage && !skipNormals)
 		return;
 
 	UINT32 cluster_cov;
@@ -6420,9 +6520,9 @@ void dna_adjust::UpdateDesignNormalMeasMatrices_Y(pit_vmsr_t _it_msr, UINT32& de
 		design_row_begin += 3;
 	}
 
-	if (projectSettings_.a.stage || !buildnewMatrices)
+	if (projectSettings_.a.stage || !buildnewMatrices || skipNormals)
 		return;
-	
+
 	_it_msr_temp = _it_msr_first;
 
 	// Add to At * V-1 * A
@@ -6485,6 +6585,13 @@ void dna_adjust::SolveTry(bool COMPUTE_INVERSE, const UINT32& block)
 
 void dna_adjust::Solve(bool COMPUTE_INVERSE, const UINT32& block)
 {
+	assert(v_design_.at(block).rows() > 0 && "Solve: design has 0 rows");
+	assert(v_design_.at(block).columns() > 0 && "Solve: design has 0 columns");
+	assert(v_AtVinv_.at(block).rows() > 0 && "Solve: AtVinv has 0 rows");
+	assert(v_AtVinv_.at(block).columns() > 0 && "Solve: AtVinv has 0 columns");
+	assert(v_normals_.at(block).rows() > 0 && "Solve: normals has 0 rows");
+	assert(v_measMinusComp_.at(block).rows() > 0 && "Solve: measMinusComp has 0 rows");
+
 	// debug matrices if required
 	debug_SolutionInformation(block);
 
@@ -6504,33 +6611,24 @@ void dna_adjust::Solve(bool COMPUTE_INVERSE, const UINT32& block)
 		// the normal matrix before inversion and subsequently reversing the effect.
 		//
 
-		// 1. Create scalar matrix
-		matrix_2d *S = nullptr, *SN = nullptr;
+		// 1. Scale normals to unity using diagonal scaling
+		UINT32 n = v_normals_.at(block).rows();
+		std::vector<double> s_diag;
 
 		if (projectSettings_.a.scale_normals_to_unity)
 		{
-			S = new matrix_2d(v_normals_.at(block).rows(), v_normals_.at(block).rows());
-			SN = new matrix_2d(v_normals_.at(block).rows(), v_normals_.at(block).rows());
-			for (UINT32 i(0); i<v_normals_.at(block).rows(); ++i)
-				S->put(i, i, sqrt(v_normals_.at(block).get(i, i)));
-			// 2. Scale Normals to reduce the diagonal elements of Normals to unity
-			//SN->multiply(*S, v_normals_.at(block));
-			SN->multiply(*S, "N", v_normals_.at(block), "N");
-			
-			//v_normals_.at(block).multiply(*SN, *S);
-			v_normals_.at(block).multiply(*SN, "N", *S, "N");
+			s_diag.resize(n);
+			for (UINT32 i(0); i<n; ++i)
+				s_diag[i] = 1.0 / sqrt(v_normals_.at(block).get(i, i));
+			v_normals_.at(block).scale_symmetric_diagonal(s_diag.data());
 		}
 		//////////////////
-	
-		// Clear upper triangle to match expected structure for cholesky_inverse
-		v_normals_.at(block).clearupper();
-		
+
 		// Calculate Inverse of AT * V-1 * A
-		// Explicitly set LOWER_IS_CLEARED to false (data is in lower triangle)
-		FormInverseVarianceMatrix(&(v_normals_.at(block)), false);
+		FormInverseVarianceMatrix(&(v_normals_.at(block)), false, false);
 
 		// Check for a failed inverse solution
-		if (boost::math::isnan(v_normals_.at(block).get(0, 0)) || 
+		if (boost::math::isnan(v_normals_.at(block).get(0, 0)) ||
 			boost::math::isinf(v_normals_.at(block).get(0, 0)))
 		{
 			std::stringstream ss;
@@ -6540,17 +6638,10 @@ void dna_adjust::Solve(bool COMPUTE_INVERSE, const UINT32& block)
 		}
 
 		//////////////////
-		// 2. Compute inverse of N (via S * (SNS)-1 * S)
+		// 2. Reverse the scaling on the inverse
 		if (projectSettings_.a.scale_normals_to_unity)
 		{
-			//SN->multiply(*S, v_normals_.at(block));
-			SN->multiply(*S, "N", v_normals_.at(block), "N");
-
-			//v_normals_.at(block).multiply(*SN, *S);
-			v_normals_.at(block).multiply(*SN, "N", *S, "N");
-
-			delete S;
-			delete SN;
+			v_normals_.at(block).scale_symmetric_diagonal(s_diag.data());
 		}
 		//////////////////
 	}
@@ -6567,10 +6658,13 @@ void dna_adjust::Solve(bool COMPUTE_INVERSE, const UINT32& block)
 	// compute weighted "measured minus computed"
 	matrix_2d At_Vinv_m(v_design_.at(block).columns(), 1);
 	At_Vinv_m.multiply(v_AtVinv_.at(block), "N", v_measMinusComp_.at(block), "N");
-	
+
 	// Solve corrections from normal equations
 	v_corrections_.at(block).redim(v_design_.at(block).columns(), 1);
-	v_corrections_.at(block).multiply(v_normals_.at(block), "N", At_Vinv_m, "N");
+	if (v_normals_.at(block).is_symmetric())
+		v_corrections_.at(block).multiply_sym(v_normals_.at(block), At_Vinv_m);
+	else
+		v_corrections_.at(block).multiply(v_normals_.at(block), "N", At_Vinv_m, "N");
 
 	if (projectSettings_.g.verbose > 0)
 	{
@@ -6854,20 +6948,25 @@ void dna_adjust::ComputeAdjustedMsrPrecisions()
 			if (projectSettings_.a.stage)
 			{
 				DeserialiseBlockFromMappedFile(block, 7,
-					sf_normals, sf_rigorous_vars, 
+					sf_normals, sf_rigorous_vars,
 					sf_design, sf_atvinv, sf_estimated_stns,
 					sf_meas_minus_comp, sf_prec_adj_msrs);
 				v_normals_.at(block) = v_rigorousVariances_.at(block);
 
 				FillDesignNormalMeasurementsMatrices(false, block, false);
 			}
-
 			// Compute adjusted measurement precisions (v_precAdjMsrsFull_)
-			// from design and rigorous station variances 
+			// from design and rigorous station variances
 			ComputePrecisionAdjMsrs(block);
 
 			// Update measurement records and Pelzer's Global reliability
 			UpdateMsrRecords(block);
+
+			if (projectSettings_.a.stage)
+			{
+				// Persist final residuals/precisions before chi-square reloads staged matrices.
+				SerialiseBlockToMappedFile(block, 2, sf_meas_minus_comp, sf_prec_adj_msrs);
+			}
 
 			// For staged adjustments, unload all matrix data
 			if (projectSettings_.a.stage)
@@ -6877,9 +6976,9 @@ void dna_adjust::ComputeAdjustedMsrPrecisions()
 	case SimultaneousMode:
 	case Phased_Block_1Mode:			// only block 1 is rigorous
 		// Compute adjusted measurement precisions (v_precAdjMsrsFull_)
-		// from design and rigorous station variances 
+		// from design and rigorous station variances
 		ComputePrecisionAdjMsrs();
-		
+
 		// Update measurement records and Pelzer's Global reliability
 		UpdateMsrRecords();
 		break;
@@ -7062,8 +7161,9 @@ void dna_adjust::ComputeandPrintAdjMsrOnIteration()
 	for (UINT32 block(0); block<blockCount_; ++block)
 	{
 		if (projectSettings_.a.stage)
-			DeserialiseBlockFromMappedFile(block, 4, sf_normals,
-				sf_meas_minus_comp, sf_design, sf_prec_adj_msrs);
+			DeserialiseBlockFromMappedFile(block, 5, sf_normals,
+				sf_meas_minus_comp, sf_design, sf_prec_adj_msrs,
+				sf_estimated_stns);
 
 		// send subvector of measurements from this block
 		end = begin + v_CML_.at(block).size();
@@ -7072,8 +7172,9 @@ void dna_adjust::ComputeandPrintAdjMsrOnIteration()
 		printHeader = false;
 
 		if (projectSettings_.a.stage)
-			UnloadBlock(block, 4, sf_normals,
-				sf_meas_minus_comp, sf_design, sf_prec_adj_msrs);
+			UnloadBlock(block, 5, sf_normals,
+				sf_meas_minus_comp, sf_design, sf_prec_adj_msrs,
+				sf_estimated_stns);
 	}
 }
 
@@ -7126,6 +7227,13 @@ void dna_adjust::ComputeandPrintAdjMsrBlockOnIteration(const UINT32& block, v_ui
 {
 	// Compute adjusted measurements
 	ComputeAdjMsrBlockOnIteration(block);
+
+	if (projectSettings_.a.stage)
+	{
+		// Alternate GNSS unit printing reloads adjusted measurement precisions
+		// from the staged file, so persist the per-iteration recomputation first.
+		SerialiseBlockToMappedFile(block, 1, sf_prec_adj_msrs);
+	}
 	
 	// Print adjusted measurements
 	printer_->PrintAdjMeasurements(msr_block, printHeader);
@@ -7239,7 +7347,6 @@ void dna_adjust::ComputeChiSquareNetwork()
 	}
 }
 	
-
 void dna_adjust::ComputeChiSquarePhased(const UINT32& block)
 {
 	// Compute adjusted measurement statistics
@@ -7339,7 +7446,341 @@ void dna_adjust::OutputLargestCorrection(std::string& formatted_msg)
 
 	formatted_msg = ss.str();
 }
-	
+
+void dna_adjust::UpdateIterationDiagnostics()
+{
+	for (UINT32 block = 0; block < blockCount_; ++block)
+	{
+		// For staged adjustments, load corrections from mapped file
+		if (projectSettings_.a.stage)
+			DeserialiseBlockFromMappedFile(block, 1, sf_corrections);
+
+		UINT32 nParams = v_corrections_.at(block).rows();
+		UINT32 nStations = nParams / 3;
+
+		for (UINT32 s = 0; s < nStations; ++s)
+		{
+			UINT32 stnIdx = v_parameterStationList_.at(block).at(s);
+			UINT32 base = s * 3;
+
+			double cx = v_corrections_.at(block).get(base, 0);
+			double cy = v_corrections_.at(block).get(base + 1, 0);
+			double cz = v_corrections_.at(block).get(base + 2, 0);
+
+			double magCurr = sqrt(cx*cx + cy*cy + cz*cz);
+
+			auto prevIt = corrPrev_.find(stnIdx);
+			if (prevIt == corrPrev_.end())
+			{
+				// First time seeing this station — store and move on
+				corrPrev_[stnIdx] = {cx, cy, cz};
+				continue;
+			}
+
+			double px = prevIt->second.cx;
+			double py = prevIt->second.cy;
+			double pz = prevIt->second.cz;
+			double magPrev = sqrt(px*px + py*py + pz*pz);
+
+			// Update stored corrections
+			prevIt->second = {cx, cy, cz};
+
+			// Skip tiny corrections (sub-millimetre)
+			if (magCurr < 0.001 && magPrev < 0.001)
+			{
+				stnOscCount_[stnIdx] = 0;
+				continue;
+			}
+
+			// Dot product and cosine of angle between correction vectors
+			double dot = cx*px + cy*py + cz*pz;
+			double denom = magCurr * magPrev;
+			double cosAngle = (denom > 1e-30) ? dot / denom : 0.0;
+
+			// Magnitude ratio
+			double ratio = (magPrev > 1e-30) ? magCurr / magPrev : 0.0;
+
+			// Oscillation: anti-parallel (cos < -0.5), similar magnitude (ratio 0.3–3.0)
+			if (cosAngle < -0.5 && ratio > 0.3 && ratio < 3.0)
+				stnOscCount_[stnIdx]++;
+			else
+				stnOscCount_[stnIdx] = 0;
+
+			if (stnOscCount_[stnIdx] >= 2)
+			{
+				// Convert to local (e, n, up)
+				matrix_2d cart(3, 1), local(3, 1);
+				cart.put(0, 0, cx);
+				cart.put(1, 0, cy);
+				cart.put(2, 0, cz);
+				Rotate_CartLocal<double>(cart, &local,
+					bstBinaryRecords_.at(stnIdx).currentLatitude,
+					bstBinaryRecords_.at(stnIdx).currentLongitude);
+
+				double localMag = sqrt(local.get(0,0)*local.get(0,0) +
+					local.get(1,0)*local.get(1,0) + local.get(2,0)*local.get(2,0));
+
+				auto hit = oscHistory_.find(stnIdx);
+				if (hit == oscHistory_.end())
+				{
+					OscillationRecord rec;
+					rec.stnBstIdx = stnIdx;
+					rec.firstIteration = CurrentIteration();
+					rec.lastIteration = CurrentIteration();
+					rec.maxCycles = stnOscCount_[stnIdx];
+					rec.firstMag = localMag;
+					rec.lastMag = localMag;
+					rec.lastE = local.get(0, 0);
+					rec.lastN = local.get(1, 0);
+					rec.lastUp = local.get(2, 0);
+					oscHistory_[stnIdx] = rec;
+				}
+				else
+				{
+					hit->second.lastIteration = CurrentIteration();
+					hit->second.maxCycles = stnOscCount_[stnIdx];
+					hit->second.lastMag = localMag;
+					hit->second.lastE = local.get(0, 0);
+					hit->second.lastN = local.get(1, 0);
+					hit->second.lastUp = local.get(2, 0);
+				}
+			}
+		}
+
+		// For staged adjustments, unload corrections
+		if (projectSettings_.a.stage)
+			UnloadBlock(block, 1, sf_corrections);
+	}
+}
+
+void dna_adjust::PrintOscillationSummary()
+{
+	if (oscHistory_.empty())
+		return;
+
+	// Collect records with meaningful magnitude, sort descending
+	std::vector<const OscillationRecord*> sorted;
+	for (auto& kv : oscHistory_)
+	{
+		double peak = std::max(kv.second.firstMag, kv.second.lastMag);
+		if (peak >= 0.1)
+			sorted.push_back(&kv.second);
+	}
+
+	if (sorted.empty())
+		return;
+
+	std::sort(sorted.begin(), sorted.end(),
+		[](const OscillationRecord* a, const OscillationRecord* b) {
+			return std::max(a->firstMag, a->lastMag) > std::max(b->firstMag, b->lastMag);
+		});
+
+	// Cap at 20 stations
+	size_t limit = std::min(sorted.size(), static_cast<size_t>(20));
+
+	std::cout << std::endl;
+	std::cout << "+ Oscillating stations detected (" << sorted.size() << " total, showing top "
+		<< limit << "):" << std::endl;
+
+	for (size_t i = 0; i < limit; ++i)
+	{
+		const auto* rec = sorted[i];
+
+		// Classify direction
+		double horizMag = sqrt(rec->lastE * rec->lastE + rec->lastN * rec->lastN);
+		double vertMag = fabs(rec->lastUp);
+		std::string direction;
+		if (vertMag < 0.01 * horizMag)
+			direction = "horizontal";
+		else if (horizMag < 0.01 * vertMag)
+			direction = "vertical";
+		else
+			direction = "3D";
+
+		std::cout << "  - " << bstBinaryRecords_.at(rec->stnBstIdx).stationName
+			<< std::fixed << std::setprecision(1)
+			<< " — " << rec->firstMag << "m to " << rec->lastMag << "m"
+			<< ", " << direction
+			<< ", " << rec->maxCycles << " cycles"
+			<< " (iterations " << rec->firstIteration << "-" << rec->lastIteration << ")"
+			<< std::endl;
+	}
+}
+
+bool dna_adjust::MeasurementTouchesOscillatingStation(const UINT32& msrIndex) const
+{
+	if (oscHistory_.empty() || msrIndex >= bmsBinaryRecords_.size())
+		return false;
+
+	std::vector<UINT32> msrStations;
+	GetMsrStations<UINT32>(bmsBinaryRecords_, msrIndex, msrStations);
+
+	for (const auto& stnIndex : msrStations)
+	{
+		if (oscHistory_.find(stnIndex) != oscHistory_.end())
+			return true;
+	}
+
+	return false;
+}
+
+std::string dna_adjust::MeasurementStationNames(const UINT32& msrIndex) const
+{
+	if (msrIndex >= bmsBinaryRecords_.size())
+		return "(measurement index unavailable)";
+
+	std::vector<UINT32> msrStations;
+	GetMsrStations<UINT32>(bmsBinaryRecords_, msrIndex, msrStations);
+
+	std::string stationNames;
+	for (const auto& stnIndex : msrStations)
+	{
+		if (stnIndex >= bstBinaryRecords_.size())
+			continue;
+
+		if (!stationNames.empty())
+			stationNames += " -> ";
+		stationNames += bstBinaryRecords_.at(stnIndex).stationName;
+	}
+
+	if (stationNames.empty())
+		return "(stations unavailable)";
+
+	return stationNames;
+}
+
+void dna_adjust::PrintSuspectMeasurementSummary(std::ostream& os, size_t limit) const
+{
+	struct SuspectMeasurementRecord {
+		UINT32 msrIndex;
+		char measType;
+		UINT32 clusterID;
+		UINT32 fileOrder;
+		double absNStat;
+		double nStat;
+		double tStat;
+		double measCorr;
+		double residualPrec;
+		double pelzerRel;
+		bool exceedsCritical;
+		bool touchesOscillatingStation;
+		std::string stationNames;
+	};
+
+	if (bmsBinaryRecords_.empty() || limit == 0)
+		return;
+
+	std::vector<SuspectMeasurementRecord> records;
+	records.reserve(bmsBinaryRecords_.size());
+
+	for (UINT32 msrIndex = 0; msrIndex < bmsBinaryRecords_.size(); ++msrIndex)
+	{
+		const auto& msr = bmsBinaryRecords_.at(msrIndex);
+		if (msr.ignore ||
+			!std::isfinite(msr.NStat) ||
+			!std::isfinite(msr.residualPrec) ||
+			msr.residualPrec <= 0.0)
+			continue;
+
+		const double absNStat = fabs(msr.NStat);
+		const bool exceedsCritical = absNStat > criticalValue_;
+		const bool touchesOscillatingStation = MeasurementTouchesOscillatingStation(msrIndex);
+
+		if (!exceedsCritical && !touchesOscillatingStation)
+			continue;
+
+		records.push_back({
+			msrIndex,
+			msr.measType,
+			msr.clusterID,
+			msr.fileOrder,
+			absNStat,
+			msr.NStat,
+			msr.TStat,
+			msr.measCorr,
+			msr.residualPrec,
+			msr.PelzerRel,
+			exceedsCritical,
+			touchesOscillatingStation,
+			MeasurementStationNames(msrIndex)
+		});
+	}
+
+	if (records.empty())
+		return;
+
+	std::vector<const SuspectMeasurementRecord*> oscillatingRecords;
+	std::vector<const SuspectMeasurementRecord*> outlierRecords;
+	oscillatingRecords.reserve(records.size());
+	outlierRecords.reserve(records.size());
+
+	for (const auto& record : records)
+	{
+		if (record.touchesOscillatingStation)
+			oscillatingRecords.push_back(&record);
+		if (record.exceedsCritical && !record.touchesOscillatingStation)
+			outlierRecords.push_back(&record);
+	}
+
+	auto sortByNStat = [](const SuspectMeasurementRecord* lhs,
+		const SuspectMeasurementRecord* rhs) {
+		if (lhs->absNStat == rhs->absNStat)
+			return lhs->msrIndex < rhs->msrIndex;
+		return lhs->absNStat > rhs->absNStat;
+	};
+
+	std::sort(oscillatingRecords.begin(), oscillatingRecords.end(), sortByNStat);
+	std::sort(outlierRecords.begin(), outlierRecords.end(), sortByNStat);
+
+	std::ios::fmtflags oldFlags = os.flags();
+	std::streamsize oldPrecision = os.precision();
+
+	auto printRecord = [&os](const SuspectMeasurementRecord& record) {
+		os << "  - " << record.measType
+			<< " msr " << record.msrIndex
+			<< " cluster " << record.clusterID
+			<< " file-order " << record.fileOrder
+			<< " " << record.stationNames
+			<< ": N=" << std::fixed << std::setprecision(2) << record.nStat;
+
+		if (std::isfinite(record.tStat) && fabs(record.tStat) > 0.0)
+			os << ", T=" << std::fixed << std::setprecision(2) << record.tStat;
+
+		os << ", corr=" << std::scientific << std::setprecision(3) << record.measCorr
+			<< ", residual precision=" << std::scientific << std::setprecision(3) << record.residualPrec
+			<< ", Pelzer=" << std::fixed << std::setprecision(2) << record.pelzerRel;
+
+		if (record.exceedsCritical)
+			os << ", exceeds critical";
+		if (record.touchesOscillatingStation)
+			os << ", touches oscillating station";
+
+		os << std::endl;
+	};
+
+	auto printList = [&os, &printRecord, limit](const std::string& title,
+		const std::vector<const SuspectMeasurementRecord*>& list) {
+		if (list.empty())
+			return;
+
+		const size_t listLimit = std::min(list.size(), limit);
+		os << std::endl << "+ " << title << " (" << list.size()
+			<< " total, showing top " << listLimit << "):" << std::endl;
+
+		for (size_t i = 0; i < listLimit; ++i)
+			printRecord(*list.at(i));
+	};
+
+	if (!oscillatingRecords.empty())
+		printList("Suspect measurements connected to oscillating stations", oscillatingRecords);
+
+	printList(oscillatingRecords.empty() ? "Largest measurement N-statistics" :
+		"Largest remaining measurement N-statistics", outlierRecords);
+
+	os.flags(oldFlags);
+	os.precision(oldPrecision);
+}
+
 void dna_adjust::ComputePrecisionAdjMsrs(const UINT32& block /*= 0*/)
 {
 	if (projectSettings_.a.report_mode)
@@ -7348,6 +7789,7 @@ void dna_adjust::ComputePrecisionAdjMsrs(const UINT32& block /*= 0*/)
 	// A*V-1*At, where:
 	//   - A is design matrix
 	//   - V is the inverse of the normals (i.e. precision of estimates)
+	v_precAdjMsrsFull_.at(block).redim(v_measurementVarianceCount_.at(block), 1);
 	v_precAdjMsrsFull_.at(block).zero();
 
 	UINT32 design_row(0);
@@ -8027,19 +8469,19 @@ void dna_adjust::ComputeChiSquare_D(it_vmsr_t& _it_msr, UINT32& measurement_inde
 }
 	
 
-void dna_adjust::FormInverseVarianceMatrix(matrix_2d* vmat, bool LOWER_IS_CLEARED)
+void dna_adjust::FormInverseVarianceMatrix(matrix_2d* vmat, bool LOWER_IS_CLEARED, bool mark_symmetric)
 {
 	if (vmat->rows() == 1)
 	{
 		vmat->put(0, 0, 1./vmat->get(0, 0));
 		return;
 	}
-	
+
 	// As of version 3.2.0, force all inversions to use MKL.  This change
 	// is enforced for two reasons:
 	// 1. Sweep, Gaussian inverse and numerical recipes cholesky
-	//    all require matrix data to be stored in row wise fashion, upper 
-	//    triangle only, whereas contiguous matrix class stores matrix data 
+	//    all require matrix data to be stored in row wise fashion, upper
+	//    triangle only, whereas contiguous matrix class stores matrix data
 	//    in column wise fashion, lower triangle.
 	// 2. Sweep, Gaussian never really offered a stable solution.
 	// The following switch is kept in case future development warrants
@@ -8049,8 +8491,8 @@ void dna_adjust::FormInverseVarianceMatrix(matrix_2d* vmat, bool LOWER_IS_CLEARE
 
 	// TODO: All functions which load variance matrix from binary files
 	// store the data in upper triangular form.  This could be changed to
-	// lower triangular form, thus alleviating the need to pass 
-	// LOWER_IS_CLEARED.  That is, force all operations to use a lower 
+	// lower triangular form, thus alleviating the need to pass
+	// LOWER_IS_CLEARED.  That is, force all operations to use a lower
 	// triangular matrix.  Not sure if this would create an efficiency or not.
 	switch (projectSettings_.a.inverse_method_msr)
 	{
@@ -8062,8 +8504,7 @@ void dna_adjust::FormInverseVarianceMatrix(matrix_2d* vmat, bool LOWER_IS_CLEARE
 //		break;
 	case Cholesky_mkl:
 	default:
-		// Inversion using Intel MKL
-		vmat->cholesky_inverse(LOWER_IS_CLEARED);
+		vmat->cholesky_inverse(LOWER_IS_CLEARED, mark_symmetric);
 		break;
 	// choleskyinverse broke once the storage order of the matrix buffer was
 	// changed from row-wise to column wise.

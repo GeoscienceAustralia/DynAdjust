@@ -33,6 +33,7 @@
 #include <exception>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <math.h>
 #include <queue>
 #include <stdexcept>
@@ -102,6 +103,7 @@ namespace networkadjust {
 extern std::mutex maxCorrMutex;
 
 using dynadjust::cpu_timer;
+using dynadjust::FormatElapsedTime;
 
 // forward declaration of dna_adjust
 class dna_adjust;
@@ -210,6 +212,7 @@ class DNAADJUST_API dna_adjust {
 class dna_adjust {
 #endif
     friend class DynAdjustPrinter;
+    friend class DynAdjustJsonPrinter;
     
   public:
     dna_adjust();
@@ -288,16 +291,26 @@ class dna_adjust {
     // void PrintEstimatedStationCoordinatestoDNAXML_Y(const std::string& msrFile,
     //                                                 INPUT_FILE_TYPE t);
 
+    void PrintOscillationSummary();
+    void PrintSuspectMeasurementSummary(std::ostream& os = std::cout,
+                                        size_t limit = 20) const;
     void CloseOutputFiles();
     void UpdateBinaryFiles();
 
     UINT32 CurrentIteration() const;
     UINT32& incrementIteration();
+    void decrementIteration();
     void initialiseIteration(const UINT32& iteration = 0);
 
     inline UINT32 CurrentBlock() const { return currentBlock_; };
 
-    inline void SetcurrentBlock(const UINT32 b) { currentBlock_ = b; };
+    inline void SetcurrentBlock(const UINT32 b) {
+        auto now = std::chrono::steady_clock::now();
+        if (b != currentBlock_ && blockStartTime_.time_since_epoch().count() > 0)
+            lastBlockElapsedMs_ = std::chrono::duration_cast<std::chrono::milliseconds>(now - blockStartTime_).count();
+        currentBlock_ = b;
+        blockStartTime_ = now;
+    };
 
     inline void SetmaxCorr(const double c) {
 
@@ -311,6 +324,15 @@ class dna_adjust {
     }
     inline bool processingForward() { return forward_; }
     inline bool processingCombine() { return isCombining_; }
+    inline int64_t LastBlockElapsedMs() const { return lastBlockElapsedMs_; }
+    inline UINT32 CurrentBlockStationCount() const {
+        if (currentBlock_ < v_blockStationsMap_.size())
+            return static_cast<UINT32>(v_blockStationsMap_.at(currentBlock_).size());
+        return 0;
+    }
+    static void SetMaxBlasThreads(int n);
+    static int GetMaxBlasThreads();
+
     inline int GetDegreesOfFreedom() const { return degreesofFreedom_; }
     inline UINT32 GetMeasurementCount() const { return measurementParams_; }
     inline UINT32 GetUnknownsCount() const { return unknownParams_; }
@@ -350,6 +372,12 @@ class dna_adjust {
             return iterationCorrections_.get_message(iteration); // safe guard
         return iterationCorrections_.get_message(iteration - 1);
     };
+
+    inline std::string GetIterationTime(const UINT32& iteration) const {
+        if (iteration == 0)
+            return iterationTimes_.get_message(iteration); // safe guard
+        return iterationTimes_.get_message(iteration - 1);
+    };
     /////////////////////////////
 
     concurrent_ofstream<std::string> concurrent_adj_ofstream;
@@ -380,14 +408,21 @@ class dna_adjust {
     bool isAdjusting_;
     bool isCombining_;
     bool forward_;
+    bool rebuildingDesign_;
     bool isFirstTimeAdjustment_;
     bool isIterationComplete_;
     bool isAdjustmentQuestionable_;
 
     UINT32 blockCount_;
     UINT32 currentBlock_;
+    std::chrono::steady_clock::time_point blockStartTime_;
+    int64_t lastBlockElapsedMs_;
 
     std::chrono::milliseconds total_time_;
+    bool profileTimings_;
+    std::atomic<uint64_t> profileUpdateNormalsNs_;
+    std::atomic<uint64_t> profileStageLoadNs_;
+    std::atomic<uint64_t> profileStageStoreNs_;
     _ADJUST_STATUS_ adjustStatus_;
     vstring statusMessages_;
     UINT32 currentIteration_;
@@ -437,6 +472,7 @@ class dna_adjust {
     void UpdateAdjustment(bool iterate);
     void ValidateandFinaliseAdjustment(cpu_timer& tot_time);
     void PrintAdjustmentTime(cpu_timer& time, _TIMER_TYPE_);
+    void PrintPerformanceProfile() const;
     void InitialiseAdjustment();
     void SetDefaultReferenceFrame();
     void LoadNetworkFiles();
@@ -499,6 +535,8 @@ class dna_adjust {
     void DeserialiseBlockFromMappedFile(const UINT32& block,
                                         const int count = 0, ...);
     void UnloadBlock(const UINT32& block, const int file_count = 0, ...);
+    void AdviseBlockDontNeed(const UINT32& block);
+    void AdviseBlockWillNeed(const UINT32& block);
     void PurgeMatricesFromDisk();
 
     // Helpers
@@ -534,7 +572,8 @@ class dna_adjust {
     void
     UpdateDesignNormalMeasMatrices(pit_vmsr_t _it_msr, UINT32& design_row,
                                    bool buildnewMatrices, const UINT32& block,
-                                   bool MT_ReverseOrCombine);
+                                   bool MT_ReverseOrCombine,
+                                   bool skipNormals = false);
 
     void
     UpdateDesignNormalMeasMatrices_A(pit_vmsr_t _it_msr, UINT32& design_row,
@@ -542,40 +581,45 @@ class dna_adjust {
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
                                      matrix_2d* normals, matrix_2d* design,
-                                     matrix_2d* AtVinv, bool buildnewMatrices);
+                                     matrix_2d* AtVinv, bool buildnewMatrices,
+                                     bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_BK(pit_vmsr_t _it_msr, UINT32& design_row,
                                       const UINT32& block,
                                       matrix_2d* measMinusComp,
                                       matrix_2d* estimatedStations,
                                       matrix_2d* normals, matrix_2d* design,
-                                      matrix_2d* AtVinv, bool buildnewMatrices);
+                                      matrix_2d* AtVinv, bool buildnewMatrices,
+                                      bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_C(pit_vmsr_t _it_msr, UINT32& design_row,
                                      const UINT32& block,
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
                                      matrix_2d* normals, matrix_2d* design,
-                                     matrix_2d* AtVinv, bool buildnewMatrices);
+                                     matrix_2d* AtVinv, bool buildnewMatrices,
+                                     bool skipNormals = false);
     void UpdateDesignNormalMeasMatrices_CEM(
         pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
         matrix_2d* measMinusComp, matrix_2d* estimatedStations,
         matrix_2d* normals, matrix_2d* design, matrix_2d* AtVinv,
-        bool buildnewMatrices);
+        bool buildnewMatrices, bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_D(pit_vmsr_t _it_msr, UINT32& design_row,
                                      const UINT32& block,
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
                                      matrix_2d* normals, matrix_2d* design,
-                                     matrix_2d* AtVinv, bool buildnewMatrices);
+                                     matrix_2d* AtVinv, bool buildnewMatrices,
+                                     bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_E(pit_vmsr_t _it_msr, UINT32& design_row,
                                      const UINT32& block,
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
                                      matrix_2d* normals, matrix_2d* design,
-                                     matrix_2d* AtVinv, bool buildnewMatrices);
+                                     matrix_2d* AtVinv, bool buildnewMatrices,
+                                     bool skipNormals = false);
     void UpdateDesignMeasMatrices_GX(pit_vmsr_t _it_msr, UINT32& design_row,
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
@@ -587,113 +631,130 @@ class dna_adjust {
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
                                      matrix_2d* normals, matrix_2d* design,
-                                     matrix_2d* AtVinv, bool buildnewMatrices);
+                                     matrix_2d* AtVinv, bool buildnewMatrices,
+                                     bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_H(pit_vmsr_t _it_msr, UINT32& design_row,
                                      const UINT32& block,
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
                                      matrix_2d* normals, matrix_2d* design,
-                                     matrix_2d* AtVinv, bool buildnewMatrices);
+                                     matrix_2d* AtVinv, bool buildnewMatrices,
+                                     bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_HR(pit_vmsr_t _it_msr, UINT32& design_row,
                                       const UINT32& block,
                                       matrix_2d* measMinusComp,
                                       matrix_2d* estimatedStations,
                                       matrix_2d* normals, matrix_2d* design,
-                                      matrix_2d* AtVinv, bool buildnewMatrices);
+                                      matrix_2d* AtVinv, bool buildnewMatrices,
+                                      bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_I(pit_vmsr_t _it_msr, UINT32& design_row,
                                      const UINT32& block,
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
                                      matrix_2d* normals, matrix_2d* design,
-                                     matrix_2d* AtVinv, bool buildnewMatrices);
+                                     matrix_2d* AtVinv, bool buildnewMatrices,
+                                     bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_IP(pit_vmsr_t _it_msr, UINT32& design_row,
                                       const UINT32& block,
                                       matrix_2d* measMinusComp,
                                       matrix_2d* estimatedStations,
                                       matrix_2d* normals, matrix_2d* design,
-                                      matrix_2d* AtVinv, bool buildnewMatrices);
+                                      matrix_2d* AtVinv, bool buildnewMatrices,
+                                      bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_J(pit_vmsr_t _it_msr, UINT32& design_row,
                                      const UINT32& block,
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
                                      matrix_2d* normals, matrix_2d* design,
-                                     matrix_2d* AtVinv, bool buildnewMatrices);
+                                     matrix_2d* AtVinv, bool buildnewMatrices,
+                                     bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_JQ(pit_vmsr_t _it_msr, UINT32& design_row,
                                       const UINT32& block,
                                       matrix_2d* measMinusComp,
                                       matrix_2d* estimatedStations,
                                       matrix_2d* normals, matrix_2d* design,
-                                      matrix_2d* AtVinv, bool buildnewMatrices);
+                                      matrix_2d* AtVinv, bool buildnewMatrices,
+                                      bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_L(pit_vmsr_t _it_msr, UINT32& design_row,
                                      const UINT32& block,
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
                                      matrix_2d* normals, matrix_2d* design,
-                                     matrix_2d* AtVinv, bool buildnewMatrices);
+                                     matrix_2d* AtVinv, bool buildnewMatrices,
+                                     bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_M(pit_vmsr_t _it_msr, UINT32& design_row,
                                      const UINT32& block,
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
                                      matrix_2d* normals, matrix_2d* design,
-                                     matrix_2d* AtVinv, bool buildnewMatrices);
+                                     matrix_2d* AtVinv, bool buildnewMatrices,
+                                     bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_P(pit_vmsr_t _it_msr, UINT32& design_row,
                                      const UINT32& block,
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
                                      matrix_2d* normals, matrix_2d* design,
-                                     matrix_2d* AtVinv, bool buildnewMatrices);
+                                     matrix_2d* AtVinv, bool buildnewMatrices,
+                                     bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_Q(pit_vmsr_t _it_msr, UINT32& design_row,
                                      const UINT32& block,
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
                                      matrix_2d* normals, matrix_2d* design,
-                                     matrix_2d* AtVinv, bool buildnewMatrices);
+                                     matrix_2d* AtVinv, bool buildnewMatrices,
+                                     bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_R(pit_vmsr_t _it_msr, UINT32& design_row,
                                      const UINT32& block,
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
                                      matrix_2d* normals, matrix_2d* design,
-                                     matrix_2d* AtVinv, bool buildnewMatrices);
+                                     matrix_2d* AtVinv, bool buildnewMatrices,
+                                     bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_S(pit_vmsr_t _it_msr, UINT32& design_row,
                                      const UINT32& block,
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
                                      matrix_2d* normals, matrix_2d* design,
-                                     matrix_2d* AtVinv, bool buildnewMatrices);
+                                     matrix_2d* AtVinv, bool buildnewMatrices,
+                                     bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_V(pit_vmsr_t _it_msr, UINT32& design_row,
                                      const UINT32& block,
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
                                      matrix_2d* normals, matrix_2d* design,
-                                     matrix_2d* AtVinv, bool buildnewMatrices);
+                                     matrix_2d* AtVinv, bool buildnewMatrices,
+                                     bool skipNormals = false);
     void UpdateDesignNormalMeasMatrices_X(
         pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
         matrix_2d* measMinusComp, matrix_2d* estimatedStations,
-        matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices);
+        matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices,
+        bool skipNormals = false);
     void UpdateDesignNormalMeasMatrices_Y(
         pit_vmsr_t _it_msr, UINT32& design_row, const UINT32& block,
         matrix_2d* measMinusComp, matrix_2d* estimatedStations,
-        matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices);
+        matrix_2d* design, matrix_2d* AtVinv, bool buildnewMatrices,
+        bool skipNormals = false);
     void
     UpdateDesignNormalMeasMatrices_Z(pit_vmsr_t _it_msr, UINT32& design_row,
                                      const UINT32& block,
                                      matrix_2d* measMinusComp,
                                      matrix_2d* estimatedStations,
                                      matrix_2d* normals, matrix_2d* design,
-                                     matrix_2d* AtVinv, bool buildnewMatrices);
+                                     matrix_2d* AtVinv, bool buildnewMatrices,
+                                     bool skipNormals = false);
 
     void UpdateIgnoredMeasurements(pit_vmsr_t _it_msr,
                                    bool storeOriginalMeasurement);
@@ -827,7 +888,9 @@ class dna_adjust {
     void PrepareDesignAndMsrMnsCmpMatricesStage(const UINT32& block);
     void FillDesignNormalMeasurementsMatrices(bool buildnewMatrices,
                                               const UINT32& block,
-                                              bool MT_ReverseOrCombine);
+                                              bool MT_ReverseOrCombine,
+                                              bool skipNormals = false);
+    void RebuildDesignAndAtVinv(const UINT32& block);
 
     // void RecomputeMeasurementsCommonJunctions(const UINT32& nextBlock, const
     // UINT32& thisBlock, const UINT32& prevBlock);
@@ -861,11 +924,11 @@ class dna_adjust {
                                                bool printHeader);
     void ComputeAdjMsrBlockOnIteration(const UINT32& block);
 
-    void ComputeAdjustedMsrPrecisions();
+	void ComputeAdjustedMsrPrecisions();
 
-    void ComputeChiSquareNetwork();
-    void ComputeChiSquare(const UINT32& block);
-    void ComputeChiSquareSimultaneous();
+	void ComputeChiSquareNetwork();
+	void ComputeChiSquare(const UINT32& block);
+	void ComputeChiSquareSimultaneous();
     void ComputeChiSquarePhased(const UINT32& block);
 
     void ComputeTestStat(const double& dof, double& chiUpper, double& chiLower,
@@ -929,7 +992,7 @@ class dna_adjust {
                         matrix_2d* measMinusComp);
 
     void
-    FormInverseVarianceMatrix(matrix_2d* vmat, bool LOWER_IS_CLEARED = false);
+    FormInverseVarianceMatrix(matrix_2d* vmat, bool LOWER_IS_CLEARED = false, bool mark_symmetric = false);
     void
     FormInverseGPSVarianceMatrix(const it_vmsr_t& _it_msr, matrix_2d* vmat);
     bool
@@ -1118,6 +1181,7 @@ class dna_adjust {
     bool allStationsFixed_;
 
     message_bank<std::string> iterationCorrections_;
+    message_bank<std::string> iterationTimes_;
 
     // For each block
     vUINT32 v_ContiguousNetList_; // vector of contiguous network IDs
@@ -1204,6 +1268,27 @@ class dna_adjust {
                                       // aposteriori Variance)
     v_mat_2d v_corrections_;          // vector of residuals matrices
     v_mat_2d v_correctionsR_;         // vector of residuals matrices
+
+	// ----------------------------------------------
+	// Iteration diagnostics — oscillation detection
+    struct StationCorrRecord {
+        double cx, cy, cz;         // Cartesian corrections
+    };
+    struct OscillationRecord {
+        UINT32 stnBstIdx;          // BST record index
+        UINT32 firstIteration;
+        UINT32 lastIteration;
+        UINT32 maxCycles;
+        double firstMag;
+        double lastMag;
+        double lastE, lastN, lastUp;
+    };
+    std::map<UINT32, StationCorrRecord> corrPrev_;    // keyed by BST station index
+    std::map<UINT32, UINT32> stnOscCount_;            // keyed by BST station index
+    std::map<UINT32, OscillationRecord> oscHistory_;  // keyed by BST station index
+    void UpdateIterationDiagnostics();
+    bool MeasurementTouchesOscillatingStation(const UINT32& msrIndex) const;
+    std::string MeasurementStationNames(const UINT32& msrIndex) const;
 
     // ----------------------------------------------
     // Adjustment functions and variables for staged adjustment

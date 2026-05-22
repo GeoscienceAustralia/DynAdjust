@@ -147,6 +147,14 @@ std::uint64_t BmsFile::LoadFile(const std::string& bms_filename,
     ReadFileInfo(bms_file);
     ReadFileMetadata(bms_file, bms_meta);
 
+    // measurement_t grew by observation_epoch in v1.2; record layout requires a v1.2 file.
+    if (!versionAtLeast(1, 2)) {
+      std::ostringstream os;
+      os << "BMS file version " << GetVersion()
+         << " predates observation_epoch support (v1.2); please re-run dnaimport.";
+      throw std::runtime_error(os.str());
+    }
+
     vbinary_msr->reserve(bms_meta.binCount);
     for (msr = 0; msr < bms_meta.binCount; msr++) {
       bms_file.read(reinterpret_cast<char*>(&measRecord),

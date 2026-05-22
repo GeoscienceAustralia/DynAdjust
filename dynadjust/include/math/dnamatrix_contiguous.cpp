@@ -19,7 +19,9 @@
 // Description  : DynAdjust Matrix library
 //============================================================================
 
+#include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <vector>
 #include <include/ide/trace.hpp>
 #include <include/math/dnamatrix_contiguous.hpp>
@@ -29,6 +31,11 @@
 namespace dynadjust {
 namespace math {
 
+// BLAS thread count selected during application start-up.
+static int g_max_blas_threads = 0;
+
+void set_max_blas_threads(int n) { g_max_blas_threads = n; }
+int get_max_blas_threads() { return g_max_blas_threads; }
 
 std::ostream& operator<<(std::ostream& os, const matrix_2d& rhs) {
     if (os.iword(0) == binary) {
@@ -44,18 +51,25 @@ std::ostream& operator<<(std::ostream& os, const matrix_2d& rhs) {
         os.write(reinterpret_cast<const char*>(&rhs._mem_rows), sizeof(UINT32));
         os.write(reinterpret_cast<const char*>(&rhs._mem_cols), sizeof(UINT32));
 
+        // Alignment padding — keeps data region at 8-byte aligned offset (24 bytes)
+        // Must match WriteMappedFileRegion / ReadMappedFileRegion / AttachMappedFileRegion layout
+        const UINT32 pad = 0;
+        os.write(reinterpret_cast<const char*>(&pad), sizeof(UINT32));
+
         UINT32 c, r;
 
         switch (rhs._matrixType) {
         case mtx_lower:
-            // output lower triangular part of a square matrix
             if (rhs._mem_rows != rhs._mem_cols)
                 throw std::runtime_error("matrix_2d operator<< (): Matrix is not square.");
 
-            // print each column
-            for (c = 0; c < rhs._mem_cols; ++c)
-                os.write(reinterpret_cast<const char*>(rhs.getelementref(c, c)), (rhs._mem_rows - c) * sizeof(double));
-
+            if (rhs._packed) {
+                os.write(reinterpret_cast<const char*>(rhs._buffer),
+                         matrix_2d::packed_size(rhs._mem_rows) * sizeof(double));
+            } else {
+                for (c = 0; c < rhs._mem_cols; ++c)
+                    os.write(reinterpret_cast<const char*>(rhs.getelementref(c, c)), (rhs._mem_rows - c) * sizeof(double));
+            }
             break;
         case mtx_sparse: break;
         case mtx_full:
@@ -108,7 +122,7 @@ void out_of_memory_handler() {
 }
 
 matrix_2d::matrix_2d()
-    : _mem_cols(0), _mem_rows(0), _cols(0), _rows(0), _buffer(0), _maxvalCol(0), _maxvalRow(0), _matrixType(mtx_full) {
+    : _mem_cols(0), _mem_rows(0), _cols(0), _rows(0), _buffer(0), _owns_buffer(true), _maxvalCol(0), _maxvalRow(0), _matrixType(mtx_full), _symmetric(false), _packed(false) {
     std::set_new_handler(out_of_memory_handler);
 
     // if this class were to be modified to use templates, each
@@ -125,9 +139,12 @@ matrix_2d::matrix_2d(const UINT32& rows, const UINT32& columns)
       _cols(columns),
       _rows(rows),
       _buffer(0),
+      _owns_buffer(true),
       _maxvalCol(0),
       _maxvalRow(0),
-      _matrixType(mtx_full) {
+      _matrixType(mtx_full),
+      _symmetric(false),
+      _packed(false) {
     std::set_new_handler(out_of_memory_handler);
 
     allocate(_rows, _cols);
@@ -140,9 +157,12 @@ matrix_2d::matrix_2d(const UINT32& rows, const UINT32& columns, const double dat
       _cols(columns),
       _rows(rows),
       _buffer(0),
+      _owns_buffer(true),
       _maxvalCol(0),
       _maxvalRow(0),
-      _matrixType(matrix_type) {
+      _matrixType(matrix_type),
+      _symmetric(false),
+      _packed(false) {
     std::set_new_handler(out_of_memory_handler);
 
     std::stringstream ss;
@@ -197,17 +217,26 @@ matrix_2d::matrix_2d(const matrix_2d& newmat)
       _cols(newmat.columns()),
       _rows(newmat.rows()),
       _buffer(0),
+      _owns_buffer(true),
       _maxvalCol(newmat.maxvalueCol()),
       _maxvalRow(newmat.maxvalueRow()),
-      _matrixType(newmat.matrixType()) {
+      _matrixType(newmat.matrixType()),
+      _symmetric(newmat._symmetric),
+      _packed(newmat._packed) {
     std::set_new_handler(out_of_memory_handler);
 
-    allocate(_mem_rows, _mem_cols);
-
-    const double* ptr = newmat.getbuffer();
-
-    // copy buffer
-    memcpy(_buffer, ptr, newmat.buffersize());
+    if (_packed) {
+        std::size_t ps = packed_size(_mem_rows);
+        _buffer = static_cast<double*>(std::malloc(ps * sizeof(double)));
+        if (!_buffer) throw NetMemoryException("Insufficient memory for packed matrix copy.");
+        memcpy(_buffer, newmat.getbuffer(), ps * sizeof(double));
+    } else {
+        // Allocate without zeroing — memcpy immediately overwrites entire buffer
+        std::size_t total_size = static_cast<std::size_t>(_mem_rows) * _mem_cols;
+        _buffer = static_cast<double*>(std::malloc(total_size * sizeof(double)));
+        if (!_buffer) throw NetMemoryException("Insufficient memory for matrix copy.");
+        memcpy(_buffer, newmat.getbuffer(), total_size * sizeof(double));
+    }
 }
 
 matrix_2d::~matrix_2d() {
@@ -216,14 +245,21 @@ matrix_2d::~matrix_2d() {
 }
 
 std::size_t matrix_2d::get_size() {
+    // 8 UINT32s: matrixType, rows, cols, mem_rows, mem_cols, _pad, maxvalRow, maxvalCol
+    // The padding UINT32 ensures the data region starts at an 8-byte aligned offset (24 bytes)
+    // from the region base, enabling in-place mmap buffer attachment.
     size_t size =
-        (7 * sizeof(UINT32));  // UINT32 _matrixType, _mem_cols, _mem_rows, _cols, _rows, _maxvalRow, _maxvalCol
+        (8 * sizeof(UINT32));
 
     switch (_matrixType) {
     case mtx_lower: size += sumOfConsecutiveIntegers(_mem_rows) * sizeof(double); break;
     case mtx_sparse: break;
     case mtx_full:
-    default: size += buffersize();
+    default:
+        if (_packed)
+            size += packed_size(_mem_rows) * sizeof(double);
+        else
+            size += buffersize();
     }
     return size;
 }
@@ -241,7 +277,6 @@ void matrix_2d::ReadMappedFileRegion(void* addr) {
 
     switch (_matrixType) {
     case mtx_sparse:
-        // _mem_cols and _mem_rows equal _cols and _rows
         _mem_rows = _rows;
         _mem_cols = _cols;
         break;
@@ -250,10 +285,22 @@ void matrix_2d::ReadMappedFileRegion(void* addr) {
     default:
         _mem_rows = *data_U++;
         _mem_cols = *data_U++;
+        ++data_U;  // skip alignment padding UINT32
         break;
     }
 
-    allocate(_mem_rows, _mem_cols);
+    if (_matrixType == mtx_lower && _mem_rows == _mem_cols) {
+        deallocate();
+        _packed = true;
+        _symmetric = true;
+        std::size_t ps = packed_size(_mem_rows);
+        _buffer = static_cast<double*>(std::calloc(ps, sizeof(double)));
+        if (!_buffer) throw NetMemoryException("Insufficient memory for packed matrix read.");
+    } else {
+        _packed = false;
+        _symmetric = false;
+        allocate(_mem_rows, _mem_cols);
+    }
 
     double* data_d;
     int* data_i;
@@ -292,15 +339,22 @@ void matrix_2d::ReadMappedFileRegion(void* addr) {
         return;
         break;
     case mtx_lower:
+        assert(_mem_rows == _mem_cols && "ReadMappedFileRegion(mtx_lower): matrix must be square");
         data_d = reinterpret_cast<double*>(data_U);
 
-        // read each column
-        for (c = 0; c < _mem_cols; ++c) {
-            memcpy(getelementref(c, c), data_d, (_mem_rows - c) * sizeof(double));
-            data_d += (_mem_rows - c);
+        if (_packed) {
+            std::size_t ps = packed_size(_mem_rows);
+            memcpy(_buffer, data_d, ps * sizeof(double));
+            data_d += ps;
+            _symmetric = true;
+        } else {
+            for (c = 0; c < _mem_cols; ++c) {
+                memcpy(getbuffer(c, c), data_d, (_mem_rows - c) * sizeof(double));
+                data_d += (_mem_rows - c);
+            }
+            fillupper();
+            _symmetric = false;
         }
-
-        fillupper();
         break;
     case mtx_full:
     default:
@@ -342,7 +396,30 @@ void matrix_2d::WriteMappedFileRegion(void* addr) {
     default:
         *data_U++ = _mem_rows;
         *data_U++ = _mem_cols;
+        *data_U++ = 0;  // alignment padding
         break;
+    }
+
+    // In-place mmap: data is already in the region, only update footer
+    if (!_owns_buffer) {
+        // Calculate footer position by skipping past data
+        double* data_d;
+        switch (_matrixType) {
+        case mtx_lower:
+            if (_packed)
+                data_d = reinterpret_cast<double*>(data_U) + packed_size(_mem_rows);
+            else
+                data_d = reinterpret_cast<double*>(data_U) + sumOfConsecutiveIntegers(_mem_rows);
+            break;
+        case mtx_full:
+        default:
+            data_d = reinterpret_cast<double*>(data_U) + static_cast<std::size_t>(_mem_rows) * _mem_cols;
+            break;
+        }
+        PUINT32 footer = reinterpret_cast<UINT32*>(data_d);
+        *footer++ = _maxvalRow;
+        *footer = _maxvalCol;
+        return;
     }
 
     double* data_d;
@@ -384,10 +461,15 @@ void matrix_2d::WriteMappedFileRegion(void* addr) {
     case mtx_lower:
         data_d = reinterpret_cast<double*>(data_U);
 
-        // print each column
-        for (c = 0; c < _mem_cols; ++c) {
-            memcpy(data_d, getbuffer(c, c), (_mem_rows - c) * sizeof(double));
-            data_d += (_mem_rows - c);
+        if (_packed) {
+            std::size_t ps = packed_size(_mem_rows);
+            memcpy(data_d, _buffer, ps * sizeof(double));
+            data_d += ps;
+        } else {
+            for (c = 0; c < _mem_cols; ++c) {
+                memcpy(data_d, getbuffer(c, c), (_mem_rows - c) * sizeof(double));
+                data_d += (_mem_rows - c);
+            }
         }
         break;
     case mtx_full:
@@ -408,16 +490,115 @@ void matrix_2d::WriteMappedFileRegion(void* addr) {
     *data_U = _maxvalCol;
 }
 
-void matrix_2d::allocate() { allocate(_mem_rows, _mem_cols); }
+
+void matrix_2d::AttachMappedFileRegion(void* addr) {
+    // Read header metadata — same layout as ReadMappedFileRegion
+    PUINT32 data_U = reinterpret_cast<PUINT32>(addr);
+    _matrixType = *data_U++;
+    _rows = *data_U++;
+    _cols = *data_U++;
+
+    switch (_matrixType) {
+    case mtx_sparse:
+        _mem_rows = _rows;
+        _mem_cols = _cols;
+        // Sparse cannot use in-place — fall back to copy path
+        ReadMappedFileRegion(addr);
+        return;
+    case mtx_lower:
+    case mtx_full:
+    default:
+        _mem_rows = *data_U++;
+        _mem_cols = *data_U++;
+        ++data_U;  // skip alignment padding
+        break;
+    }
+
+    // Release any existing buffer
+    deallocate();
+
+    // Point _buffer directly at the data region in the mmap
+    _buffer = reinterpret_cast<double*>(data_U);
+    _owns_buffer = false;
+
+    // Set packed/symmetric flags for lower-triangular matrices
+    if (_matrixType == mtx_lower && _mem_rows == _mem_cols) {
+        _packed = true;
+        _symmetric = true;
+    } else {
+        _packed = false;
+    }
+
+    // Read footer (maxvalRow, maxvalCol) from after the data
+    double* data_d;
+    switch (_matrixType) {
+    case mtx_lower:
+        data_d = _buffer + packed_size(_mem_rows);
+        break;
+    case mtx_full:
+    default:
+        data_d = _buffer + static_cast<std::size_t>(_mem_rows) * _mem_cols;
+        break;
+    }
+
+    PUINT32 footer = reinterpret_cast<UINT32*>(data_d);
+    _maxvalRow = *footer++;
+    _maxvalCol = *footer;
+}
+
+
+void matrix_2d::DetachMappedFileRegion(void* addr) {
+    if (_owns_buffer || _buffer == nullptr)
+        return;
+
+    // Write updated footer (maxvalRow, maxvalCol) to the mmap region.
+    // Header: 6 UINT32s (matrixType, rows, cols, mem_rows, mem_cols, pad) = 24 bytes.
+    // Skip past data to find the footer position.
+    double* data_d;
+    switch (_matrixType) {
+    case mtx_lower:
+        data_d = _buffer + packed_size(_mem_rows);
+        break;
+    case mtx_full:
+    default:
+        data_d = _buffer + static_cast<std::size_t>(_mem_rows) * _mem_cols;
+        break;
+    }
+
+    PUINT32 footer = reinterpret_cast<UINT32*>(data_d);
+    *footer++ = _maxvalRow;
+    *footer = _maxvalCol;
+
+    // Detach without freeing the mmap memory
+    _buffer = nullptr;
+    _owns_buffer = true;
+}
+
+
+void matrix_2d::allocate() {
+    if (_matrixType == mtx_lower && _mem_rows == _mem_cols && _mem_rows > 0) {
+        deallocate();
+        _packed = true;
+        _symmetric = true;
+        std::size_t ps = packed_size(_mem_rows);
+        _buffer = static_cast<double*>(std::calloc(ps, sizeof(double)));
+        if (!_buffer) {
+            std::stringstream ss;
+            ss << "Insufficient memory for a packed " << _mem_rows << " x " << _mem_rows << " matrix.";
+            throw NetMemoryException(ss.str());
+        }
+        return;
+    }
+    _packed = false;
+    _symmetric = false;
+    allocate(_mem_rows, _mem_cols);
+}
 
 // creates memory for desired "memory size", not matrix dimensions
 void matrix_2d::allocate(const UINT32& rows, const UINT32& columns) {
-    //_method_ = "allocate";
-
     deallocate();
-
-    // an exception will be thrown by out_of_memory_handler
-    // if memory cannot be allocated
+    _packed = false;
+    _symmetric = false;
     buy(rows, columns, &_buffer);
 }
 
@@ -429,26 +610,27 @@ void matrix_2d::buy(const UINT32& rows, const UINT32& columns, double** mem_spac
     __row__ = rows;
     __col__ = columns;
 
-    // an exception will be thrown by out_of_memory_handler
-    // if memory cannot be allocated
+    // calloc returns zero-initialised memory.  For large allocations glibc
+    // satisfies calloc via mmap, whose anonymous pages are already zero-filled
+    // by the kernel — so calloc skips the redundant memset that was previously
+    // triggering page-fault storms (97 % of CPU time on the NSW benchmark).
     std::size_t total_size = static_cast<std::size_t>(rows) * static_cast<std::size_t>(columns);
-    (*mem_space) = new double[total_size];
+    (*mem_space) = static_cast<double*>(std::calloc(total_size, sizeof(double)));
 
     if ((*mem_space) == nullptr) {
         std::stringstream ss;
         ss << "Insufficient memory for a " << rows << " x " << columns << " matrix.";
         throw NetMemoryException(ss.str());
     }
-
-    // Initialize memory to zero to prevent uninitialized values
-    std::memset((*mem_space), 0, total_size * sizeof(double));
 }
 
 void matrix_2d::deallocate() {
     if (_buffer != nullptr) {
-        delete[] _buffer;
+        if (_owns_buffer)
+            std::free(_buffer);
         _buffer = nullptr;
     }
+    _owns_buffer = true;
 }
 
 matrix_2d matrix_2d::submatrix(const UINT32& row_begin, const UINT32& col_begin, const UINT32& rows,
@@ -514,9 +696,14 @@ void matrix_2d::submatrix(const UINT32& row_begin, const UINT32& col_begin, matr
 }
 
 void matrix_2d::redim(const UINT32& rows, const UINT32& columns) {
+    if (_packed) {
+        deallocate();
+        _packed = false;
+    }
+    _symmetric = false;
     // if new matrix size is smaller than or equal to the previous
     // matrix size, then simply change dimensions and return
-    if (rows <= _mem_rows && columns <= _mem_cols) {
+    if (_buffer != nullptr && rows <= _mem_rows && columns <= _mem_cols) {
         // Zero out the unused portions when reusing buffer
         // Zero partial columns (rows beyond new row count)
         for (UINT32 col = 0; col < columns && col < _mem_cols; ++col) {
@@ -550,21 +737,44 @@ void matrix_2d::redim(const UINT32& rows, const UINT32& columns) {
     buy(rows, columns, &new_buffer);
     
     // Copy old data to new buffer if there was any
+    bool old_owns = _owns_buffer;
     if (old_buffer != nullptr && old_rows > 0 && old_cols > 0) {
         for (UINT32 col = 0; col < old_cols && col < columns; ++col) {
             for (UINT32 row = 0; row < old_rows && row < rows; ++row) {
                 new_buffer[col * rows + row] = old_buffer[col * old_rows + row];
             }
         }
-        // Delete old buffer
-        delete[] old_buffer;
+        if (old_owns)
+            std::free(old_buffer);
     }
     
     _buffer = new_buffer;
-    
+    _owns_buffer = true;
 
     _rows = _mem_rows = rows;
     _cols = _mem_cols = columns;
+}
+
+void matrix_2d::redim_packed(const UINT32& n) {
+    std::size_t ps = packed_size(n);
+
+    if (_buffer != nullptr && _packed && n <= _mem_rows) {
+        std::memset(_buffer, 0, ps * sizeof(double));
+        _rows = _cols = _mem_rows = _mem_cols = n;
+        return;
+    }
+
+    deallocate();
+    _rows = _cols = _mem_rows = _mem_cols = n;
+    _packed = true;
+    _symmetric = true;
+    _matrixType = mtx_lower;
+    _buffer = static_cast<double*>(std::calloc(ps, sizeof(double)));
+    if (!_buffer) {
+        std::stringstream ss;
+        ss << "Insufficient memory for a packed " << n << " x " << n << " matrix.";
+        throw NetMemoryException(ss.str());
+    }
 }
 
 void matrix_2d::shrink(const UINT32& rows, const UINT32& columns) {
@@ -601,6 +811,8 @@ void matrix_2d::grow(const UINT32& rows, const UINT32& columns) {
 
 void matrix_2d::setsize(const UINT32& rows, const UINT32& columns) {
     deallocate();
+    _packed = false;
+    _symmetric = false;
     _rows = _mem_rows = rows;
     _cols = _mem_cols = columns;
 }
@@ -641,19 +853,51 @@ void matrix_2d::copybuffer(const UINT32& rowstart, const UINT32& columnstart, co
     }
 }
 
-void matrix_2d::copyelements(const UINT32& row_dest, const UINT32& column_dest, const matrix_2d& src,
-                             const UINT32& row_src, const UINT32& column_src, const UINT32& rows,
-                             const UINT32& columns) {
+void matrix_2d::copyelements_generic(const UINT32& row_dest, const UINT32& column_dest, const matrix_2d& src,
+                                     const UINT32& row_src, const UINT32& column_src, const UINT32& rows,
+                                     const UINT32& columns) {
+    assert(_buffer != nullptr && src._buffer != nullptr);
+    assert(row_dest + rows <= _mem_rows && "copyelements_generic(): dest row overflow");
+    assert(column_dest + columns <= _mem_cols && "copyelements_generic(): dest col overflow");
+    assert(row_src + rows <= src._mem_rows && "copyelements_generic(): src row overflow");
+    assert(column_src + columns <= src._mem_cols && "copyelements_generic(): src col overflow");
+    // Fast path: packed source → dense dest (avoids per-element get/put overhead)
+    if (src._packed && !_packed) {
+        for (UINT32 c = 0; c < columns; ++c) {
+            double* d = _buffer + static_cast<std::size_t>(column_dest + c) * _mem_rows + row_dest;
+            UINT32 sc = column_src + c;
+            for (UINT32 r = 0; r < rows; ++r) {
+                UINT32 sr = row_src + r, sj = sc;
+                if (sr < sj) std::swap(sr, sj);
+                d[r] = src._buffer[packed_index(src._rows, sr, sj)];
+            }
+        }
+        return;
+    }
+    // Fast path: dense source → packed dest
+    if (_packed && !src._packed && !src._symmetric) {
+        for (UINT32 c = 0; c < columns; ++c) {
+            const double* s = src._buffer + static_cast<std::size_t>(column_src + c) * src._mem_rows + row_src;
+            UINT32 dc = column_dest + c;
+            for (UINT32 r = 0; r < rows; ++r) {
+                UINT32 dr = row_dest + r;
+                if (dr >= dc)
+                    _buffer[packed_index(_rows, dr, dc)] = s[r];
+            }
+        }
+        return;
+    }
+    // Fallback for remaining packed/symmetric combinations
+    if (src._symmetric || src._packed || _packed) {
+        for (UINT32 r = 0; r < rows; ++r)
+            for (UINT32 c = 0; c < columns; ++c)
+                put(row_dest + r, column_dest + c, src.get(row_src + r, column_src + c));
+        return;
+    }
     UINT32 cd(0), cs(0), colend_dest(column_dest + columns);
     for (cd = column_dest, cs = column_src; cd < colend_dest; ++cd, ++cs)
         memcpy(getelementref(row_dest, cd), src.getbuffer(row_src, cs),
                static_cast<std::size_t>(rows) * sizeof(double));
-}
-
-void matrix_2d::copyelements(const UINT32& row_dest, const UINT32& column_dest, const matrix_2d* src,
-                             const UINT32& row_src, const UINT32& column_src, const UINT32& rows,
-                             const UINT32& columns) {
-    copyelements(row_dest, column_dest, *src, row_src, column_src, rows, columns);
 }
 
 void matrix_2d::sweep(UINT32 k1, UINT32 k2) {
@@ -705,9 +949,46 @@ matrix_2d matrix_2d::sweepinverse() {
     return *this;
 }
 
-matrix_2d matrix_2d::cholesky_inverse(bool LOWER_IS_CLEARED /*=false*/) {
+matrix_2d matrix_2d::cholesky_inverse(bool LOWER_IS_CLEARED /*=false*/, bool mark_symmetric /*=false*/) {
     if (_rows < 1) return *this;
     if (_rows != _cols) throw std::runtime_error("cholesky_inverse(): Matrix is not square.");
+
+    assert(_buffer != nullptr && "cholesky_inverse(): null buffer");
+    assert(_mem_rows >= _rows && "cholesky_inverse(): mem_rows < rows");
+    assert(_mem_cols >= _cols && "cholesky_inverse(): mem_cols < cols");
+    assert(!(mark_symmetric && LOWER_IS_CLEARED) &&
+           "cholesky_inverse(): mark_symmetric with LOWER_IS_CLEARED not supported");
+
+    if (_packed) {
+        // Unpack to full format for fast blocked dpotrf/dpotri, then repack.
+        // dpptrf/dpptri are element-by-element and orders of magnitude slower.
+        lapack_int n = _rows;
+        std::size_t full_size = static_cast<std::size_t>(n) * n;
+
+        // Reuse thread-local workspace to avoid repeated allocation/deallocation.
+        // dpotrf/dpotri with uplo='L' only read the lower triangle, so no
+        // memset is needed — the unpack loop sets all lower-triangle elements.
+        static thread_local std::vector<double> chol_workspace;
+        if (chol_workspace.size() < full_size)
+            chol_workspace.resize(full_size);
+        double* full = chol_workspace.data();
+
+        for (UINT32 j = 0; j < _rows; ++j)
+            for (UINT32 i = j; i < _rows; ++i)
+                full[static_cast<std::size_t>(j) * n + i] = _buffer[packed_index(_rows, i, j)];
+
+        char uplo = LOWER_TRIANGLE;
+        lapack_int info, lda = n;
+        LAPACK_FUNC(dpotrf)(&uplo, &n, full, &lda, &info);
+        if (info != 0) throw MatrixInversionFailure("Matrix inversion failed, the matrix is singular.");
+        LAPACK_FUNC(dpotri)(&uplo, &n, full, &lda, &info);
+        if (info != 0) throw MatrixInversionFailure("Matrix inversion failed, the matrix is singular.");
+
+        for (UINT32 j = 0; j < _rows; ++j)
+            for (UINT32 i = j; i < _rows; ++i)
+                _buffer[packed_index(_rows, i, j)] = full[static_cast<std::size_t>(j) * n + i];
+        return *this;
+    }
 
     char uplo(LOWER_TRIANGLE);
     if (LOWER_IS_CLEARED) uplo = UPPER_TRIANGLE;
@@ -727,23 +1008,181 @@ matrix_2d matrix_2d::cholesky_inverse(bool LOWER_IS_CLEARED /*=false*/) {
     if (info != 0)
         throw MatrixInversionFailure("Matrix inversion failed, the matrix is singular.");
 
-    if (LOWER_IS_CLEARED)
+    if (mark_symmetric) {
+        _symmetric = true;
+    } else if (LOWER_IS_CLEARED) {
         filllower();
-    else
+    } else {
         fillupper();
+    }
 
     return *this;
 }
 
+matrix_2d matrix_2d::cholesky_factor(bool LOWER_IS_CLEARED /*=false*/) {
+    if (_rows < 1) return *this;
+    if (_rows != _cols) throw std::runtime_error("cholesky_factor(): Matrix is not square.");
+
+    assert(_buffer != nullptr && "cholesky_factor(): null buffer");
+    assert(_mem_rows >= _rows && "cholesky_factor(): mem_rows < rows");
+    assert(_mem_cols >= _cols && "cholesky_factor(): mem_cols < cols");
+
+    if (_packed) {
+        // Unpack to full format for dpotrf (same approach as cholesky_inverse).
+        // The factor L is stored back in packed format.
+        lapack_int n = _rows;
+        std::size_t full_size = static_cast<std::size_t>(n) * n;
+
+        // Reuse thread-local workspace; no memset needed (dpotrf reads lower triangle only)
+        static thread_local std::vector<double> chol_workspace;
+        if (chol_workspace.size() < full_size)
+            chol_workspace.resize(full_size);
+        double* full = chol_workspace.data();
+
+        for (UINT32 j = 0; j < _rows; ++j)
+            for (UINT32 i = j; i < _rows; ++i)
+                full[static_cast<std::size_t>(j) * n + i] = _buffer[packed_index(_rows, i, j)];
+
+        char uplo = LOWER_TRIANGLE;
+        lapack_int info, lda = n;
+        LAPACK_FUNC(dpotrf)(&uplo, &n, full, &lda, &info);
+        if (info != 0) throw MatrixInversionFailure("Cholesky factorisation failed, the matrix is singular.");
+
+        // Store the L factor back in packed format
+        for (UINT32 j = 0; j < _rows; ++j)
+            for (UINT32 i = j; i < _rows; ++i)
+                _buffer[packed_index(_rows, i, j)] = full[static_cast<std::size_t>(j) * n + i];
+        return *this;
+    }
+
+    char uplo(LOWER_TRIANGLE);
+    if (LOWER_IS_CLEARED) uplo = UPPER_TRIANGLE;
+
+    lapack_int info, n = _rows;
+    lapack_int lda = _mem_rows;
+
+    LAPACK_FUNC(dpotrf)(&uplo, &n, _buffer, &lda, &info);
+
+    if (info != 0)
+        throw MatrixInversionFailure("Cholesky factorisation failed, the matrix is singular.");
+
+    return *this;
+}
+
+void matrix_2d::cholesky_solve(matrix_2d& rhs, bool LOWER_IS_CLEARED /*=false*/) {
+    assert(_rows == _cols && "cholesky_solve(): factor matrix is not square");
+    assert(_rows == rhs._rows && "cholesky_solve(): dimension mismatch");
+    assert(_buffer != nullptr && "cholesky_solve(): null factor buffer");
+    assert(rhs._buffer != nullptr && "cholesky_solve(): null rhs buffer");
+
+    if (_packed) {
+        // Unpack the L factor to full format for dpotrs.
+        lapack_int n = _rows;
+        std::size_t full_size = static_cast<std::size_t>(n) * n;
+
+        // Reuse thread-local workspace; no memset needed (dpotrs reads lower triangle only)
+        static thread_local std::vector<double> chol_workspace;
+        if (chol_workspace.size() < full_size)
+            chol_workspace.resize(full_size);
+        double* full = chol_workspace.data();
+
+        for (UINT32 j = 0; j < _rows; ++j)
+            for (UINT32 i = j; i < _rows; ++i)
+                full[static_cast<std::size_t>(j) * n + i] = _buffer[packed_index(_rows, i, j)];
+
+        char uplo = LOWER_TRIANGLE;
+        lapack_int nrhs = rhs._cols;
+        lapack_int lda = n;
+        lapack_int ldb = rhs._mem_rows;
+        lapack_int info;
+
+        LAPACK_FUNC(dpotrs)(&uplo, &n, &nrhs, full, &lda, rhs._buffer, &ldb, &info);
+
+        if (info != 0)
+            throw MatrixInversionFailure("Cholesky solve failed.");
+        return;
+    }
+
+    char uplo(LOWER_TRIANGLE);
+    if (LOWER_IS_CLEARED) uplo = UPPER_TRIANGLE;
+
+    lapack_int n = _rows;
+    lapack_int nrhs = rhs._cols;
+    lapack_int lda = _mem_rows;
+    lapack_int ldb = rhs._mem_rows;
+    lapack_int info;
+
+    LAPACK_FUNC(dpotrs)(&uplo, &n, &nrhs, _buffer, &lda, rhs._buffer, &ldb, &info);
+
+    if (info != 0)
+        throw MatrixInversionFailure("Cholesky solve failed.");
+}
+
+double matrix_2d::dot(const matrix_2d& other) const {
+    assert(_cols == 1 && other._cols == 1 && "dot(): both matrices must be column vectors");
+    assert(_rows == other._rows && "dot(): dimension mismatch");
+    assert(_buffer != nullptr && other._buffer != nullptr && "dot(): null buffer");
+
+    double result = 0.0;
+    for (UINT32 i = 0; i < _rows; ++i)
+        result += get(i, 0) * other.get(i, 0);
+    return result;
+}
+
 matrix_2d matrix_2d::scale(const double& scalar) {
+    if (_packed) {
+        std::size_t ps = packed_size(_rows);
+        for (std::size_t k = 0; k < ps; ++k)
+            _buffer[k] *= scalar;
+        return *this;
+    }
     UINT32 i, j;
     for (i = 0; i < _rows; ++i)
         for (j = 0; j < _cols; ++j) *getelementref(i, j) *= scalar;
     return *this;
 }
 
-void matrix_2d::blockadd(const UINT32& row_dest, const UINT32& col_dest, const matrix_2d& mat_src,
-                         const UINT32& row_src, const UINT32& col_src, const UINT32& rows, const UINT32& cols) {
+void matrix_2d::scale_symmetric_diagonal(const double* diag) {
+    assert(_symmetric && "scale_symmetric_diagonal(): matrix must be symmetric");
+    if (_packed) {
+        for (UINT32 j = 0; j < _rows; ++j)
+            for (UINT32 i = j; i < _rows; ++i)
+                _buffer[packed_index(_rows, i, j)] *= diag[i] * diag[j];
+        return;
+    }
+    for (UINT32 j = 0; j < _rows; ++j)
+        for (UINT32 i = j; i < _rows; ++i) {
+            double s = diag[i] * diag[j];
+            *getelementref(i, j) *= s;
+        }
+}
+
+void matrix_2d::blockadd_generic(const UINT32& row_dest, const UINT32& col_dest, const matrix_2d& mat_src,
+                                 const UINT32& row_src, const UINT32& col_src, const UINT32& rows, const UINT32& cols) {
+    // Fast path: dense source → packed dest (avoids per-element get/elementadd overhead)
+    if (_packed && !mat_src._packed && !mat_src._symmetric) {
+        for (UINT32 c = 0; c < cols; ++c) {
+            const double* s = mat_src._buffer + static_cast<std::size_t>(col_src + c) * mat_src._mem_rows + row_src;
+            UINT32 dc = col_dest + c;
+            for (UINT32 r = 0; r < rows; ++r) {
+                UINT32 dr = row_dest + r;
+                if (dr >= dc)
+                    _buffer[packed_index(_rows, dr, dc)] += s[r];
+            }
+        }
+        return;
+    }
+    // Fast path: both dense (non-packed, non-symmetric) — use direct buffer arithmetic
+    if (!_packed && !mat_src._packed && !mat_src._symmetric) {
+        for (UINT32 c = 0; c < cols; ++c) {
+            double* d = _buffer + static_cast<std::size_t>(col_dest + c) * _mem_rows + row_dest;
+            const double* s = mat_src._buffer + static_cast<std::size_t>(col_src + c) * mat_src._mem_rows + row_src;
+            for (UINT32 r = 0; r < rows; ++r)
+                d[r] += s[r];
+        }
+        return;
+    }
+    // Fallback: generic per-element path
     UINT32 i_dest, j_dest, i_src, j_src;
     UINT32 i_dest_end(row_dest + rows), j_dest_end(col_dest + cols);
 
@@ -752,9 +1191,8 @@ void matrix_2d::blockadd(const UINT32& row_dest, const UINT32& col_dest, const m
             elementadd(i_dest, j_dest, mat_src.get(i_src, j_src));
 }
 
-// Same as blockadd, but adds transpose.  mat_src must be square.
-void matrix_2d::blockTadd(const UINT32& row_dest, const UINT32& col_dest, const matrix_2d& mat_src,
-                          const UINT32& row_src, const UINT32& col_src, const UINT32& rows, const UINT32& cols) {
+void matrix_2d::blockTadd_generic(const UINT32& row_dest, const UINT32& col_dest, const matrix_2d& mat_src,
+                                  const UINT32& row_src, const UINT32& col_src, const UINT32& rows, const UINT32& cols) {
     UINT32 i_dest, j_dest, i_src, j_src;
     UINT32 i_dest_end(row_dest + rows), j_dest_end(col_dest + cols);
 
@@ -773,79 +1211,153 @@ void matrix_2d::blocksubtract(const UINT32& row_dest, const UINT32& col_dest, co
             elementsubtract(i_dest, j_dest, mat_src.get(i_src, j_src));
 }
 
-// clearlower()
 void matrix_2d::clearlower() {
+    assert(_buffer != nullptr);
+    assert(!_packed && "clearlower(): not valid for packed storage");
     // Sets lower triangle elements to zero
     UINT32 col, row;
-    for (row = 1, col = 0; col < _mem_cols; ++col, ++row)
+    for (row = 1, col = 0; col < _mem_cols && row < _mem_rows; ++col, ++row)
         memset(getelementref(row, col), 0, (static_cast<std::size_t>(_mem_rows) - row) * sizeof(double));
 }
 
-// clearupper()
 void matrix_2d::clearupper() {
+    assert(!_packed && "clearupper(): not valid for packed storage");
     // Sets upper triangle elements to zero
-    UINT32 col, row;
-    for (row = 0; row < _rows; ++row)
-        for (col = row + 1; col < _cols; ++col) put(row, col, 0.0);
+    // Column-major: for each column, zero the rows above the diagonal
+    for (UINT32 col = 1; col < _cols; ++col)
+        memset(_buffer + col * _mem_rows, 0, col * sizeof(double));
 }
 
-// filllower()
 void matrix_2d::filllower() {
-    // copies upper triangle to lower triangle
-    UINT32 column, row;
-    for (row = 1; row < _rows; row++)
-        for (column = 0; column < row; column++) put(row, column, get(column, row));
+    assert(_buffer != nullptr);
+    assert(!_packed && "filllower(): not valid for packed storage");
+    assert(_rows == _cols && "filllower(): matrix must be square");
+    // Copy upper triangle to lower: A(row,col) = A(col,row) for row > col
+    // Column-major: A(r,c) = _buffer[c * _mem_rows + r]
+    // Outer loop over destination columns so writes are sequential in memory.
+    const std::size_t mr = _mem_rows;
+    constexpr UINT32 BLK = 64;
+    for (UINT32 cb = 0; cb < _cols; cb += BLK) {
+        UINT32 ce = std::min(cb + BLK, _cols);
+        for (UINT32 rb = ce; rb < _rows; rb += BLK) {
+            UINT32 re = std::min(rb + BLK, _rows);
+            for (UINT32 col = cb; col < ce; col++) {
+                double* dst = _buffer + col * mr;
+                for (UINT32 row = rb; row < re; row++)
+                    dst[row] = _buffer[row * mr + col];
+            }
+        }
+    }
+    // Diagonal blocks: row > col within the same block
+    for (UINT32 cb = 0; cb < _cols; cb += BLK) {
+        UINT32 ce = std::min(cb + BLK, _cols);
+        for (UINT32 col = cb; col < ce; col++) {
+            double* dst = _buffer + col * mr;
+            for (UINT32 row = col + 1; row < ce; row++)
+                dst[row] = _buffer[row * mr + col];
+        }
+    }
 }
 
-// fillupper()
 void matrix_2d::fillupper() {
-    // copies lower triangle to upper triangle
-    UINT32 column, row;
-    for (row = 1; row < _rows; row++)
-        for (column = 0; column < row; column++) put(column, row, get(row, column));
+    assert(_buffer != nullptr);
+    assert(!_packed && "fillupper(): not valid for packed storage");
+    assert(_rows == _cols && "fillupper(): matrix must be square");
+    // Copy lower triangle to upper: A(r,c) = A(c,r) for r < c
+    // Column-major: A(r,c) = _buffer[c * _mem_rows + r]
+    //
+    // Outer loop over destination columns so writes are sequential in memory.
+    // Reads are strided (one element per source column) but write-combining
+    // and store buffers make sequential writes much faster than sequential reads
+    // for large matrices.
+    const std::size_t mr = _mem_rows;
+    constexpr UINT32 BLK = 64;
+    for (UINT32 cb = 0; cb < _cols; cb += BLK) {
+        UINT32 ce = std::min(cb + BLK, _cols);
+        for (UINT32 rb = 0; rb < ce; rb += BLK) {
+            UINT32 re = std::min(rb + BLK, ce);
+            for (UINT32 col = cb; col < ce; col++) {
+                double* dst = _buffer + col * mr;
+                UINT32 r0 = rb;
+                UINT32 r1 = std::min(re, col);
+                for (UINT32 row = r0; row < r1; row++)
+                    dst[row] = _buffer[row * mr + col];
+            }
+        }
+    }
 }
 
-// zero()
-void matrix_2d::zero() { memset(_buffer, 0, buffersize()); }
+void matrix_2d::zero() {
+    assert(_buffer != nullptr && "zero(): null buffer");
+    if (_packed)
+        memset(_buffer, 0, packed_size(_mem_rows) * sizeof(double));
+    else
+        memset(_buffer, 0, buffersize());
+}
 
 // zero()
 void matrix_2d::zero(const UINT32& row_begin, const UINT32& col_begin, const UINT32& rows, const UINT32& columns) {
+    assert(_buffer != nullptr && "zero(sub): null buffer");
+    assert(row_begin + rows <= _mem_rows && "zero(sub): row overflow");
+    assert(col_begin + columns <= _mem_cols && "zero(sub): col overflow");
     UINT32 col(0), col_end(col_begin + columns);
     for (col = col_begin; col < col_end; ++col) memset(getelementref(row_begin, col), 0, rows * sizeof(double));
 }
 
 
 matrix_2d& matrix_2d::operator=(const matrix_2d& rhs) {
-    // Overloaded assignment operator
     if (this == &rhs) return *this;
 
-    // If rhs data can fit within limits of this matrix, copy
-    // and return. Otherwise, allocate new memory
+    if (rhs._packed) {
+        std::size_t ps = packed_size(rhs._rows);
+        if (_packed && _mem_rows >= rhs._rows) {
+            _rows = _cols = rhs._rows;
+            memcpy(_buffer, rhs._buffer, ps * sizeof(double));
+        } else {
+            deallocate();
+            _rows = _cols = _mem_rows = _mem_cols = rhs._rows;
+            _buffer = static_cast<double*>(std::malloc(ps * sizeof(double)));
+            if (!_buffer) throw NetMemoryException("Insufficient memory for packed matrix assignment.");
+            memcpy(_buffer, rhs._buffer, ps * sizeof(double));
+        }
+        _packed = true;
+        _symmetric = true;
+        _matrixType = rhs._matrixType;
+        _maxvalCol = rhs.maxvalueCol();
+        _maxvalRow = rhs.maxvalueRow();
+        return *this;
+    }
+
+    // rhs is not packed
+    if (_packed) {
+        deallocate();
+        _packed = false;
+        _mem_rows = _mem_cols = 0;
+    }
+
     if (_mem_rows >= rhs.rows() && _mem_cols >= rhs.columns()) {
-        // don't change _mem_rows or _mem_cols.  Simply update
-        // visible dimensions and copy buffer
         _rows = rhs.rows();
         _cols = rhs.columns();
         copybuffer(_rows, _cols, rhs);
 
-        _maxvalCol = rhs.maxvalueCol();  // col of max value
-        _maxvalRow = rhs.maxvalueRow();  // row of max value
+        _maxvalCol = rhs.maxvalueCol();
+        _maxvalRow = rhs.maxvalueRow();
+        _symmetric = rhs._symmetric;
 
         return *this;
     }
 
-    // Okay, rhs is larger, so allocate new memory. Call free
-    // memory first before changing row and column dimensions!
     deallocate();
-    _mem_rows = rhs.memRows();  // change memory limits
+    _mem_rows = rhs.memRows();
     _mem_cols = rhs.memColumns();
-    _rows = rhs.rows();  // change matrix dimensions
+    _rows = rhs.rows();
     _cols = rhs.columns();
     allocate(_mem_rows, _mem_cols);
     copybuffer(_rows, _cols, rhs);
 
-    _maxvalCol = rhs.maxvalueCol();  // col of max value
-    _maxvalRow = rhs.maxvalueRow();  // row of max value
+    _maxvalCol = rhs.maxvalueCol();
+    _maxvalRow = rhs.maxvalueRow();
+    _symmetric = rhs._symmetric;
 
     return *this;
 }
@@ -875,6 +1387,10 @@ matrix_2d matrix_2d::add(const matrix_2d& rhs) {
 // multiplies this matrix by rhs and stores the result in a new matrix
 // Uses Intel MKL dgemm
 matrix_2d matrix_2d::multiply(const char* lhs_trans, const matrix_2d& rhs, const char* rhs_trans) {
+    assert(!_symmetric && "multiply(dgemm): LHS is symmetric — use multiply_sym instead");
+    assert(!rhs._symmetric && "multiply(dgemm): RHS is symmetric — upper triangle is unpopulated");
+    assert(_buffer != nullptr && rhs._buffer != nullptr);
+
     matrix_2d m(_rows, rhs.columns());
 
     const double one = 1.0;
@@ -914,6 +1430,10 @@ matrix_2d matrix_2d::multiply(const char* lhs_trans, const matrix_2d& rhs, const
 // Uses Intel MKL dgemm
 matrix_2d
 matrix_2d::multiply(const matrix_2d& lhs, const char* lhs_trans, const matrix_2d& rhs, const char* rhs_trans) {
+    assert(!lhs._symmetric && "multiply(dgemm): LHS is symmetric — use multiply_sym instead");
+    assert(!rhs._symmetric && "multiply(dgemm): RHS is symmetric — upper triangle is unpopulated");
+    assert(lhs._buffer != nullptr && rhs._buffer != nullptr && _buffer != nullptr);
+
     const double one = 1.0;
     const double zero = 0.0;
 
@@ -947,6 +1467,48 @@ matrix_2d::multiply(const matrix_2d& lhs, const char* lhs_trans, const matrix_2d
     return *this;
 }  // Multiply()
 
+// C (this) = sym_lhs * rhs, using dsymm or dspmv (packed)
+matrix_2d matrix_2d::multiply_sym(const matrix_2d& sym_lhs, const matrix_2d& rhs) {
+    lapack_int m = sym_lhs.rows();
+    lapack_int n = rhs.columns();
+
+    assert(sym_lhs._symmetric && "multiply_sym(): LHS must be marked symmetric");
+    assert(sym_lhs._buffer != nullptr && "multiply_sym(): LHS null buffer");
+    assert(rhs._buffer != nullptr && "multiply_sym(): RHS null buffer");
+    assert(_buffer != nullptr && "multiply_sym(): result null buffer");
+    assert(_buffer != sym_lhs._buffer && _buffer != rhs._buffer &&
+           "multiply_sym(): result must not alias inputs");
+
+    if (sym_lhs.columns() != sym_lhs.rows())
+        throw std::runtime_error("multiply_sym(): LHS matrix is not square.");
+    if (static_cast<lapack_int>(rhs.rows()) != m)
+        throw std::runtime_error("multiply_sym(): Matrix dimensions are incompatible.");
+    if (_rows != static_cast<UINT32>(m) || _cols != static_cast<UINT32>(n))
+        throw std::runtime_error("multiply_sym(): Result matrix dimensions are incompatible.");
+
+    if (sym_lhs._packed) {
+        for (lapack_int j = 0; j < n; ++j) {
+            BLAS_FUNC(dspmv)(CblasColMajor, CblasLower,
+                             m, 1.0, sym_lhs._buffer,
+                             rhs._buffer + j * rhs._mem_rows, 1,
+                             0.0, _buffer + j * _mem_rows, 1);
+        }
+        return *this;
+    }
+
+    assert(sym_lhs.memRows() >= sym_lhs.rows() && "multiply_sym(): LHS LDA < M");
+    assert(rhs.memRows() >= rhs.rows() && "multiply_sym(): RHS LDA < M");
+    assert(_mem_rows >= _rows && "multiply_sym(): result LDA < M");
+
+    BLAS_FUNC(dsymm)(CblasColMajor, CblasLeft, CblasLower,
+                     m, n, 1.0,
+                     sym_lhs.getbuffer(), sym_lhs.memRows(),
+                     rhs.getbuffer(), rhs.memRows(),
+                     0.0, _buffer, _mem_rows);
+
+    return *this;
+}
+
 // Transpose()
 matrix_2d matrix_2d::transpose(const matrix_2d& matA) {
     if ((matA.columns() != _rows) || (matA.rows() != _cols))
@@ -967,9 +1529,19 @@ matrix_2d matrix_2d::transpose() {
     return m;
 }  // Transpose()
 
-// computes and retains the maximum value in the matrix
 double matrix_2d::compute_maximum_value() {
     _maxvalCol = _maxvalRow = 0;
+    if (_packed) {
+        for (UINT32 j = 0; j < _rows; ++j) {
+            for (UINT32 i = j; i < _rows; ++i) {
+                if (fabs(get(i, j)) > fabs(get(_maxvalRow, _maxvalCol))) {
+                    _maxvalRow = i;
+                    _maxvalCol = j;
+                }
+            }
+        }
+        return get(_maxvalRow, _maxvalCol);
+    }
     UINT32 col, row;
     for (row = 0; row < _rows; ++row) {
         for (col = 0; col < _cols; col++) {

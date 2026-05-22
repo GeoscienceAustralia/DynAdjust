@@ -197,6 +197,7 @@ private:
 	void LogFrameSubstitutions(std::vector<string_string_pair>& substitutions, const std::string& type);
 	void ApplyStationFrameSubstitutions();
 	void ApplyMeasurementFrameSubstitutions();
+    void ApplyToFrameSubstitution();
 
 	bool IsolateandApplySubstitute(const std::string& epsgCode, const std::string& epoch, std::string& epsgSubstitute);
 
@@ -224,8 +225,9 @@ private:
 	v_plate_motion_cartesians		plate_motion_cartesians_;	// Helmert parameters computed from Euler parameters
 
 	vframeSubsPtr					_frameSubstitutions;		// Reference frame substitutions
-	std::vector<string_string_pair>		_v_stn_substitutions;		// station substitutions made
-	std::vector<string_string_pair>		_v_msr_substitutions;		// station substitutions made
+	std::vector<string_string_pair>	_v_stn_substitutions;		// station substitutions made
+	std::vector<string_string_pair>	_v_msr_substitutions;		// station substitutions made
+    std::vector<string_string_pair> _v_frame_substitutions;     // frameTo substitution made
 
 	v_string_uint32_pair 			vplateMap_;					// Plate Map index sorted on plate ID
 

@@ -83,8 +83,8 @@ if(BUILD_STATIC)
         "-framework CoreFoundation")
     else()
       target_link_options(${STATIC_TARGET_NAME} PRIVATE
-        -static)
-
+        -static-libgcc
+        -static-libstdc++)
     endif()
   elseif(WIN32)
     # On Windows with MSVC
