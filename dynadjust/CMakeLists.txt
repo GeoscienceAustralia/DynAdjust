@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(dynadjust VERSION 1.4.1)
+project(dynadjust VERSION 1.4.0)
 
 option(USE_MKL "Use Intel MKL (Linux and Windows)" OFF)
 option(BUILD_TESTING "Enable testing" OFF)
