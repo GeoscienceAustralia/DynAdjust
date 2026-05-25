@@ -250,6 +250,13 @@ jobs:
           cmake -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DUSE_UNITY_BUILD=ON dynadjust
           make -j2
           ls -la bin/
+          for f in ./bin/*; do
+            file "$f"
+            if objdump -p "$f" | perl -ne 'if (/^\s+(INTERP|NEEDED)\b/) { print; $found = 1 } END { exit($found ? 0 : 1) }'; then
+              echo "::error::$f is dynamically linked but this job publishes the static Linux artefact"
+              exit 1
+            fi
+          done
 
       - name: Prepare artifacts
         run: |

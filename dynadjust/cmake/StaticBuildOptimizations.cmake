@@ -10,6 +10,8 @@ function(optimize_static_target TARGET_NAME)
     # Platform-specific optimizations
     if(UNIX AND NOT APPLE)
         target_link_options(${TARGET_NAME} PRIVATE
+            -static
+            -Wl,-no-pie
             -static-libgcc
             -static-libstdc++
             -Wl,--as-needed

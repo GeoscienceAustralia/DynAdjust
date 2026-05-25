@@ -21,12 +21,11 @@ else()
   # Always output as 'dnadiff' (not 'dnadiff_static')
   SET_TARGET_PROPERTIES(${STATIC_TARGET_NAME} PROPERTIES OUTPUT_NAME dnadiff)
 
-  # Link statically
-  if(UNIX)
-    if(NOT APPLE)
-      target_link_options(${STATIC_TARGET_NAME} PRIVATE -static-libgcc -static-libstdc++)
-      target_link_libraries(${STATIC_TARGET_NAME} pthread)
-    endif()
+  if(COMMAND optimize_static_target)
+    optimize_static_target(${STATIC_TARGET_NAME})
+  elseif(UNIX AND NOT APPLE)
+    target_link_options(${STATIC_TARGET_NAME} PRIVATE -static -Wl,-no-pie -static-libgcc -static-libstdc++)
+    target_link_libraries(${STATIC_TARGET_NAME} pthread m dl)
   endif()
 
 endif()
