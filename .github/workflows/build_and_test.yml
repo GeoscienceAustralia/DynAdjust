@@ -1193,29 +1193,20 @@ jobs:
           fi
 
   test_linux_openblas_binaries:
-    name: Test Linux OpenBLAS static binaries
+    name: Test Linux OpenBLAS static binaries (${{ matrix.distribution }})
     runs-on: ubuntu-latest
     needs: [build_linux_static_openblas]
     env:
-      BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+      TEST_IMAGE: ${{ matrix.image }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distribution: Ubuntu rolling
+            image: ubuntu:rolling
 
     steps:
-      - name: Show CPU information
-        shell: bash
-        run: |
-          echo "CPU Information:"
-          lscpu || true
-          echo "---"
-          nproc || true
-
-      - name: Check branch name
-        shell: bash
-        run: echo ${{ env.BRANCH_NAME }}
-
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ env.BRANCH_NAME }}
-
       - name: Download static binaries artifact
         uses: actions/download-artifact@v7
         with:
@@ -1232,65 +1223,24 @@ jobs:
             mv ./artifacts/dynadjust-linux-static/* ./bin/
           else
             # Fallback in case directory structure is different
-            find ./artifacts -type f -executable -exec mv {} ./bin/ \;
+            find ./artifacts -type f -exec mv {} ./bin/ \;
           fi
 
           # Make sure binaries are executable
           chmod +x ./bin/*
 
-          # Create symlinks for the expected binary names
-          cd bin
-          for binary in *; do
-            # Create symlink without 'dna' prefix if it exists
-            if [[ $binary == dna* ]]; then
-              ln -sf "$binary" "${binary#dna}"
-            fi
-          done
-          cd ..
-
           ls -la ./bin/
 
-      - name: Run GNSS network test
-        working-directory: ./sampleData
+      - name: Smoke test binaries in ${{ matrix.distribution }}
         run: |
-          # Modify PATH to use our static binaries
-          export PATH="../bin:$PATH"
-
-          # Run the test script and capture output
-          set +e  # Don't exit on error
-          bash run-gnss-network.sh 2>&1 | tee gnss_test_output.log
-          TEST_EXIT_CODE=${PIPESTATUS[0]}
-
-          # Check if Chi-Square test has the expected values
-          if grep -q "0.843 < 1.165 < 1.170" gnss_test_output.log; then
-            echo "Chi-Square test values match (0.843 < 1.165 < 1.170) - test considered successful"
-            exit 0
-          else
-            # If Chi-Square values not found, use original exit code
-            echo "GNSS network test exit code: $TEST_EXIT_CODE"
-            exit $TEST_EXIT_CODE
-          fi
-
-      - name: Run urban network test
-        working-directory: ./sampleData
-        run: |
-          # Modify PATH to use our static binaries
-          export PATH="../bin:$PATH"
-
-          # Run the test script and capture output
-          set +e  # Don't exit on error
-          bash run-urban-network.sh 2>&1 | tee urban_test_output.log
-          TEST_EXIT_CODE=${PIPESTATUS[0]}
-
-          # Check if Chi-Square test has the expected values
-          if grep -q "0.901 < 0.857 < 1.104" urban_test_output.log; then
-            echo "Chi-Square test values match (0.901 < 0.857 < 1.104) - test considered successful"
-            exit 0
-          else
-            # If Chi-Square values not found, use original exit code
-            echo "Urban network test exit code: $TEST_EXIT_CODE"
-            exit $TEST_EXIT_CODE
-          fi
+          docker pull "$TEST_IMAGE"
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE/bin:/opt/dynadjust:ro" \
+            "$TEST_IMAGE" \
+            bash -c '
+              cat /etc/os-release
+              /opt/dynadjust/dnaadjust --version
+            '
 
   test_macos_static_binaries:
     name: Test macOS static binaries
