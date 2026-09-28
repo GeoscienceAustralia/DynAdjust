@@ -391,7 +391,7 @@ jobs:
     runs-on: windows-2025-vs2026
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-      VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess xerces-c vcpkg-tool-ninja
+      VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess xerces-c
       VCPKG_INSTALLATION_ROOT: "C:/vcpkg"
       VCPKG_BINARY_SOURCES: "clear"
 
@@ -526,7 +526,7 @@ jobs:
     runs-on: windows-2025-vs2026
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-      VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess xerces-c vcpkg-tool-ninja openblas lapack-reference
+      VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess xerces-c openblas lapack-reference
       VCPKG_INSTALLATION_ROOT: "C:/vcpkg"
       VCPKG_BINARY_SOURCES: "clear"
 
@@ -865,7 +865,7 @@ jobs:
     runs-on: windows-2025-vs2026
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-      VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess boost-filesystem boost-timer boost-date-time boost-chrono xerces-c vcpkg-tool-ninja
+      VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess boost-filesystem boost-timer boost-date-time boost-chrono xerces-c
       VCPKG_INSTALLATION_ROOT: "C:/vcpkg"
       VCPKG_BINARY_SOURCES: "clear"
 
@@ -1345,7 +1345,7 @@ jobs:
     needs: [build_windows_dyn_mkl]
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-      VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess xerces-c vcpkg-tool-ninja
+      VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess xerces-c
       VCPKG_INSTALLATION_ROOT: "C:/vcpkg"
       VCPKG_BINARY_SOURCES: "clear"
 
@@ -1530,7 +1530,7 @@ jobs:
     needs: [build_windows_dyn_openblas]
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-      VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess xerces-c vcpkg-tool-ninja openblas lapack-reference
+      VCPKG_PACKAGES: boost-geometry boost-process boost-iostreams boost-spirit boost-program-options boost-interprocess xerces-c openblas lapack-reference
       VCPKG_INSTALLATION_ROOT: "C:/vcpkg"
       VCPKG_BINARY_SOURCES: "clear"
 
