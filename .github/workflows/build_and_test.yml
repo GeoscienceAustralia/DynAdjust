@@ -8,6 +8,9 @@ name: Build and test
 on:
   workflow_dispatch:
   push:
+  schedule:
+    - cron: '0 9 * * 1'
+      timezone: Australia/Sydney
 
 env:
   LINUX_BASEKIT_URL: https://registrationcenter-download.intel.com/akdlm/IRC_NAS/3b7a16b3-a7b0-460f-be16-de0d64fa6b1e/intel-oneapi-base-toolkit-2025.2.1.44_offline.sh
@@ -1205,6 +1208,8 @@ jobs:
         include:
           - distribution: Ubuntu rolling
             image: ubuntu:rolling
+          - distribution: Ubuntu latest
+            image: ubuntu:latest
 
     steps:
       - name: Download static binaries artifact
@@ -1239,6 +1244,7 @@ jobs:
             "$TEST_IMAGE" \
             bash -c '
               cat /etc/os-release
+              /opt/dynadjust/dnaimport --version
               /opt/dynadjust/dnaadjust --version
             '
 
