@@ -1015,42 +1015,42 @@ jobs:
 
     - name: Parse test results and create annotations
       if: always()
-      working-directory: "./src"
-      shell: bash
+      shell: powershell
       run: |
-        set +e  # Don't exit on error
-        if [ -f ctest_output.log ]; then
-          # Convert Windows line endings to Unix (try multiple methods)
-          if command -v dos2unix &> /dev/null; then
-            dos2unix ctest_output.log 2>/dev/null
-          elif command -v sed &> /dev/null; then
-            sed -i.bak 's/\r$//' ctest_output.log 2>/dev/null || true
-          fi
+        $logPath = Join-Path $env:GITHUB_WORKSPACE "src/ctest_output.log"
+        if (-not (Test-Path -LiteralPath $logPath)) {
+          Write-Output "::warning title=Test Warning::Could not find ctest output file"
+          exit 0
+        }
 
-          # Find the line with "tests passed" and get everything from there to the end
-          SUMMARY_LINE=$(grep -n "tests passed" ctest_output.log 2>/dev/null | head -1 | cut -d: -f1)
+        $lines = @(Get-Content -LiteralPath $logPath)
+        $summaryIndex = -1
+        for ($index = 0; $index -lt $lines.Count; $index++) {
+          if ($lines[$index] -match "tests passed") {
+            $summaryIndex = $index
+            break
+          }
+        }
 
-          if [ -n "$SUMMARY_LINE" ]; then
-            # Get the first line (the summary line)
-            FIRST_LINE=$(tail -n +$SUMMARY_LINE ctest_output.log | head -1)
-            # Get the multiline summary from the tests passed line onwards
-            SUMMARY_CONTENT=$(tail -n +$SUMMARY_LINE ctest_output.log | grep -v "Errors while running" | head -20)
-            # Replace newlines with %0A for GitHub Actions annotation
-            SUMMARY_CONTENT=$(echo "$SUMMARY_CONTENT" | sed ':a;N;$!ba;s/\n/%0A/g')
+        if ($summaryIndex -lt 0) {
+          Write-Output "::warning title=Test Warning::Could not find test summary in ctest output"
+          exit 0
+        }
 
-            # Check if there are failed tests
-            if grep -q "tests failed" ctest_output.log; then
-              echo "::error title=Test results (windows mkl): $FIRST_LINE::$SUMMARY_CONTENT"
-            else
-              echo "::notice title=Test results (windows mkl): $FIRST_LINE::$SUMMARY_CONTENT"
-            fi
-          else
-            echo "::warning title=Test Warning::Could not find test summary in ctest output"
-          fi
-        else
-          echo "::warning title=Test Warning::Could not find ctest output file"
-        fi
-        exit 0
+        $firstLine = $lines[$summaryIndex]
+        $summaryLines = $lines[$summaryIndex..($lines.Count - 1)] |
+          Where-Object { $_ -notmatch "Errors while running" } |
+          Select-Object -First 20
+        $summaryContent = $summaryLines -join "`n"
+
+        $firstLine = $firstLine.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+        $summaryContent = $summaryContent.Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+
+        if ($lines -match "tests failed") {
+          Write-Output "::error title=Test results (windows mkl): ${firstLine}::${summaryContent}"
+        } else {
+          Write-Output "::notice title=Test results (windows mkl): ${firstLine}::${summaryContent}"
+        }
 
 #=======================================================
 # BINARY TEST JOBS (depend on corresponding build jobs)
