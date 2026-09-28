@@ -20,10 +20,12 @@ RUN apt-get update &&\
  apt-get install -y --no-install-recommends make &&\
  apt-get install -y --no-install-recommends g++ &&\
  apt-get install -y --no-install-recommends xsdcxx
-RUN wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
-RUN apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
-RUN add-apt-repository "deb https://apt.repos.intel.com/oneapi all main"
-RUN apt install -y intel-oneapi-compiler-dpcpp-cpp intel-oneapi-mkl-devel intel-oneapi-tbb-devel
+RUN wget -qO /tmp/intel-oneapi-key.pub https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB &&\
+ gpg --dearmor --output /usr/share/keyrings/oneapi-archive-keyring.gpg /tmp/intel-oneapi-key.pub &&\
+ rm /tmp/intel-oneapi-key.pub &&\
+ echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | tee /etc/apt/sources.list.d/oneAPI.list > /dev/null
+RUN apt-get update &&\
+ apt-get install -y intel-oneapi-compiler-dpcpp-cpp intel-oneapi-mkl-devel intel-oneapi-tbb-devel
 RUN apt-get -y install cpio &&\
  cd ./DynAdjust &&\
  chmod +x ./resources/make_dynadjust_gcc.sh &&\
