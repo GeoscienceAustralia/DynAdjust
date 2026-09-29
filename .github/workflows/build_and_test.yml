@@ -1210,6 +1210,10 @@ jobs:
             image: ubuntu:rolling
           - distribution: Ubuntu latest
             image: ubuntu:latest
+          - distribution: Red Hat latest
+            image: registry.access.redhat.com/ubi10/ubi:latest
+          - distribution: Alpine latest
+            image: alpine:latest
 
     steps:
       - name: Download static binaries artifact
@@ -1242,7 +1246,8 @@ jobs:
           docker run --rm \
             --volume "$GITHUB_WORKSPACE/bin:/opt/dynadjust:ro" \
             "$TEST_IMAGE" \
-            bash -c '
+            sh -c '
+              set -eu
               cat /etc/os-release
               /opt/dynadjust/dnaimport --version
               /opt/dynadjust/dnaadjust --version
