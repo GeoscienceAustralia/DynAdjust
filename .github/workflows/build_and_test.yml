@@ -1196,7 +1196,7 @@ jobs:
           fi
 
   test_linux_openblas_binaries:
-    name: \"${{ matrix.distribution }}\" binary test
+    name: ${{ matrix.distribution }} - binary test
     runs-on: ubuntu-latest
     needs: [build_linux_static_openblas]
     env:
