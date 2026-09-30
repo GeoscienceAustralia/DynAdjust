@@ -178,7 +178,7 @@ jobs:
     env:
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
       PKGS: >
-        xsdcxx libboost-program-options-dev libopenblas-dev liblapacke-dev
+        xsdcxx libboost-program-options-dev libopenblas-dev liblapacke-dev libicu-dev
       XERCES_VERSION: 3.2.4
 
     steps:
@@ -232,7 +232,7 @@ jobs:
             /usr/local/lib/libxerces-c*.a
             /usr/local/include/xercesc
             /usr/local/lib/pkgconfig/xerces-c.pc
-          key: xerces-static-${{ env.XERCES_VERSION }}-${{ runner.os }}
+          key: xerces-static-icu-${{ env.XERCES_VERSION }}-${{ runner.os }}-${{ env.APT_HASH }}
 
       - name: Build static xerces
         if: steps.cache-xerces.outputs.cache-hit != 'true'
@@ -244,7 +244,7 @@ jobs:
 
           cd xerces-c-${{ env.XERCES_VERSION }}
 
-          PKG_CONFIG="pkg-config --static" ./configure --without-curl --without-icu --enable-static --disable-shared
+          PKG_CONFIG="pkg-config --static" ./configure --without-curl --with-icu --enable-transcoder-icu --enable-static --disable-shared
           make -j2
           sudo make install
 
@@ -1196,7 +1196,7 @@ jobs:
           fi
 
   test_linux_openblas_binaries:
-    name: \"${{ matrix.distribution }}\" binary test
+    name: ${{ matrix.distribution }} - binary test
     runs-on: ubuntu-latest
     needs: [build_linux_static_openblas]
     env:
@@ -1216,10 +1216,16 @@ jobs:
             image: ubuntu:26.04
           - distribution: Red Hat latest
             image: registry.access.redhat.com/ubi10/ubi:latest
+          - distribution: Rocky Linux 8 (NCI Gadi)
+            image: rockylinux:8
           - distribution: Alpine latest
             image: alpine:latest
 
     steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: sampleData
+
       - name: Download static binaries artifact
         uses: actions/download-artifact@v7
         with:
@@ -1249,12 +1255,21 @@ jobs:
           docker pull "$TEST_IMAGE"
           docker run --rm \
             --volume "$GITHUB_WORKSPACE/bin:/opt/dynadjust:ro" \
+            --volume "$GITHUB_WORKSPACE/sampleData:/opt/sampleData:ro" \
+            --env OPENBLAS_NUM_THREADS=1 \
             "$TEST_IMAGE" \
             sh -c '
               set -eu
               cat /etc/os-release
-              /opt/dynadjust/dnaimport --version
+
               /opt/dynadjust/dnaadjust --version
+
+              echo "Testing if static XML library works"
+              /opt/dynadjust/dnaimport -n xml-test \
+                /opt/sampleData/urban-networkstn.xml \
+                /opt/sampleData/urban-networkmsr.xml
+              test -s xml-test.bst
+              test -s xml-test.bms
             '
 
   test_macos_static_binaries:
